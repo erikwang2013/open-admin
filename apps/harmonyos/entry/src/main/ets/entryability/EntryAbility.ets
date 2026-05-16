@@ -16,7 +16,11 @@ export default class EntryAbility extends UIAbility {
   onWindowStageCreate(windowStage: window.WindowStage): void {
     hilog.info(0x0000, TAG, 'Ability onWindowStageCreate');
 
-    windowStage.loadContent('pages/LoginPage', (err) => {
+    // 已登录则跳过登录页直接进入仪表盘
+    const accessToken = AppStorage.get('access_token') as string ?? '';
+    const startPage = accessToken.length > 0 ? 'pages/DashboardPage' : 'pages/LoginPage';
+
+    windowStage.loadContent(startPage, (err) => {
       if (err.code) {
         hilog.error(0x0000, TAG, `Failed to load content: ${err.code}`);
         return;

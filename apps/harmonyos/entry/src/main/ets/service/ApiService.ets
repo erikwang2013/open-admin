@@ -43,7 +43,7 @@ export class ApiService {
 
     if (response.responseCode === 401) {
       TokenManager.clearTokens();
-      // 跳转到登录页
+      throw new Error('UNAUTHORIZED');
     }
 
     const result: ApiResponse<T> = JSON.parse(response.result as string);

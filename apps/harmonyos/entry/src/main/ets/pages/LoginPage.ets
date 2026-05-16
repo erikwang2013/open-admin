@@ -16,7 +16,8 @@ struct LoginPage {
   @State showPassword: boolean = false;
 
   async login(): Promise<void> {
-    if (!this.username.trim()) {
+    const trimmedUsername = this.username.trim();
+    if (!trimmedUsername) {
       promptAction.showToast({ message: '请输入用户名' });
       return;
     }
@@ -27,8 +28,9 @@ struct LoginPage {
 
     this.isLoading = true;
     try {
-      const result = await AuthService.login(this.username, this.password);
+      const result = await AuthService.login(trimmedUsername, this.password);
       await TokenManager.saveTokens(result.access_token, result.refresh_token);
+      AppStorage.setOrCreate('adminUsername', trimmedUsername);
       router.replaceUrl({ url: 'pages/DashboardPage' });
     } catch (e) {
       promptAction.showToast({ message: '登录失败，请检查账号密码' });

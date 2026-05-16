@@ -213,7 +213,7 @@ struct UserListPage {
             }
           }
           .onReachEnd(() => {
-            this.loadMore();
+            // 通过 ListItem 中的按钮手动加载更多
           })
           .width('100%')
           .layoutWeight(1)

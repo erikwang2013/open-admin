@@ -15,8 +15,8 @@ struct UserDetailPage {
   @State isLoading: boolean = true;
   @State hasError: boolean = false;
   @State isSubmitting: boolean = false;
-  @StorageLink('mode') mode: string = 'view'; // create | edit | view
-  @StorageLink('userId') userId: string = '';
+  @State mode: string = 'view';
+  @State userId: string = '';
 
   // 表单状态
   @State formUsername: string = '';
@@ -94,14 +94,29 @@ struct UserDetailPage {
   }
 
   async deleteUser(): Promise<void> {
-    // 使用 AlertDialog 确认删除
-    try {
-      await UserService.delete(this.userId);
-      promptAction.showToast({ message: '删除成功' });
-      router.back();
-    } catch (e) {
-      promptAction.showToast({ message: '删除失败' });
-    }
+    AlertDialog.show({
+      title: '确认删除',
+      message: '确定要删除该用户吗？删除后不可恢复。',
+      autoCancel: true,
+      alignment: DialogAlignment.Center,
+      primaryButton: {
+        value: '确定',
+        fontColor: '#FF4D4F',
+        action: async () => {
+          try {
+            await UserService.delete(this.userId);
+            promptAction.showToast({ message: '删除成功' });
+            router.back();
+          } catch (e) {
+            promptAction.showToast({ message: '删除失败' });
+          }
+        }
+      },
+      secondaryButton: {
+        value: '取消',
+        action: () => {}
+      }
+    });
   }
 
   build() {
