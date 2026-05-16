@@ -20,7 +20,8 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 | PHP 版本 | 8.3+ | |
 | 数据库 | MySQL 8.0+ | 表前缀 `erik_`，BIGINT 非自增主键 |
 | 搜索引擎 | Elasticsearch | 通过 `webman-scout` 同步与查询 |
-| 前端 | Flutter 3.x | Web 端为 PC 管理后台风格 |
+| 管理端前端 | Flutter 3.x | Web 端为 PC 管理后台风格（`apps/admin_app/`） |
+| 移动端 | HarmonyOS ArkTS | 鸿蒙原生客户端（`apps/harmonyos/`），支持手机/平板/2in1 |
 
 ## 核心依赖
 
@@ -51,8 +52,9 @@ open-admin/
 │   │   ├── AdminAuth.php       # JWT 认证
 │   │   └── AdminPermission.php # RBAC 权限校验
 │   └── model/                  # 数据模型
-├── apps/                       # Flutter 管理后台前端
-│   └── admin_app/
+├── apps/                       # 前端应用
+│   ├── admin_app/              # Flutter Web 管理后台（PC 风格）
+│   └── harmonyos/              # HarmonyOS 原生客户端
 ├── config/                     # 配置文件（含中文注释）
 │   ├── snowflake.php           # Snowflake 配置
 │   ├── hashids.php             # Hashids 配置
@@ -122,11 +124,18 @@ php start.php start
 
 ### 5. 启动前端（可选）
 
+**Flutter 管理后台（Web 端）:**
+
 ```bash
 cd apps/admin_app
 flutter pub get
 flutter run -d chrome    # Web 端（PC 管理后台风格）
 ```
+
+**HarmonyOS 客户端（手机端）:**
+
+使用 DevEco Studio 打开 `apps/harmonyos/` 目录，连接真机或模拟器运行。
+
 
 ## 数据库规范
 

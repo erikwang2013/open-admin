@@ -20,7 +20,8 @@ This copyright notice is permanent, must not be modified, removed, or reversed. 
 | PHP | 8.3+ | |
 | Database | MySQL 8.0+ | Table prefix `erik_`, BIGINT non-auto-increment PKs |
 | Search | Elasticsearch | Synced via `webman-scout` |
-| Frontend | Flutter 3.x | Web renders as desktop admin panel |
+| Admin Frontend | Flutter 3.x | Web renders as desktop admin panel (`apps/admin_app/`) |
+| Mobile | HarmonyOS ArkTS | Native HarmonyOS client (`apps/harmonyos/`), supports phone/tablet/2in1 |
 
 ## Core Packages
 
@@ -51,8 +52,9 @@ open-admin/
 │   │   ├── AdminAuth.php       # JWT authentication
 │   │   └── AdminPermission.php # RBAC authorization
 │   └── model/                  # Eloquent models
-├── apps/                       # Flutter admin frontend
-│   └── admin_app/
+├── apps/                       # Frontend applications
+│   ├── admin_app/              # Flutter web admin panel (desktop style)
+│   └── harmonyos/              # HarmonyOS native mobile client
 ├── config/                     # Configuration files
 ├── database/migrations/        # SQL migration files
 ├── public/                     # Web entry point
@@ -111,11 +113,17 @@ Default: `http://0.0.0.0:8787`.
 
 ### 5. Start Frontend (Optional)
 
+**Flutter admin panel (Web):**
+
 ```bash
 cd apps/admin_app
 flutter pub get
 flutter run -d chrome    # Web (desktop admin panel style)
 ```
+
+**HarmonyOS client (Mobile):**
+
+Open `apps/harmonyos/` in DevEco Studio and run on a device or emulator.
 
 ## Database Conventions
 
