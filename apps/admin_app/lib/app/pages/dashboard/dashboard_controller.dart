@@ -39,7 +39,15 @@ class DashboardController extends GetxController {
   Future<void> loadData() async {
     try {
       isLoading.value = true;
-      // 模拟数据，生产环境替换为 _dio.get('/admin/dashboard')
+      final response = await _dio.get('/admin/dashboard');
+      if (response.data['code'] == 0) {
+        final data = response.data['data'];
+        stats.value = List<Map<String, dynamic>>.from(data['stats'] ?? []);
+        trends.value = Map<String, dynamic>.from(data['trends'] ?? {});
+        recentLogs.value = List<Map<String, dynamic>>.from(data['recent_logs'] ?? []);
+      }
+    } catch (e) {
+      // 开发环境使用模拟数据
       stats.value = [
         {'label': '用户总数', 'value': '1,236', 'icon': 'people', 'color': '#1677FF', 'trend': 12.5},
         {'label': '今日新增', 'value': '28', 'icon': 'person_add', 'color': '#52C41A', 'trend': null},
@@ -55,8 +63,7 @@ class DashboardController extends GetxController {
           },
         ],
       };
-      isLoading.value = false;
-    } catch (e) {
+    } finally {
       isLoading.value = false;
     }
   }

@@ -73,11 +73,33 @@ class DashboardController extends BaseController
         $userGrowth = [];
         $logCounts = [];
 
+        // 生成日期序列
         for ($i = 29; $i >= 0; $i--) {
-            $date = date('Y-m-d', strtotime("+{$i} days", strtotime($startOfRange)));
-            $dates[] = $date;
-            $userGrowth[] = AdminUser::whereDate('created_at', '<=', $date)->count();
-            $logCounts[] = OperationLog::whereDate('created_at', $date)->count();
+            $dates[] = date('Y-m-d', strtotime("+{$i} days", strtotime($startOfRange)));
+        }
+
+        // 一次查询获取用户每日新增数，PHP 内累加
+        $dailyNewUsers = AdminUser::whereDate('created_at', '>=', $startOfRange)
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
+            ->groupBy('date')
+            ->pluck('count', 'date')
+            ->toArray();
+
+        $cumulative = AdminUser::whereDate('created_at', '<', $startOfRange)->count();
+        foreach ($dates as $date) {
+            $cumulative += $dailyNewUsers[$date] ?? 0;
+            $userGrowth[] = $cumulative;
+        }
+
+        // 一次查询获取操作日志每日数量
+        $dailyLogs = OperationLog::whereDate('created_at', '>=', $startOfRange)
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
+            ->groupBy('date')
+            ->pluck('count', 'date')
+            ->toArray();
+
+        foreach ($dates as $date) {
+            $logCounts[] = $dailyLogs[$date] ?? 0;
         }
 
         return [
@@ -115,10 +137,10 @@ class DashboardController extends BaseController
             ->toArray();
     }
 
-    private function calcTrend(string $model): ?float
+    private function calcTrend(string $modelClass): ?float
     {
-        $today = AdminUser::whereDate('created_at', date('Y-m-d'))->count();
-        $yesterday = AdminUser::whereDate('created_at', date('Y-m-d', strtotime('-1 day')))->count();
+        $today = $modelClass::whereDate('created_at', date('Y-m-d'))->count();
+        $yesterday = $modelClass::whereDate('created_at', date('Y-m-d', strtotime('-1 day')))->count();
 
         if ($yesterday === 0) {
             return $today > 0 ? 100.0 : 0.0;

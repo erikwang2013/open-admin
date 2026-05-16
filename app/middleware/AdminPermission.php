@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace app\middleware;
 
+use app\model\AdminUser;
 use support\Request;
 use support\Response;
 
@@ -42,7 +43,7 @@ class AdminPermission
 
     private function getUserPermissions(int $adminId): array
     {
-        $user = \app\model\AdminUser::find($adminId);
+        $user = AdminUser::find($adminId);
         if (!$user) return [];
 
         $permissions = [];

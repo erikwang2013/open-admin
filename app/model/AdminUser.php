@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace app\model;
 
+use Maize\Encryptable\Encryptable;
 use support\Model;
 
 class AdminUser extends Model
@@ -28,12 +29,10 @@ class AdminUser extends Model
         'last_login_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'email' => Encryptable::class,
+        'phone' => Encryptable::class,
+        'id_card' => Encryptable::class,
     ];
-
-    /**
-     * 使用 encryptable trait 自动加解密敏感字段
-     */
-    protected array $encryptable = ['email', 'phone', 'id_card'];
 
     public function roles()
     {

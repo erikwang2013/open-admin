@@ -106,8 +106,9 @@ class PermissionController extends BaseController
         $tree = [];
         foreach ($permissions as $perm) {
             if ($perm['parent_id'] == $parentId) {
+                $originalId = $perm['id'];
                 $perm = $this->encodeIds($perm);
-                $children = $this->buildTree($permissions, (int) $perm['id']);
+                $children = $this->buildTree($permissions, $originalId);
                 if ($children) {
                     $perm['children'] = $children;
                 }

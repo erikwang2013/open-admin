@@ -7,9 +7,10 @@ declare(strict_types=1);
 
 namespace app\middleware;
 
-use app\common\HashidsService;
 use support\Request;
 use support\Response;
+
+use function jwt;
 
 class AdminAuth
 {
@@ -23,7 +24,7 @@ class AdminAuth
         }
 
         try {
-            $payload = \jwt()->verify($token);
+            $payload = jwt()->verify($token);
             $request->adminId = $payload['sub'] ?? 0;
             $request->adminUsername = $payload['username'] ?? '';
         } catch (\Exception $e) {

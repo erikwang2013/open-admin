@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace app\common;
 
+use InvalidArgumentException;
+
 /**
  * Hashids 编解码服务
  * 用于 API 层 ID 加解密，对外暴露 hash 字符串，隐藏真实数据库 BIGINT ID
@@ -15,14 +17,14 @@ class HashidsService
 {
     public static function encode(int $id): string
     {
-        return \hashids()->encode($id);
+        return hashids()->encode($id);
     }
 
     public static function decode(string $hashid): int
     {
-        $ids = \hashids()->decode($hashid);
+        $ids = hashids()->decode($hashid);
         if (empty($ids)) {
-            throw new \InvalidArgumentException('无效的加密ID');
+            throw new InvalidArgumentException('无效的加密ID');
         }
         return (int) $ids[0];
     }

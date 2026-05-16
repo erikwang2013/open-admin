@@ -14,6 +14,10 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use Dompdf\Dompdf;
 use app\common\EncryptionService;
+use app\model\AdminUser;
+use app\model\OperationLog;
+use app\model\AdminRole;
+use app\model\SystemConfig;
 use support\Request;
 
 class ExportController extends BaseController
@@ -74,7 +78,13 @@ class ExportController extends BaseController
                 $value = $item[$col] ?? '';
                 if (in_array($col, $sensitiveFields) && !empty($value)) {
                     $decrypted = EncryptionService::decrypt((string) $value);
-                    $value = in_array($col, ['phone']) ? EncryptionService::maskPhone($decrypted) : EncryptionService::maskEmail($decrypted);
+                    if ($col === 'phone') {
+                        $value = EncryptionService::maskPhone($decrypted);
+                    } elseif ($col === 'email') {
+                        $value = EncryptionService::maskEmail($decrypted);
+                    } else {
+                        $value = str_repeat('*', 8); // id_card等彻底隐藏
+                    }
                 }
                 $sheet->getCell($colIndex . $row)->setValue($value);
                 $sheet->getStyle($colIndex . $row)->applyFromArray($dataStyle);
@@ -194,10 +204,10 @@ class ExportController extends BaseController
     private function fetchExportData(string $table, array $columns, array $conditions): array
     {
         $modelMap = [
-            'admin_user' => \app\model\AdminUser::class,
-            'operation_log' => \app\model\OperationLog::class,
-            'admin_role' => \app\model\AdminRole::class,
-            'system_config' => \app\model\SystemConfig::class,
+            'admin_user' => AdminUser::class,
+            'operation_log' => OperationLog::class,
+            'admin_role' => AdminRole::class,
+            'system_config' => SystemConfig::class,
         ];
 
         if (!isset($modelMap[$table])) {
