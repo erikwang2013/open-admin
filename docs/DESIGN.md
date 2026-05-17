@@ -2,6 +2,8 @@
 
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
+> 详细的 Mermaid 架构图请参阅 [ARCHITECTURE.md](ARCHITECTURE.md)（GitHub/GitLab/VS Code 可自动渲染）。
+
 ## 1. 系统架构
 
 ```
@@ -40,10 +42,10 @@
 │                             │                                  │
 │  ┌──────────────────────────┼───────────────────────────┐    │
 │  │              数据存储层                                │    │
-│  │  ┌──────────┐  ┌──────────────┐                       │    │
-│  │  │  MySQL   │  │ Elasticsearch│                       │    │
-│  │  │ (主存储)  │  │ (全文检索)    │                       │    │
-│  │  └──────────┘  └──────────────┘                       │    │
+│  │  ┌──────────┐  ┌──────────────┐  ┌──────────┐        │    │
+│  │  │  MySQL   │  │ Elasticsearch│  │  Redis   │        │    │
+│  │  │ (主存储)  │  │ (全文检索)    │  │ (缓存)   │        │    │
+│  │  └──────────┘  └──────────────┘  └──────────┘        │    │
 │  └──────────────────────────────────────────────────────┘    │
 │                       webman v2                               │
 └──────────────────────────────────────────────────────────────┘
@@ -57,7 +59,7 @@
 |---|------|------|
 | 路由 | `config/route.php` | URL 到控制器的映射，中间件绑定 |
 | 中间件 | `app/middleware/` | 认证(JWT)、授权(RBAC) |
-| 控制器 | `app/admin/controller/` | 请求参数校验、调用业务逻辑、响应格式化 |
+| 控制器 | `app/admin/controller/` `app/api/controller/` | 请求参数校验、调用业务逻辑、响应格式化 |
 | 业务服务 | `app/service/` | 可复用的业务逻辑（预留） |
 | 数据模型 | `app/model/` | ORM 映射、关联关系、字段加解密 |
 | 公共工具 | `app/common/` | Hashids、Snowflake、Encryption 服务 |
@@ -84,69 +86,27 @@ Route 匹配
 Controller::method()
   │
   ├─► 参数验证 (validator)
+  ├─► 敏感操作确认 (confirmPassword)
   ├─► decodeId() — hashid → BIGINT
   ├─► Model 操作 (自动 encryptable 加解密)
   ├─► encodeId() — BIGINT → hashid
   └─► Response JSON
 ```
 
-### 2.3 中间件执行顺序
+### 2.3 ID 生命周期
 
 ```
-AdminAuth                    AdminPermission
-┌──────────┐                ┌──────────────────┐
-│ 提取Token │ ──► 验证JWT ──►│ 获取用户角色权限   │ ──► 匹配权限标识
-│ from     │    (jwt())    │ getUserPermissions│    method.path
-│ Header   │               │                    │
-└──────────┘               └──────────────────┘
-    401                        403
-  未登录                     无权限
+生成 (Snowflake) → 存储 (MySQL BIGINT) → 传输 (Hashids 编码) → 外部 (hash 字符串)
+                                                                    │
+                            HashidsService::decode() ←──────────────┘
 ```
 
-### 2.4 ID 生命周期
+### 2.4 数据加密体系
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      ID 全生命周期                        │
-│                                                         │
-│  生成                  存储                 传输         │
-│  ┌──────────┐        ┌──────────┐        ┌──────────┐  │
-│  │Snowflake │  ──►  │  MySQL   │  ──►  │ Hashids  │  │
-│  │::generate│        │ BIGINT   │        │ encode() │  │
-│  │  ()      │        │ 原始ID   │        │  hash串  │  │
-│  └──────────┘        └──────────┘        └──────────┘  │
-│       │                   │                    │        │
-│       │              encryptable             │        │
-│       │              自动加解密               │        │
-│       ▼                   ▼                    ▼        │
-│  BIGINT(18)        密文存储              对外暴露        │
-│  1750123456789     (不可逆)             aB3xK9mW...     │
-│                                                         │
-│  反向流程: hashid → HashidsService::decode() → BIGINT   │
-└─────────────────────────────────────────────────────────┘
-```
-
-### 2.5 数据加密体系
-
-```
-       ┌──────────────────────────────────┐
-       │          加密分层架构              │
-       │                                  │
-       │  传输层 (encryption)              │
-       │  ┌────────────────────────────┐  │
-       │  │ Request 敏感字段加解密       │  │
-       │  │ AES-256-CBC + 独立密钥      │  │
-       │  └────────────────────────────┘  │
-       │              │                   │
-       │  存储层 (encryptable)             │
-       │  ┌────────────────────────────┐  │
-       │  │ Model $casts 自动加解密     │  │
-       │  │ AES-128-ECB + 独立密钥      │  │
-       │  │ Eloquent CastsAttributes   │  │
-       │  └────────────────────────────┘  │
-       │                                  │
-       │  两层密钥完全独立，不能共用        │
-       └──────────────────────────────────┘
+传输层 (encryption)     — AES-256-CBC，独立密钥
+存储层 (encryptable)    — AES-128-ECB，独立密钥，Model $casts 自动处理
+展示层 (mask)           — 手机号: 138****1234，邮箱: a***@example.com
 ```
 
 ## 3. 数据库设计
@@ -206,7 +166,7 @@ erik_system_config (系统配置) — 独立表
   POST   /admin/user          → 创建
   GET    /admin/user/{hashid} → 详情
   PUT    /admin/user/{hashid} → 更新
-  DELETE /admin/user/{hashid} → 删除
+  DELETE /admin/user/{hashid} → 删除（需密码确认）
 ```
 
 ### 4.2 统一响应
@@ -226,50 +186,32 @@ erik_system_config (系统配置) — 独立表
 | 401 | 未认证 | Token 缺失/过期/无效 |
 | 403 | 无权限 | 用户角色不包含所需权限 |
 | 404 | 不存在 | 资源未找到 |
-| 422 | 验证失败 | 表单参数不符合规则 |
+| 422 | 验证失败 | 表单参数不符合规则 / 密码确认失败 |
 | 500 | 服务端错误 | 未预期异常 |
 
 ### 4.3 认证流程（含点击验证码）
 
 ```
-  客户端                        服务端
-    │                             │
-    │  POST /api/captcha/generate│
-    │─────────────────────────►  │ captcha_create('click')
-    │  {key, image(base64),      │
-    │   targets:[{order,text}]}  │
-    │◄─────────────────────────  │
-    │                             │
-    │  用户点击图中文字位置         │
-    │  收集 clicks: [{x,y},...]  │
-    │                             │
-    │  POST /api/auth/login      │
-    │  {username, password,      │
-    │   captcha_key, clicks}     │
-    │─────────────────────────►  │
-    │                             │ ① captcha_verify(key, clicks)
-    │                             │ ② password_verify()
-    │                             │ ③ jwt()->create()
-    │  {access_token,            │
-    │   refresh_token,           │
-    │   expires_in: 7200}        │
-    │◄─────────────────────────  │
-    │                             │
-    │  GET /admin/dashboard      │
-    │  Authorization: Bearer xxx │
-    │─────────────────────────►  │
-    │                             │ AdminAuth: jwt()->verify()
-    │                             │ → $request->adminId
-    │                             │ AdminPermission: RBAC
-    │  200 {data: ...}           │
-    │◄─────────────────────────  │
-    │                             │
-    │  [token 快过期]             │
-    │  POST /api/auth/refresh    │
-    │  {refresh_token}           │
-    │─────────────────────────►  │
-    │  {新 access_token}         │
-    │◄─────────────────────────  │
+客户端                               服务端
+  │                                    │
+  │  ① POST /api/captcha/generate     │ captcha_create('click')
+  │◄── {key, image(base64), targets}  │
+  │                                    │
+  │  ② 用户点击图中文字位置              │
+  │                                    │
+  │  ③ POST /api/auth/login           │
+  │     {username, password,          │
+  │      captcha_key, clicks}         │
+  │────────────────────────────────►  │
+  │                                    │ ① captcha_verify()
+  │                                    │ ② password_verify()
+  │                                    │ ③ jwt()->create()
+  │◄── {access_token, refresh_token}  │
+  │                                    │
+  │  ④ GET /admin/dashboard           │
+  │     Authorization: Bearer xxx     │
+  │────────────────────────────────►  │ AdminAuth → AdminPermission
+  │◄── 200 {dashboard data}           │
 ```
 
 ### 4.4 权限模型 (RBAC)
@@ -292,16 +234,15 @@ erik_system_config (系统配置) — 独立表
 删除用户、角色、权限等敏感操作，需要在请求体中传入当前用户密码进行身份复核：
 
 ```
-客户端                          服务端
-  │                               │
-  │  DELETE /admin/user/{hashid} │
-  │  { password: "******" }      │
-  │───────────────────────────►  │
-  │                               │ confirmPassword(adminId, password)
-  │                               │ → 密码错误返回 422
-  │                               │ → 密码正确继续执行
-  │  200 { code: 0 }             │
-  │◄───────────────────────────  │
+客户端                           服务端
+  │                                │
+  │  DELETE /admin/user/{hashid}  │
+  │  { password: "******" }       │
+  │────────────────────────────►  │
+  │                                │ confirmPassword(adminId, password)
+  │                                │ → 密码错误返回 422
+  │                                │ → 密码正确继续执行
+  │◄── 200 { code: 0 }           │
 ```
 
 前端在触发删除操作前弹出确认对话框，收集用户密码后发送请求。
@@ -313,82 +254,34 @@ erik_system_config (系统配置) — 独立表
 ```
 ┌────────────────────────────────────────────────┐
 │  Header (56px)                                 │
-│  ┌──────────────────────────────────────────┐  │
-│  │  ☰ 菜单按钮           🔔 消息  👤 管理员  ▼ │  │
-│  └──────────────────────────────────────────┘  │
+│  ☰ 菜单按钮           🔔 消息  👤 管理员  ▼    │
 ├──────────┬─────────────────────────────────────┤
 │ Sidebar  │  Content Area                       │
 │ (64/240) │                                     │
-│          │  ┌──────────────────────────────┐   │
-│ 📊 仪表盘│  │  Dashboard                    │   │
-│ 👥 用户  │  │  ┌────┐┌────┐┌────┐┌────┐   │   │
-│ 🔒 角色  │  │  │统计││统计││统计││统计│   │   │
-│ ⚙ 配置  │  │  └────┘└────┘└────┘└────┘   │   │
-│ 📋 日志  │  │  ┌──────────────────────┐    │   │
-│          │  │  │     趋势折线图        │    │   │
-│          │  │  └──────────────────────┘    │   │
-│          │  │  ┌──────┐ ┌──────────┐      │   │
-│          │  │  │饼图  │ │ 最近操作  │      │   │
-│          │  │  └──────┘ └──────────┘      │   │
-│          │  └──────────────────────────────┘   │
+│          │  ┌──────────────┐ ┌──────────┐     │
+│ 📊 仪表盘│  │ 统计卡片×4    │ │ 趋势图   │     │
+│ 👥 用户  │  └──────────────┘ └──────────┘     │
+│ 🔒 角色  │  ┌──────┐ ┌────────────────┐       │
+│ ⚙ 配置  │  │饼图  │ │ 最近操作日志    │       │
+│ 📋 日志  │  └──────┘ └────────────────┘       │
 └──────────┴─────────────────────────────────────┘
 ```
 
-特性:
-- 侧边栏可折叠（64px / 240px），鼠标悬停交互
-- 数据表格密度高，支持固定列、排序、筛选、批量操作
-- 弹窗使用 Dialog（非 BottomSheet）
-- Material 3 浅色/深色双主题
-- 响应式断点: MOBILE < 768px < DESKTOP
+特性: 侧边栏可折叠、Material 3 双主题、数据表格高密度、弹窗 Dialog、鼠标悬停交互
 
 ### 5.2 HarmonyOS 移动端
-
-```
-┌─────────────────┐
-│  顶栏 (56px)    │
-│  仪表盘    👤   │
-├─────────────────┤
-│                 │
-│  ┌────┐┌────┐  │
-│  │统计││统计│  │
-│  └────┘└────┘  │
-│  ┌────┐┌────┐  │
-│  │统计││统计│  │
-│  └────┘└────┘  │
-│                 │
-│  最近操作       │
-│  ┌──────────┐  │
-│  │ 操作记录  │  │
-│  │ 操作记录  │  │
-│  │ 操作记录  │  │
-│  └──────────┘  │
-│                 │
-│  版权信息       │
-├─────────────────┤
-│ 首页│用户│我的   │  ← 底部Tab导航栏
-└─────────────────┘
-```
 
 页面路由:
 
 | 页面 | 路由 | 说明 |
 |------|------|------|
-| LoginPage | `pages/LoginPage` | 启动页，用户名密码 + 点击验证码 |
-| DashboardPage | `pages/DashboardPage` | 仪表盘统计卡片+最近操作 |
-| UserListPage | `pages/UserListPage` | 用户列表，搜索+下拉刷新+上滑加载更多 |
-| UserDetailPage | `pages/UserDetailPage` | 用户新增/编辑/查看，含删除功能 |
-| ProfilePage | `pages/ProfilePage` | 个人中心，退出登录 |
+| LoginPage | `pages/LoginPage` | 用户名密码 + 点击验证码登录 |
+| DashboardPage | `pages/DashboardPage` | 统计卡片 + 最近操作 |
+| UserListPage | `pages/UserListPage` | 用户列表，搜索 + 下拉刷新 + 上滑加载 |
+| UserDetailPage | `pages/UserDetailPage` | 新增/编辑/查看/删除（AlertDialog 确认） |
+| ProfilePage | `pages/ProfilePage` | 个人中心，退出登录（AlertDialog 确认） |
 
-数据流:
-
-```
-Page ←→ DataService ←→ ApiService ←→ HTTP ←→ webman后端
-  │                     │
-  │                     ├─ JWT Bearer 自动注入
-  │                     └─ 401 自动跳转登录
-  │
-  └─ @State 数据绑定，自动刷新 UI
-```
+数据流: Page ← DataService ← ApiService (JWT Bearer) ← HTTP ← webman
 
 ## 6. 安全设计
 
@@ -410,7 +303,7 @@ Page ←→ DataService ←→ ApiService ←→ HTTP ←→ webman后端
 ### 6.2 密钥管理
 
 ```
-JWT_SECRET          → 生产环境通过环境变量注入，64位随机字符串
+JWT_SECRET          → 环境变量注入，64位随机字符串
 HASHIDS_SALT        → 唯一盐值，泄漏后需全局更换
 ENCRYPTION_KEY      → API 传输加密密钥，32字节
 ENCRYPTABLE_KEY     → DB 存储加密密钥，与传输密钥独立
@@ -423,7 +316,7 @@ SCOUT_HOSTS         → ES 地址，内网部署
 |------|------|------|
 | 列表展示 | phone | 脱敏: 138****1234 |
 | 列表展示 | email | 脱敏: a***@example.com |
-| 详情查看 | phone | 需单独解密接口（可留审计） |
+| 详情查看 | phone/email | 需解密接口 |
 | 导出Excel | phone/email | 脱敏后导出 |
 | 导出PDF | 全字段 | 脱敏 + 不可移除版权水印 |
 | 存储 | phone/email/id_card | encryptable 加密为密文 |
@@ -433,37 +326,20 @@ SCOUT_HOSTS         → ES 地址，内网部署
 ### 7.1 Excel 导出
 
 ```
-请求: POST /admin/export/excel
-  { table, columns, conditions, title }
-       │
-       ▼
-  ExportController::excel()
-       │
-       ├► fetchExportData() → 查询数据 (limit 10000)
-       ├► 脱敏敏感字段
-       ├► PhpSpreadsheet 构建工作簿
-       │   ├─ 表头: 蓝底白字加粗
-       │   ├─ 数据行: 细边框
-       │   ├─ 冻结首行
-       │   └─ 自动筛选
-       └► 写入 runtime/tmp/ → download 响应
+请求: POST /admin/export/excel { table, columns, conditions, title }
+  → fetchExportData() 查询数据 (limit 10000)
+  → 脱敏敏感字段
+  → PhpSpreadsheet 构建（蓝底白字表头 + 冻结首行 + 自动筛选）
+  → 写入 runtime/tmp/ → download 响应
 ```
 
 ### 7.2 PDF 导出
 
 ```
-请求: POST /admin/export/pdf
-  { type: table|dashboard, title, data }
-       │
-       ▼
-  ExportController::pdf()
-       │
-       ├► buildPdfHtml() → HTML + 内联 CSS
-       │   ├─ 页头: 标题 + 版权 + 时间戳
-       │   ├─ 内容: 表格或仪表盘卡片
-       │   └─ 页脚: 不可移除版权声明
-       ├► Dompdf 渲染
-       └► 写入 runtime/tmp/ → download 响应
+请求: POST /admin/export/pdf { type: table|dashboard, title, data }
+  → buildPdfHtml() HTML + 内联CSS + 页头版权 + 页脚不可移除版权
+  → Dompdf 渲染 A4 横向
+  → 写入 runtime/tmp/ → download 响应
 ```
 
 ## 8. 部署架构
@@ -471,25 +347,8 @@ SCOUT_HOSTS         → ES 地址，内网部署
 ### 8.1 推荐拓扑
 
 ```
-                   ┌──────────┐
-                   │  Nginx   │  ← 反向代理 + HTTPS + 静态文件
-                   └────┬─────┘
-                        │
-            ┌───────────┼───────────┐
-            ▼           ▼           ▼
-      ┌──────────┐ ┌──────────┐ ┌──────────┐
-      │ webman   │ │ webman   │ │ webman   │  ← 多进程（每个CPU核1个）
-      │ worker 1 │ │ worker 2 │ │ worker N │
-      └────┬─────┘ └────┬─────┘ └────┬─────┘
-           │            │            │
-           └────────────┼────────────┘
-                        │
-            ┌───────────┼───────────┐
-            ▼           ▼           ▼
-      ┌──────────┐ ┌──────────┐ ┌──────────┐
-      │  MySQL   │ │   ES     │ │  Redis   │  ← 存储层
-      │ (主从)    │ │ (集群)   │ │ (缓存)   │
-      └──────────┘ └──────────┘ └──────────┘
+Nginx (:443 HTTPS) → webman worker × N (:8787) → MySQL + ES + Redis
+                    静态文件: Flutter Web build/
 ```
 
 ### 8.2 环境要求
