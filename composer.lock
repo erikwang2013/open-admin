@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "ad9e4352b379c22bd03ca2424e2d71c5",
+    "content-hash": "b14ffbd392601e5fa4ca67ce15119d47",
     "packages": [
         {
             "name": "barryvdh/laravel-dompdf",
@@ -538,16 +538,16 @@
         },
         {
             "name": "erikwang2013/encryptable",
-            "version": "v1.0.6",
+            "version": "v2.0.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/erikwang2013/encryptable.git",
-                "reference": "d29c00ebabcd48effb0ae6961355754b3ae87fa1"
+                "reference": "a258193b2ba0eef4a5053a8dedceb7f3a5f22064"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/erikwang2013/encryptable/zipball/d29c00ebabcd48effb0ae6961355754b3ae87fa1",
-                "reference": "d29c00ebabcd48effb0ae6961355754b3ae87fa1",
+                "url": "https://api.github.com/repos/erikwang2013/encryptable/zipball/a258193b2ba0eef4a5053a8dedceb7f3a5f22064",
+                "reference": "a258193b2ba0eef4a5053a8dedceb7f3a5f22064",
                 "shasum": ""
             },
             "require": {
@@ -580,19 +580,19 @@
             },
             "type": "composer-plugin",
             "extra": {
-                "class": "Maize\\Encryptable\\Composer\\Plugin",
+                "class": "Erikwang2013\\Encryptable\\Composer\\Plugin",
                 "hyperf": {
-                    "config": "Maize\\Encryptable\\Bridge\\Hyperf\\ConfigProvider"
+                    "config": "Erikwang2013\\Encryptable\\Bridge\\Hyperf\\ConfigProvider"
                 },
                 "laravel": {
                     "providers": [
-                        "Maize\\Encryptable\\EncryptableServiceProvider"
+                        "Erikwang2013\\Encryptable\\EncryptableServiceProvider"
                     ]
                 }
             },
             "autoload": {
                 "psr-4": {
-                    "Maize\\Encryptable\\": "src"
+                    "Erikwang2013\\Encryptable\\": "src"
                 }
             },
             "notification-url": "https://packagist.org/downloads/",
@@ -620,9 +620,9 @@
             ],
             "support": {
                 "issues": "https://github.com/erikwang2013/encryptable/issues",
-                "source": "https://github.com/erikwang2013/encryptable/tree/v1.0.6"
+                "source": "https://github.com/erikwang2013/encryptable/tree/v2.0.0"
             },
-            "time": "2026-05-14T13:25:18+00:00"
+            "time": "2026-05-17T11:22:27+00:00"
         },
         {
             "name": "erikwang2013/encryption",
@@ -754,16 +754,16 @@
         },
         {
             "name": "erikwang2013/jwt-webman",
-            "version": "v1.0.9",
+            "version": "v2.0.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/erikwang2013/jwt-webman.git",
-                "reference": "11135ed4653541ea79a9d9ae042e5f94bab133a7"
+                "reference": "9fd2ef1e8f1eb539526544e743bd2d7434675f06"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/erikwang2013/jwt-webman/zipball/11135ed4653541ea79a9d9ae042e5f94bab133a7",
-                "reference": "11135ed4653541ea79a9d9ae042e5f94bab133a7",
+                "url": "https://api.github.com/repos/erikwang2013/jwt-webman/zipball/9fd2ef1e8f1eb539526544e743bd2d7434675f06",
+                "reference": "9fd2ef1e8f1eb539526544e743bd2d7434675f06",
                 "shasum": ""
             },
             "require": {
@@ -782,16 +782,16 @@
             "extra": {
                 "laravel": {
                     "aliases": {
-                        "JWT": "ErikJwt\\Laravel\\Facade"
+                        "JWT": "Erikwang2013\\Jwt\\Laravel\\Facade"
                     },
                     "providers": [
-                        "ErikJwt\\Laravel\\JWTServiceProvider"
+                        "Erikwang2013\\Jwt\\Laravel\\JWTServiceProvider"
                     ]
                 }
             },
             "autoload": {
                 "psr-4": {
-                    "ErikJwt\\": "src/erik-jwt"
+                    "Erikwang2013\\Jwt\\": "src/erik-jwt"
                 }
             },
             "notification-url": "https://packagist.org/downloads/",
@@ -821,7 +821,7 @@
                 "issues": "https://github.com/erikwang2013/jwt-webman/issues",
                 "source": "https://github.com/erikwang2013/jwt-webman"
             },
-            "time": "2026-05-14T13:25:31+00:00"
+            "time": "2026-05-17T12:32:03+00:00"
         },
         {
             "name": "erikwang2013/poster-php",
@@ -902,44 +902,44 @@
         },
         {
             "name": "erikwang2013/season",
-            "version": "v1.0.3",
+            "version": "v1.0.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/erikwang2013/season.git",
-                "reference": "3ed2181e3f11648559efa2c2c450fc4b777ed8f6"
+                "reference": "e6b4783ce596995f5f0f63c1a3184b497c922cd5"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/erikwang2013/season/zipball/3ed2181e3f11648559efa2c2c450fc4b777ed8f6",
-                "reference": "3ed2181e3f11648559efa2c2c450fc4b777ed8f6",
+                "url": "https://api.github.com/repos/erikwang2013/season/zipball/e6b4783ce596995f5f0f63c1a3184b497c922cd5",
+                "reference": "e6b4783ce596995f5f0f63c1a3184b497c922cd5",
                 "shasum": ""
             },
             "require": {
                 "ext-mbstring": "*",
-                "php": ">=8.0"
+                "php": ">=8.1"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.0 || ^11.0 || ^12.0"
             },
             "suggest": {
-                "hyperf/framework": "Hyperf 2 / 3 使用 CountrySeason\\Hyperf\\ConfigProvider 时需要",
-                "illuminate/support": "Laravel 7–11 使用 CountrySeason\\Laravel\\CountrySeasonServiceProvider 时需要",
-                "topthink/framework": "ThinkPHP 6 / 8 使用 CountrySeason\\ThinkPHP\\Service 时需要",
+                "hyperf/framework": "Hyperf 2 / 3 使用 Erikwang2013\\Season\\Hyperf\\ConfigProvider 时需要",
+                "illuminate/support": "Laravel 7–11 使用 Erikwang2013\\Season\\Laravel\\CountrySeasonServiceProvider 时需要",
+                "topthink/framework": "ThinkPHP 6 / 8 使用 Erikwang2013\\Season\\ThinkPHP\\Service 时需要",
                 "workerman/webman-framework": "用于在 webman 项目中作为插件使用"
             },
             "type": "library",
             "extra": {
                 "think": {
                     "services": [
-                        "CountrySeason\\ThinkPHP\\Service"
+                        "Erikwang2013\\Season\\ThinkPHP\\Service"
                     ]
                 },
                 "hyperf": {
-                    "config": "CountrySeason\\Hyperf\\ConfigProvider"
+                    "config": "Erikwang2013\\Season\\Hyperf\\ConfigProvider"
                 },
                 "laravel": {
                     "providers": [
-                        "CountrySeason\\Laravel\\CountrySeasonServiceProvider"
+                        "Erikwang2013\\Season\\Laravel\\CountrySeasonServiceProvider"
                     ]
                 },
                 "branch-alias": {
@@ -951,7 +951,7 @@
                     "src/helpers.php"
                 ],
                 "psr-4": {
-                    "CountrySeason\\": "src/"
+                    "Erikwang2013\\Season\\": "src/"
                 }
             },
             "notification-url": "https://packagist.org/downloads/",
@@ -977,13 +977,13 @@
             ],
             "support": {
                 "issues": "https://github.com/erikwang2013/season/issues",
-                "source": "https://github.com/erikwang2013/season/tree/v1.0.3"
+                "source": "https://github.com/erikwang2013/season/tree/v2.0.0"
             },
-            "time": "2026-05-14T14:43:03+00:00"
+            "time": "2026-05-17T11:02:49+00:00"
         },
         {
             "name": "erikwang2013/snowflake-php",
-            "version": "v1.0.4",
+            "version": "v2.0.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/erikwang2013/snowflake-php.git",
@@ -1047,7 +1047,7 @@
             "support": {
                 "email": "erik@erik.xyz",
                 "issues": "https://github.com/erikwang2013/snowflake-php/issues",
-                "source": "https://github.com/erikwang2013/snowflake-php/tree/v1.0.4"
+                "source": "https://github.com/erikwang2013/snowflake-php/tree/v2.0.0"
             },
             "time": "2026-05-17T10:52:39+00:00"
         },
