@@ -75,5 +75,8 @@
       "erikwang2013/webman-scout": true,
       "erikwang2013/encryption": true
     }
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^12.5"
   }
 }
