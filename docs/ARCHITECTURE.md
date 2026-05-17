@@ -9,7 +9,7 @@
 ## 1. 系统拓扑架构
 
 ```mermaid
-graph TB
+flowchart TB
     subgraph "客户端层"
         A1["Flutter Web<br/>PC 管理后台<br/>(Port 3000)"]
         A2["HarmonyOS ArkTS<br/>手机/平板客户端"]
@@ -70,7 +70,7 @@ graph TB
 ## 2. 后端分层架构
 
 ```mermaid
-graph TD
+flowchart TD
     subgraph "路由层 Route Layer"
         R1["config/route.php<br/>URL → Controller 映射"]
     end
@@ -241,7 +241,7 @@ sequenceDiagram
 ## 5. RBAC 权限模型
 
 ```mermaid
-graph LR
+flowchart LR
     subgraph "用户 User"
         U1["admin<br/>(超级管理员)"]
         U2["editor<br/>(编辑)"]
@@ -280,7 +280,7 @@ graph LR
 ```
 
 ```mermaid
-graph TD
+flowchart TD
     subgraph "权限类型"
         T1["type=1 菜单<br/>控制侧边栏显示/隐藏"]
         T2["type=2 按钮<br/>控制页面操作按钮"]
@@ -317,7 +317,7 @@ graph TD
 ## 6. ID 全生命周期
 
 ```mermaid
-graph LR
+flowchart LR
     subgraph "1. 生成"
         G1["SnowflakeService<br/>::generate()"]
         G2["datacenter_id(5bit)<br/>+ worker_id(5bit)<br/>+ timestamp(41bit)<br/>+ sequence(12bit)"]
@@ -355,7 +355,7 @@ graph LR
 ## 7. 数据加密分层
 
 ```mermaid
-graph TB
+flowchart TB
     subgraph "传输层加密 (encryption)"
         E1["客户端发送敏感数据"]
         E2["AES-256-CBC 加密"]
@@ -506,7 +506,7 @@ sequenceDiagram
 ## 10. Flutter Web 组件树
 
 ```mermaid
-graph TD
+flowchart TD
     APP["AdminApp (GetMaterialApp)"]
     APP --> LP["/login<br/>LoginPage"]
     APP --> DB["/dashboard<br/>AdminLayout"]
@@ -530,7 +530,7 @@ graph TD
 ## 11. HarmonyOS 页面路由
 
 ```mermaid
-graph LR
+flowchart LR
     EA["EntryAbility<br/>启动"]
     EA -->|"无 Token"| LP["LoginPage<br/>登录页"]
     EA -->|"有 Token"| DP["DashboardPage<br/>仪表盘"]
@@ -559,7 +559,7 @@ graph LR
 ## 12. 安全纵深防御全景
 
 ```mermaid
-graph TB
+flowchart TB
     subgraph "第1层: 人机验证"
         L1["点击验证码<br/>Click Captcha<br/>登录/注册强制"]
     end
@@ -604,7 +604,7 @@ graph TB
 ## 13. 部署拓扑
 
 ```mermaid
-graph TB
+flowchart TB
     subgraph "DNS / CDN"
         DNS["erik.xyz"]
     end

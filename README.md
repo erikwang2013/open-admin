@@ -2,7 +2,7 @@
 
 基于 webman v2 + Flutter 的全栈管理后台系统。
 
-> [English version](README_EN.md) | [架构设计图](ARCHITECTURE.md) | [设计文档](DESIGN.md)
+> [English version](README_EN.md) | [架构设计图](docs/ARCHITECTURE.md) | [设计文档](docs/DESIGN.md)
 
 ## 版权
 
