@@ -4,13 +4,6 @@
 
 > [English version](README_EN.md) | [架构设计图](docs/ARCHITECTURE.md) | [设计文档](docs/DESIGN.md)
 
-## 版权
-
-```
-Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
-```
-
-本版权声明不可修改、不可移除、不可逆。所有项目文件均受此版权保护。
 
 ## 技术栈
 
