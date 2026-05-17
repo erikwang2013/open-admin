@@ -12,22 +12,22 @@ declare(strict_types=1);
  */
 return [
     // 默认连接
-    'default' => getenv('DB_CONNECTION', 'mysql'),
+    'default' => getenv('DB_CONNECTION') ?: 'mysql',
 
     'connections' => [
         'mysql' => [
             // 数据库驱动
             'driver' => 'mysql',
             // 数据库主机
-            'host' => getenv('DB_HOST', '127.0.0.1'),
+            'host' => getenv('DB_HOST') ?: '127.0.0.1',
             // 数据库端口
-            'port' => (int) getenv('DB_PORT', 3306),
+            'port' => (int)(getenv('DB_PORT') ?: 3306),
             // 数据库名
-            'database' => getenv('DB_DATABASE', 'open_admin'),
+            'database' => getenv('DB_DATABASE') ?: 'open_admin',
             // 用户名
-            'username' => getenv('DB_USERNAME', 'root'),
+            'username' => getenv('DB_USERNAME') ?: 'root',
             // 密码
-            'password' => getenv('DB_PASSWORD', ''),
+            'password' => getenv('DB_PASSWORD') ?: '',
             // 字符集，统一使用 utf8mb4
             'charset' => 'utf8mb4',
             // 排序规则
