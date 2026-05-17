@@ -14,9 +14,9 @@ return [
     // ── 图像处理驱动 ──
     'image' => [
         // 驱动类型: auto=自动检测 | gd | imagick
-        'driver' => env('POSTER_IMAGE_DRIVER', 'auto'),
+        'driver' => getenv('POSTER_IMAGE_DRIVER', 'auto'),
         // JPEG 输出质量 0-100
-        'quality' => (int) env('POSTER_IMAGE_QUALITY', 90),
+        'quality' => (int) getenv('POSTER_IMAGE_QUALITY', 90),
         // 默认字体路径，null=使用包自带字体
         'font' => null,
     ],
@@ -24,13 +24,13 @@ return [
     // ── 验证码模块 ──
     'captcha' => [
         // 验证数据存储: auto=自动检测 | file | session | redis
-        'storage' => env('POSTER_CAPTCHA_STORAGE', 'auto'),
+        'storage' => getenv('POSTER_CAPTCHA_STORAGE', 'auto'),
         // 验证码有效期（秒），过期后 key 作废
-        'ttl' => (int) env('POSTER_CAPTCHA_TTL', 300),
+        'ttl' => (int) getenv('POSTER_CAPTCHA_TTL', 300),
         // 同一 key 最多验证次数，防暴力枚举
-        'max_attempts' => (int) env('POSTER_CAPTCHA_MAX_ATTEMPTS', 3),
+        'max_attempts' => (int) getenv('POSTER_CAPTCHA_MAX_ATTEMPTS', 3),
         // 默认难度: easy=2个点 | medium=3个点 | hard=4个点
-        'default_difficulty' => env('POSTER_CAPTCHA_DIFFICULTY', 'medium'),
+        'default_difficulty' => getenv('POSTER_CAPTCHA_DIFFICULTY', 'medium'),
         // 验证误差容忍
         'tolerance' => [
             'click'  => 18,   // 点击验证像素半径

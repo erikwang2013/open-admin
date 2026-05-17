@@ -12,11 +12,11 @@ declare(strict_types=1);
  */
 return [
     // 数据中心 ID，取值范围 0-31。单机房部署保持默认值即可
-    'datacenter_id' => (int) env('SNOWFLAKE_DATACENTER_ID', 1),
+    'datacenter_id' => (int) getenv('SNOWFLAKE_DATACENTER_ID', 1),
 
     // 工作节点 ID，取值范围 0-31。同一数据中心内每台机器需分配不同编号
-    'worker_id' => (int) env('SNOWFLAKE_WORKER_ID', 1),
+    'worker_id' => (int) getenv('SNOWFLAKE_WORKER_ID', 1),
 
     // 起始时间戳（毫秒），用于压缩 ID 长度。修改此值会导致已生成 ID 失效
-    'start_timestamp' => (int) env('SNOWFLAKE_START_TIMESTAMP', 1700000000000),
+    'start_timestamp' => (int) getenv('SNOWFLAKE_START_TIMESTAMP', 1700000000000),
 ];
