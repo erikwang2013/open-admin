@@ -110,6 +110,27 @@ class _AdminLayoutState extends State<AdminLayout> {
                 Icon(Icons.arrow_drop_down, size: 20),
               ],
             ),
+            onSelected: (value) {
+              if (value == 'logout') {
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('确认退出'),
+                    content: const Text('确定要退出登录吗？'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          Navigator.of(context).pushReplacementNamed('/login');
+                        },
+                        child: const Text('确定退出', style: TextStyle(color: Colors.red)),
+                      ),
+                    ],
+                  ),
+                );
+              }
+            },
             itemBuilder: (_) => [
               const PopupMenuItem(value: 'profile', child: Text('个人中心')),
               const PopupMenuItem(value: 'logout', child: Text('退出登录')),

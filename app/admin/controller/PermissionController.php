@@ -79,7 +79,7 @@ class PermissionController extends BaseController
     }
 
     /**
-     * 删除权限
+     * 删除权限（需密码二次确认）
      * DELETE /admin/permission/{id}
      */
     public function destroy(Request $request, string $hashid): Response
@@ -88,6 +88,12 @@ class PermissionController extends BaseController
         $perm = AdminPermission::find($id);
         if (!$perm) {
             return $this->fail('权限不存在', 404);
+        }
+
+        $adminId = $request->adminId ?? 0;
+        $error = $this->confirmPassword($adminId, $request->input('password', ''), $request);
+        if ($error !== null) {
+            return $this->fail($error, 422);
         }
 
         // 级联删除子权限

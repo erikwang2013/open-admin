@@ -34,6 +34,7 @@ This copyright notice is permanent, must not be modified, removed, or reversed. 
 | `erikwang2013/encryptable` | Database-layer sensitive field auto encryption |
 | `erikwang2013/webman-scout` | Elasticsearch sync and full-text search |
 | `erikwang2013/season` | Country flag data |
+| `erikwang2013/poster-php` | Click captcha generation/verification + poster generation |
 | `phpoffice/phpspreadsheet` | Excel export |
 | `barryvdh/laravel-dompdf` | PDF export (Dompdf-based) |
 
@@ -43,7 +44,9 @@ This copyright notice is permanent, must not be modified, removed, or reversed. 
 open-admin/
 ├── app/
 │   ├── admin/controller/       # Admin controllers
-│   ├── api/controller/         # Client API controllers (reserved)
+│   ├── api/controller/         # Public API controllers
+│   │   ├── CaptchaController.php# Click captcha (generate/verify)
+│   │   └── AuthController.php   # Login/register/refresh token
 │   ├── common/                 # Shared services
 │   │   ├── HashidsService.php  # ID encode/decode
 │   │   ├── SnowflakeService.php# Snowflake ID generation
@@ -166,6 +169,24 @@ Open `apps/harmonyos/` in DevEco Studio and run on a device or emulator.
 
 ### Authentication
 
+Login and registration require **click captcha** verification:
+
+1. Client requests `POST /api/captcha/generate` to get a captcha image (base64 PNG) and target word list
+2. User clicks the corresponding word positions on the image in order
+3. Login request includes `captcha_key` and `clicks` array — server verifies captcha before credentials
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "******",
+  "captcha_key": "abc123...",
+  "clicks": [{"x": 120, "y": 85}, {"x": 210, "y": 140}, {"x": 95, "y": 170}]
+}
+```
+
 All admin endpoints require a JWT token:
 
 ```http
@@ -174,7 +195,31 @@ Authorization: Bearer <token>
 
 Login returns an `access_token` (2h TTL) and a `refresh_token` (14d TTL).
 
-## Admin API Reference
+### Sensitive Operation Confirmation
+
+Destructive operations (delete user, role, permission) require the current user's `password` in the request body for identity re-verification:
+
+```http
+DELETE /admin/user/{id}
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{ "password": "******" }
+```
+
+## API Reference
+
+### Public Endpoints
+
+| Method | Path | Description |
+|-----|------|------|
+| `POST` | `/api/captcha/generate` | Generate click captcha (key + base64 image + targets) |
+| `POST` | `/api/captcha/verify` | Verify click positions (debugging) |
+| `POST` | `/api/auth/login` | Login (requires captcha) |
+| `POST` | `/api/auth/register` | Register (requires captcha) |
+| `POST` | `/api/auth/refresh` | Refresh token |
+
+### Admin Endpoints (requires JWT + RBAC)
 
 | Method | Path | Description |
 |-----|------|------|
@@ -183,15 +228,15 @@ Login returns an `access_token` (2h TTL) and a `refresh_token` (14d TTL).
 | `POST` | `/admin/user` | Create user |
 | `GET` | `/admin/user/{id}` | User detail |
 | `PUT` | `/admin/user/{id}` | Update user |
-| `DELETE` | `/admin/user/{id}` | Delete user (soft delete) |
+| `DELETE` | `/admin/user/{id}` | Delete user (soft delete, requires password) |
 | `GET` | `/admin/role` | Role list |
 | `POST` | `/admin/role` | Create role |
 | `PUT` | `/admin/role/{id}` | Update role |
-| `DELETE` | `/admin/role/{id}` | Delete role |
+| `DELETE` | `/admin/role/{id}` | Delete role (requires password) |
 | `GET` | `/admin/permission` | Permission tree |
 | `POST` | `/admin/permission` | Create permission |
 | `PUT` | `/admin/permission/{id}` | Update permission |
-| `DELETE` | `/admin/permission/{id}` | Delete permission (cascades children) |
+| `DELETE` | `/admin/permission/{id}` | Delete permission (cascades children, requires password) |
 | `POST` | `/admin/export/excel` | Export to Excel |
 | `POST` | `/admin/export/pdf` | Export to PDF |
 

@@ -19,9 +19,25 @@ struct ProfilePage {
   }
 
   logout(): void {
-    TokenManager.clearTokens();
-    promptAction.showToast({ message: '已退出登录' });
-    router.replaceUrl({ url: 'pages/LoginPage' });
+    AlertDialog.show({
+      title: '确认退出',
+      message: '确定要退出登录吗？',
+      autoCancel: true,
+      alignment: DialogAlignment.Center,
+      primaryButton: {
+        value: '确定退出',
+        fontColor: '#FF4D4F',
+        action: () => {
+          TokenManager.clearTokens();
+          promptAction.showToast({ message: '已退出登录' });
+          router.replaceUrl({ url: 'pages/LoginPage' });
+        }
+      },
+      secondaryButton: {
+        value: '取消',
+        action: () => {}
+      }
+    });
   }
 
   build() {

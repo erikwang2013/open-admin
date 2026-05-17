@@ -158,7 +158,7 @@ class UserController extends BaseController
     }
 
     /**
-     * 删除用户（软删除）
+     * 删除用户（软删除，需密码二次确认）
      * DELETE /admin/user/{id}
      */
     public function destroy(Request $request, string $hashid): Response
@@ -167,6 +167,12 @@ class UserController extends BaseController
         $user = AdminUser::find($id);
         if (!$user) {
             return $this->fail('用户不存在', 404);
+        }
+
+        $adminId = $request->adminId ?? 0;
+        $error = $this->confirmPassword($adminId, $request->input('password', ''), $request);
+        if ($error !== null) {
+            return $this->fail($error, 422);
         }
 
         $user->delete();

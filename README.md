@@ -34,6 +34,7 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 | `erikwang2013/encryptable` | 数据库存储层敏感字段自动加解密 |
 | `erikwang2013/webman-scout` | Elasticsearch 数据同步与全文检索 |
 | `erikwang2013/season` | 国家旗帜数据 |
+| `erikwang2013/poster-php` | 点击验证码生成与校验 + 海报生成 |
 | `phpoffice/phpspreadsheet` | Excel 导出 |
 | `barryvdh/laravel-dompdf` | PDF 导出（基于 Dompdf） |
 
@@ -43,7 +44,9 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 open-admin/
 ├── app/                        # 应用目录
 │   ├── admin/controller/       # 管理端控制器
-│   ├── api/controller/         # 客户端 API 控制器（预留）
+│   ├── api/controller/         # 公开 API 控制器
+│   │   ├── CaptchaController.php# 点击验证码（生成/校验）
+│   │   └── AuthController.php   # 登录/注册/刷新令牌
 │   ├── common/                 # 公共工具类
 │   │   ├── HashidsService.php  # ID 编解码
 │   │   ├── SnowflakeService.php# Snowflake ID 生成
@@ -178,7 +181,25 @@ flutter run -d chrome    # Web 端（PC 管理后台风格）
 
 ### 认证
 
-管理端所有接口需要 JWT 认证：
+登录与注册需要先通过**点击验证码**校验：
+
+1. 客户端请求 `POST /api/captcha/generate` 获取验证码图片（base64 PNG）和文字目标列表
+2. 用户按顺序点击图中对应文字位置，收集点击坐标 `[{x, y}, ...]`
+3. 登录时一并提交 `captcha_key` 和 `clicks`，服务端先校验验证码再校验凭证
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "******",
+  "captcha_key": "abc123...",
+  "clicks": [{"x": 120, "y": 85}, {"x": 210, "y": 140}, {"x": 95, "y": 170}]
+}
+```
+
+管理端后续接口需要 JWT 认证：
 
 ```http
 Authorization: Bearer <token>
@@ -186,7 +207,31 @@ Authorization: Bearer <token>
 
 登录成功后返回 access_token，有效期 2 小时；另返回 refresh_token，有效期 14 天。
 
-## 管理端 API 列表
+### 敏感操作二次确认
+
+删除用户、角色、权限等敏感操作需要在请求体中传入当前登录用户的 `password` 进行身份二次确认：
+
+```http
+DELETE /admin/user/{id}
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{ "password": "******" }
+```
+
+## API 列表
+
+### 公开接口
+
+| 方法 | 路径 | 说明 |
+|-----|------|------|
+| `POST` | `/api/captcha/generate` | 生成点击验证码（返回 key + base64 图片 + 目标文字） |
+| `POST` | `/api/captcha/verify` | 校验点击坐标（调试用） |
+| `POST` | `/api/auth/login` | 登录（需 captcha） |
+| `POST` | `/api/auth/register` | 注册（需 captcha） |
+| `POST` | `/api/auth/refresh` | 刷新令牌 |
+
+### 管理端接口（需 JWT + RBAC）
 
 | 方法 | 路径 | 说明 |
 |-----|------|------|
@@ -195,15 +240,15 @@ Authorization: Bearer <token>
 | `POST` | `/admin/user` | 创建用户 |
 | `GET` | `/admin/user/{id}` | 用户详情 |
 | `PUT` | `/admin/user/{id}` | 更新用户 |
-| `DELETE` | `/admin/user/{id}` | 删除用户（软删除） |
+| `DELETE` | `/admin/user/{id}` | 删除用户（软删除，需密码确认） |
 | `GET` | `/admin/role` | 角色列表 |
 | `POST` | `/admin/role` | 创建角色 |
 | `PUT` | `/admin/role/{id}` | 更新角色 |
-| `DELETE` | `/admin/role/{id}` | 删除角色 |
+| `DELETE` | `/admin/role/{id}` | 删除角色（需密码确认） |
 | `GET` | `/admin/permission` | 权限树 |
 | `POST` | `/admin/permission` | 创建权限 |
 | `PUT` | `/admin/permission/{id}` | 更新权限 |
-| `DELETE` | `/admin/permission/{id}` | 删除权限（级联子权限） |
+| `DELETE` | `/admin/permission/{id}` | 删除权限（级联子权限，需密码确认） |
 | `POST` | `/admin/export/excel` | 导出 Excel |
 | `POST` | `/admin/export/pdf` | 导出 PDF |
 

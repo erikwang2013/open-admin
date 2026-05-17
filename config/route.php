@@ -39,12 +39,17 @@ Route::group('/admin', function () {
 ]);
 
 // ============================================================
-// 客户端 API 路由（预留）
+// 公开接口（无需认证）
 // ============================================================
 Route::group('/api', function () {
-    // 认证相关
-    // Route::post('/auth/login', [app\api\controller\AuthController::class, 'login']);
-    // Route::post('/auth/refresh', [app\api\controller\AuthController::class, 'refresh']);
+    // 点击验证码
+    Route::post('/captcha/generate', [app\api\controller\CaptchaController::class, 'generate']);
+    Route::post('/captcha/verify', [app\api\controller\CaptchaController::class, 'verify']);
+
+    // 认证
+    Route::post('/auth/login', [app\api\controller\AuthController::class, 'login']);
+    Route::post('/auth/register', [app\api\controller\AuthController::class, 'register']);
+    Route::post('/auth/refresh', [app\api\controller\AuthController::class, 'refresh']);
 });
 
 // 关闭默认路由（生产环境建议关闭）

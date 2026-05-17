@@ -9,6 +9,7 @@ namespace app\admin\controller;
 
 use app\common\HashidsService;
 use app\common\SnowflakeService;
+use app\model\AdminUser;
 use support\Request;
 use support\Response;
 
@@ -64,5 +65,27 @@ class BaseController
     protected function generateId(): int
     {
         return SnowflakeService::generate();
+    }
+
+    /**
+     * 二次确认 — 验证当前登录用户密码
+     * 敏感操作（删除、导出等）调用此方法确认身份
+     *
+     * @param int $adminId 当前登录用户 ID
+     * @param string $password 用户输入的密码
+     * @return string|null 错误消息，null 表示验证通过
+     */
+    protected function confirmPassword(int $adminId, string $password, Request $request): ?string
+    {
+        if (empty($password)) {
+            return '敏感操作需要输入密码确认';
+        }
+
+        $admin = AdminUser::find($adminId);
+        if (!$admin || !password_verify($password, $admin->password)) {
+            return '密码验证失败';
+        }
+
+        return null; // 验证通过
     }
 }

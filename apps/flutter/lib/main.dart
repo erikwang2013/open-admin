@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 import 'app/theme/app_theme.dart';
 import 'app/layouts/admin_layout.dart';
+import 'app/pages/login/login_page.dart';
 import 'app/pages/dashboard/dashboard_page.dart';
 
 void main() {
@@ -28,10 +29,10 @@ class AdminApp extends StatelessWidget {
         ],
       ),
       getPages: [
-        GetPage(name: '/', page: () => AdminLayout(child: const DashboardPage())),
+        GetPage(name: '/login', page: () => const LoginPage()),
         GetPage(name: '/dashboard', page: () => AdminLayout(child: const DashboardPage())),
       ],
-      initialRoute: '/',
+      initialRoute: '/login',
     );
   }
 }

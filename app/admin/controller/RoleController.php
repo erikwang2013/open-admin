@@ -93,7 +93,7 @@ class RoleController extends BaseController
     }
 
     /**
-     * 删除角色
+     * 删除角色（需密码二次确认）
      * DELETE /admin/role/{id}
      */
     public function destroy(Request $request, string $hashid): Response
@@ -102,6 +102,12 @@ class RoleController extends BaseController
         $role = AdminRole::find($id);
         if (!$role) {
             return $this->fail('角色不存在', 404);
+        }
+
+        $adminId = $request->adminId ?? 0;
+        $error = $this->confirmPassword($adminId, $request->input('password', ''), $request);
+        if ($error !== null) {
+            return $this->fail($error, 422);
         }
 
         $role->permissions()->detach();

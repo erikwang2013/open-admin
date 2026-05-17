@@ -195,10 +195,11 @@ erik_system_config (系统配置) — 独立表
 ### 4.1 URL 规范
 
 ```
-管理端:  /admin/{resource}[/{hashid}]
-         /admin/export/{excel|pdf}
+公开接口:  /api/captcha/{generate|verify}
+           /api/auth/{login|register|refresh}
 
-认证:    /api/auth/{login|refresh}
+管理端:   /admin/{resource}[/{hashid}]
+          /admin/export/{excel|pdf}
 
 资源路由:
   GET    /admin/user          → 列表
@@ -228,16 +229,27 @@ erik_system_config (系统配置) — 独立表
 | 422 | 验证失败 | 表单参数不符合规则 |
 | 500 | 服务端错误 | 未预期异常 |
 
-### 4.3 认证流程
+### 4.3 认证流程（含点击验证码）
 
 ```
   客户端                        服务端
     │                             │
+    │  POST /api/captcha/generate│
+    │─────────────────────────►  │ captcha_create('click')
+    │  {key, image(base64),      │
+    │   targets:[{order,text}]}  │
+    │◄─────────────────────────  │
+    │                             │
+    │  用户点击图中文字位置         │
+    │  收集 clicks: [{x,y},...]  │
+    │                             │
     │  POST /api/auth/login      │
-    │  {username, password}      │
+    │  {username, password,      │
+    │   captcha_key, clicks}     │
     │─────────────────────────►  │
-    │                             │ 验证凭证
-    │                             │ jwt()->create()
+    │                             │ ① captcha_verify(key, clicks)
+    │                             │ ② password_verify()
+    │                             │ ③ jwt()->create()
     │  {access_token,            │
     │   refresh_token,           │
     │   expires_in: 7200}        │
@@ -274,6 +286,25 @@ erik_system_config (系统配置) — 独立表
   例: get.admin/user  post.admin/user  delete.admin/user
   超级管理员标识: * (跳过所有权限检查)
 ```
+
+### 4.5 敏感操作二次确认
+
+删除用户、角色、权限等敏感操作，需要在请求体中传入当前用户密码进行身份复核：
+
+```
+客户端                          服务端
+  │                               │
+  │  DELETE /admin/user/{hashid} │
+  │  { password: "******" }      │
+  │───────────────────────────►  │
+  │                               │ confirmPassword(adminId, password)
+  │                               │ → 密码错误返回 422
+  │                               │ → 密码正确继续执行
+  │  200 { code: 0 }             │
+  │◄───────────────────────────  │
+```
+
+前端在触发删除操作前弹出确认对话框，收集用户密码后发送请求。
 
 ## 5. 前端设计
 
@@ -342,7 +373,7 @@ erik_system_config (系统配置) — 独立表
 
 | 页面 | 路由 | 说明 |
 |------|------|------|
-| LoginPage | `pages/LoginPage` | 启动页，用户名密码登录 |
+| LoginPage | `pages/LoginPage` | 启动页，用户名密码 + 点击验证码 |
 | DashboardPage | `pages/DashboardPage` | 仪表盘统计卡片+最近操作 |
 | UserListPage | `pages/UserListPage` | 用户列表，搜索+下拉刷新+上滑加载更多 |
 | UserDetailPage | `pages/UserDetailPage` | 用户新增/编辑/查看，含删除功能 |
@@ -365,6 +396,8 @@ Page ←→ DataService ←→ ApiService ←→ HTTP ←→ webman后端
 
 | 层面 | 措施 |
 |------|------|
+| 人机验证 | 点击验证码（Click Captcha），登录/注册强制校验 |
+| 操作确认 | 删除等敏感操作需输入当前用户密码二次确认 |
 | 传输 | HTTPS + JWT Bearer Token |
 | 接口ID | Hashids 加密，外部不可逆推真实 ID |
 | 请求体 | AES-256-CBC 敏感字段加密 |
