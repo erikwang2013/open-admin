@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace app\common;
 
+use support\Container;
 use InvalidArgumentException;
 
 /**
@@ -17,12 +18,12 @@ class HashidsService
 {
     public static function encode(int $id): string
     {
-        return hashids()->encode($id);
+        return Container::get('hashids')->encode($id);
     }
 
     public static function decode(string $hashid): int
     {
-        $ids = hashids()->decode($hashid);
+        $ids = Container::get('hashids')->decode($hashid);
         if (empty($ids)) {
             throw new InvalidArgumentException('无效的加密ID');
         }

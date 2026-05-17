@@ -10,44 +10,49 @@ namespace app\api\controller;
 use app\model\AdminUser;
 use app\common\SnowflakeService;
 use app\common\EncryptionService;
+use support\Container;
 use support\Request;
 use support\Response;
+use Erikwang2013\Jwt\JWT;
+use Erikwang2013\Jwt\JWTFactory;
 use Throwable;
-
-use function captcha_verify;
-use function jwt;
-use function hashids;
 
 class AuthController
 {
+    private static ?JWT $jwt = null;
+
+    private static function getJWT(): JWT
+    {
+        if (self::$jwt === null) {
+            $config = config('plugin.erikwang2013.jwt.jwt', []);
+            self::$jwt = JWTFactory::createFromConfig($config);
+        }
+        return self::$jwt;
+    }
+
     /**
      * 登录（需先通过点击验证码）
      * POST /api/auth/login
-     *
-     * 请求: { username, password, captcha_key, clicks: [{x,y}, ...] }
      */
     public function login(Request $request): Response
     {
         $validator = validator($request->all(), [
-            'username' => 'required|string|min:3|max:50',
-            'password' => 'required|string|min:6|max:32',
+            'username'    => 'required|string|min:3|max:50',
+            'password'    => 'required|string|min:6|max:32',
             'captcha_key' => 'required|string',
-            'clicks' => 'required|array|min:2',
+            'clicks'      => 'required|array|min:2',
         ]);
 
         if ($validator->fails()) {
             return json(['code' => 422, 'message' => $validator->errors()->first(), 'data' => []]);
         }
 
-        // 第一步: 验证点击验证码
-        $captchaKey = $request->input('captcha_key');
-        $clicks = $request->input('clicks');
-
-        if (!captcha_verify($captchaKey, 'click', $clicks)) {
+        // 验证点击验证码
+        if (!captcha_verify($request->input('captcha_key'), 'click', $request->input('clicks'))) {
             return json(['code' => 422, 'message' => '验证码错误，请重试', 'data' => []]);
         }
 
-        // 第二步: 校验用户凭证
+        // 校验用户凭证
         $username = $request->input('username');
         $user = AdminUser::where('username', $username)->first();
 
@@ -59,13 +64,12 @@ class AuthController
             return json(['code' => 403, 'message' => '账号已被禁用', 'data' => []]);
         }
 
-        // 第三步: 签发 JWT
-        $token = jwt()->create([
-            'sub' => $user->id,
-            'username' => $user->username,
-        ]);
-
-        $refreshToken = jwt()->refresh();
+        // 签发 JWT
+        $jwt = self::getJWT();
+        $token = $jwt->encode(['sub' => $user->id, 'username' => $user->username]);
+        $refreshToken = $jwt->encode(['sub' => $user->id, 'token_type' => 'refresh'],
+            (int)(config('plugin.erikwang2013.jwt.jwt.refresh_expire') ?: 1209600)
+        );
 
         // 更新登录信息
         $user->last_login_at = date('Y-m-d H:i:s');
@@ -73,15 +77,15 @@ class AuthController
         $user->save();
 
         return json([
-            'code' => 0,
+            'code'    => 0,
             'message' => '登录成功',
-            'data' => [
-                'access_token' => $token,
+            'data'    => [
+                'access_token'  => $token,
                 'refresh_token' => $refreshToken,
-                'expires_in' => 7200,
-                'user' => [
-                    'id' => hashids()->encode($user->id),
-                    'username' => $user->username,
+                'expires_in'    => (int)(config('plugin.erikwang2013.jwt.jwt.default_expire') ?: 7200),
+                'user'          => [
+                    'id'        => Container::get('hashids')->encode($user->id),
+                    'username'  => $user->username,
                     'real_name' => $user->real_name,
                 ],
             ],
@@ -91,38 +95,30 @@ class AuthController
     /**
      * 注册（需先通过点击验证码）
      * POST /api/auth/register
-     *
-     * 请求: { username, password, real_name, captcha_key, clicks: [{x,y}, ...] }
      */
     public function register(Request $request): Response
     {
         $validator = validator($request->all(), [
-            'username' => 'required|string|min:3|max:50',
-            'password' => 'required|string|min:6|max:32',
-            'real_name' => 'required|string|max:50',
+            'username'    => 'required|string|min:3|max:50',
+            'password'    => 'required|string|min:6|max:32',
+            'real_name'   => 'required|string|max:50',
             'captcha_key' => 'required|string',
-            'clicks' => 'required|array|min:2',
+            'clicks'      => 'required|array|min:2',
         ]);
 
         if ($validator->fails()) {
             return json(['code' => 422, 'message' => $validator->errors()->first(), 'data' => []]);
         }
 
-        // 第一步: 验证点击验证码
-        $captchaKey = $request->input('captcha_key');
-        $clicks = $request->input('clicks');
-
-        if (!captcha_verify($captchaKey, 'click', $clicks)) {
+        if (!captcha_verify($request->input('captcha_key'), 'click', $request->input('clicks'))) {
             return json(['code' => 422, 'message' => '验证码错误，请重试', 'data' => []]);
         }
 
-        // 第二步: 检查用户名唯一性
         $username = $request->input('username');
         if (AdminUser::where('username', $username)->exists()) {
             return json(['code' => 422, 'message' => '用户名已存在', 'data' => []]);
         }
 
-        // 第三步: 创建用户
         $user = new AdminUser();
         $user->id = SnowflakeService::generate();
         $user->username = $username;
@@ -133,23 +129,22 @@ class AuthController
         $user->status = 1;
         $user->save();
 
-        // 第四步: 签发 JWT
-        $token = jwt()->create([
-            'sub' => $user->id,
-            'username' => $user->username,
-        ]);
-        $refreshToken = jwt()->refresh();
+        $jwt = self::getJWT();
+        $token = $jwt->encode(['sub' => $user->id, 'username' => $user->username]);
+        $refreshToken = $jwt->encode(['sub' => $user->id, 'token_type' => 'refresh'],
+            (int)(config('plugin.erikwang2013.jwt.jwt.refresh_expire') ?: 1209600)
+        );
 
         return json([
-            'code' => 0,
+            'code'    => 0,
             'message' => '注册成功',
-            'data' => [
-                'access_token' => $token,
+            'data'    => [
+                'access_token'  => $token,
                 'refresh_token' => $refreshToken,
-                'expires_in' => 7200,
-                'user' => [
-                    'id' => hashids()->encode($user->id),
-                    'username' => $user->username,
+                'expires_in'    => (int)(config('plugin.erikwang2013.jwt.jwt.default_expire') ?: 7200),
+                'user'          => [
+                    'id'        => Container::get('hashids')->encode($user->id),
+                    'username'  => $user->username,
                     'real_name' => $user->real_name,
                 ],
             ],
@@ -169,16 +164,21 @@ class AuthController
         }
 
         try {
-            $token = jwt()->refresh($refreshToken);
-            $newRefreshToken = jwt()->refresh();
+            $jwt = self::getJWT();
+            $payload = $jwt->decode($refreshToken);
+
+            $token = $jwt->encode(['sub' => $payload['sub'], 'username' => $payload['username'] ?? '']);
+            $newRefresh = $jwt->encode(['sub' => $payload['sub'], 'token_type' => 'refresh'],
+                (int)(config('plugin.erikwang2013.jwt.jwt.refresh_expire') ?: 1209600)
+            );
 
             return json([
-                'code' => 0,
+                'code'    => 0,
                 'message' => 'success',
-                'data' => [
-                    'access_token' => $token,
-                    'refresh_token' => $newRefreshToken,
-                    'expires_in' => 7200,
+                'data'    => [
+                    'access_token'  => $token,
+                    'refresh_token' => $newRefresh,
+                    'expires_in'    => (int)(config('plugin.erikwang2013.jwt.jwt.default_expire') ?: 7200),
                 ],
             ]);
         } catch (Throwable $e) {

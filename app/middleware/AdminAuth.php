@@ -9,11 +9,23 @@ namespace app\middleware;
 
 use support\Request;
 use support\Response;
-
-use function jwt;
+use Erikwang2013\Jwt\JWT;
+use Erikwang2013\Jwt\JWTFactory;
+use Erikwang2013\Jwt\JWTException;
 
 class AdminAuth
 {
+    private static ?JWT $jwt = null;
+
+    private static function getJWT(): JWT
+    {
+        if (self::$jwt === null) {
+            $config = config('plugin.erikwang2013.jwt.jwt', []);
+            self::$jwt = JWTFactory::createFromConfig($config);
+        }
+        return self::$jwt;
+    }
+
     public function process(Request $request, callable $next): Response
     {
         $token = $request->header('Authorization', '');
@@ -24,10 +36,10 @@ class AdminAuth
         }
 
         try {
-            $payload = jwt()->verify($token);
+            $payload = self::getJWT()->decode($token);
             $request->adminId = $payload['sub'] ?? 0;
             $request->adminUsername = $payload['username'] ?? '';
-        } catch (\Exception $e) {
+        } catch (JWTException | \Exception $e) {
             return json(['code' => 401, 'message' => 'Token已过期或无效', 'data' => []]);
         }
 

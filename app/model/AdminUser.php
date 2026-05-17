@@ -7,7 +7,7 @@ declare(strict_types=1);
 
 namespace app\model;
 
-use Maize\Encryptable\Encryptable;
+use Erikwang2013\Encryptable\Encryptable;
 use support\Model;
 
 class AdminUser extends Model

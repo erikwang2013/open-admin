@@ -22,9 +22,9 @@ class SnowflakeService
         if (self::$instance === null) {
             $config = config('snowflake', []);
             self::$instance = new Snowflake(
-                $config['datacenter_id'] ?? 1,
-                $config['worker_id'] ?? 1,
-                $config['start_timestamp'] ?? null
+                workerId: (int)($config['worker_id'] ?? 1),
+                datacenterId: (int)($config['datacenter_id'] ?? 1),
+                epoch: $config['start_timestamp'] ?? null,
             );
         }
         return self::$instance->nextId();

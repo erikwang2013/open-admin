@@ -7,7 +7,8 @@ declare(strict_types=1);
 
 namespace app\common;
 
-use Erikwang2013\Encryption\Encryption;
+use Erikwang2013\Encryption\EncryptionManager;
+use Erikwang2013\Encryption\EncryptionManagerFactory;
 
 /**
  * API 敏感数据加解密服务
@@ -15,13 +16,23 @@ use Erikwang2013\Encryption\Encryption;
  */
 class EncryptionService
 {
-    private static ?Encryption $instance = null;
+    private static ?EncryptionManager $instance = null;
 
-    private static function getInstance(): Encryption
+    private static function getInstance(): EncryptionManager
     {
         if (self::$instance === null) {
             $config = config('encryption', []);
-            self::$instance = new Encryption($config['key'] ?? '', $config['cipher'] ?? 'AES-256-CBC');
+            $key = $config['key'] ?? 'open-admin-api-encryption-key32b';
+
+            // EncryptionManagerFactory 要求主密钥恰好 32 字节
+            if (strlen($key) !== 32) {
+                $key = str_pad(substr($key, 0, 32), 32, "\0");
+            }
+
+            self::$instance = EncryptionManagerFactory::fromMasterKey(
+                $key,
+                'aes-256-cbc-hmac'
+            );
         }
         return self::$instance;
     }
