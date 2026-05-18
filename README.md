@@ -267,6 +267,14 @@ Web 端与移动端 App 的差异：
 - 数据库主键必须由应用层 snowflake 生成，禁止自增
 - API 层所有参数和响应中的 ID 必须通过 hashids 加解密
 
+## 开源不易，欢迎支持
+
+| 微信 | 支付宝 |
+|:---:|:---:|
+| ![微信](./docs/weixinpay.png "微信") | ![支付宝](./docs/alipay.png "支付宝") |
+
+---
+
 ## License
 
 MIT
