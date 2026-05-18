@@ -26,7 +26,7 @@ class AdminApp extends StatelessWidget {
         breakpoints: [
           const Breakpoint(start: 0, end: 767, name: PHONE),
           const Breakpoint(start: 768, end: 1199, name: TABLET),
-          const Breakpoint(start: 1200, end: 2460, name: DESKTOP),
+          const Breakpoint(start: 1200, end: 4500, name: DESKTOP),
         ],
       ),
       getPages: [

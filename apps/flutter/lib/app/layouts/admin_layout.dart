@@ -12,20 +12,27 @@ class AdminLayout extends StatefulWidget {
 
 class _AdminLayoutState extends State<AdminLayout> {
   bool _sidebarCollapsed = false;
-  bool _sidebarInitialized = false;
+  String? _previousBreakpoint;
   static const double sidebarWidth = 240;
   static const double sidebarCollapsedWidth = 64;
   static const double headerHeight = 56;
 
-  bool get _isPhone => ResponsiveBreakpoints.of(context).smallerThan(TABLET);
-  bool get _isTablet => ResponsiveBreakpoints.of(context).equals(TABLET);
+  ResponsiveBreakpointsData get _bp => ResponsiveBreakpoints.of(context);
+  bool get _isPhone => _bp.smallerThan(TABLET);
+  bool get _isTablet => _bp.equals(TABLET);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final current = _bp.breakpoint.name;
+    if (_previousBreakpoint != null && _previousBreakpoint != current) {
+      _sidebarCollapsed = _isTablet;
+    }
+    _previousBreakpoint = current;
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (!_sidebarInitialized) {
-      _sidebarCollapsed = _isTablet;
-      _sidebarInitialized = true;
-    }
     if (_isPhone) return _buildPhoneLayout();
     return _buildDesktopLayout();
   }
@@ -39,26 +46,26 @@ class _AdminLayoutState extends State<AdminLayout> {
         actions: [_buildUserMenu()],
       ),
       drawer: Drawer(
-        child: SafeArea(
-          child: Column(
-            children: [
-              Container(
-                height: headerHeight,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                alignment: Alignment.centerLeft,
-                child: const Row(
-                  children: [
-                    Icon(Icons.admin_panel_settings, size: 24),
-                    SizedBox(width: 8),
-                    Text('管理后台',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  ],
-                ),
+        child: NavigationDrawer(
+          selectedIndex: 0,
+          onDestinationSelected: (i) {},
+          children: [
+            Container(
+              height: headerHeight,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              alignment: Alignment.centerLeft,
+              child: const Row(
+                children: [
+                  Icon(Icons.admin_panel_settings, size: 24),
+                  SizedBox(width: 8),
+                  Text('管理后台',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ],
               ),
-              const Divider(),
-              ..._buildNavItems(),
-            ],
-          ),
+            ),
+            const Divider(),
+            ..._buildNavItems(),
+          ],
         ),
       ),
       body: Container(
