@@ -24,8 +24,9 @@ class AdminApp extends StatelessWidget {
       builder: (context, child) => ResponsiveBreakpoints.builder(
         child: child!,
         breakpoints: [
-          const Breakpoint(start: 0, end: 768, name: MOBILE),
-          const Breakpoint(start: 769, end: 1920, name: DESKTOP),
+          const Breakpoint(start: 0, end: 767, name: PHONE),
+          const Breakpoint(start: 768, end: 1199, name: TABLET),
+          const Breakpoint(start: 1200, end: 2460, name: DESKTOP),
         ],
       ),
       getPages: [
