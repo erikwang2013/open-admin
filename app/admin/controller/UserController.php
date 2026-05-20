@@ -178,4 +178,53 @@ class UserController extends BaseController
         $user->delete();
         return $this->success([], '删除成功');
     }
+
+    /**
+     * 批量删除
+     * POST /admin/user/batch/destroy
+     */
+    public function batchDestroy(Request $request): Response
+    {
+        $ids      = $request->input('ids', []);
+        $password = $request->input('password', '');
+
+        if (empty($ids) || !is_array($ids)) {
+            return $this->fail('请选择要删除的用户', 422);
+        }
+
+        $adminId = $request->adminId ?? 0;
+        $error   = $this->confirmPassword($adminId, $password, $request);
+        if ($error !== null) {
+            return $this->fail($error, 422);
+        }
+
+        $decodedIds = array_map(fn($hashid) => $this->decodeId($hashid), $ids);
+        AdminUser::whereIn('id', $decodedIds)->delete();
+
+        return $this->success(['count' => count($decodedIds)], '删除成功');
+    }
+
+    /**
+     * 批量启用/禁用
+     * POST /admin/user/batch/status
+     */
+    public function batchStatus(Request $request): Response
+    {
+        $ids    = $request->input('ids', []);
+        $status = (int) $request->input('status', 0);
+
+        if (empty($ids) || !is_array($ids)) {
+            return $this->fail('请选择用户', 422);
+        }
+
+        if (!in_array($status, [0, 1], true)) {
+            return $this->fail('状态值无效', 422);
+        }
+
+        $decodedIds = array_map(fn($hashid) => $this->decodeId($hashid), $ids);
+        AdminUser::whereIn('id', $decodedIds)->update(['status' => $status]);
+
+        $label = $status === 1 ? '启用' : '禁用';
+        return $this->success(['count' => count($decodedIds)], "批量{$label}成功");
+    }
 }
