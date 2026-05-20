@@ -24,9 +24,114 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 - 国家旗帜: `erikwang2013/season`
 
 ### 前端
-- Flutter 3.x，源码目录 `apps/`
+- Flutter 3.x，源码目录 `apps/flutter/`
 - Web 端按 PC 管理后台风格设计（非移动端 App 风格）
 - 支持客户端和管理员端
+- HarmonyOS ArkTS，源码目录 `apps/harmonyos/`
+
+## 项目结构
+
+```
+open-admin/
+├── app/
+│   ├── admin/controller/       # 管理端控制器 (14 个)
+│   │   ├── BaseController.php      # 基础控制器
+│   │   ├── DashboardController.php # 仪表盘（Redis 缓存）
+│   │   ├── UserController.php      # 用户 CRUD + 批量操作
+│   │   ├── RoleController.php      # 角色 CRUD
+│   │   ├── PermissionController.php# 权限 CRUD
+│   │   ├── ConfigController.php    # 系统配置 CRUD
+│   │   ├── LogController.php       # 操作日志查询
+│   │   ├── ProfileController.php   # 个人中心 + 登出
+│   │   ├── ExportController.php    # Excel/PDF 导出
+│   │   ├── ImportController.php    # Excel 导入用户
+│   │   ├── UploadController.php    # 文件上传
+│   │   ├── HealthController.php    # 健康检查
+│   │   └── DocsController.php      # OpenAPI 文档
+│   ├── api/v1/controller/      # API v1 控制器（版本头控制）
+│   │   ├── CaptchaController.php
+│   │   └── AuthController.php
+│   ├── common/                 # 公共工具类
+│   │   ├── HashidsService.php
+│   │   ├── SnowflakeService.php
+│   │   └── EncryptionService.php
+│   ├── middleware/             # 中间件（6 个）
+│   │   ├── Cors.php            # 跨域（全局）
+│   │   ├── RateLimit.php       # Redis 限流（全局，Lua 原子化）
+│   │   ├── ApiVersion.php      # API 版本校验
+│   │   ├── AdminAuth.php       # JWT 认证 + 黑名单
+│   │   ├── AdminPermission.php # RBAC 权限校验
+│   │   └── OperationLog.php    # 操作日志自动记录
+│   ├── model/                  # 数据模型
+│   ├── queue/                  # 队列任务
+│   └── process/                # 进程 (Http, Monitor)
+├── apps/
+│   ├── flutter/                # Flutter Web 管理后台
+│   │   └── lib/app/
+│   │       ├── pages/          # 6 个完整页面
+│   │       │   ├── dashboard/  # 仪表盘
+│   │       │   ├── login/      # 登录
+│   │       │   ├── user/       # 用户管理
+│   │       │   ├── role/       # 角色权限
+│   │       │   ├── config/     # 系统配置
+│   │       │   ├── log/        # 操作日志
+│   │       │   └── profile/    # 个人中心
+│   │       ├── services/       # ApiService + AuthService
+│   │       ├── layouts/        # 响应式布局
+│   │       └── theme/          # Material 3 主题
+│   └── harmonyos/              # HarmonyOS 客户端
+├── config/                     # 配置文件
+│   ├── route.php               # 路由 + API 版本策略
+│   └── middleware.php           # 全局中间件注册
+├── database/migrations/        # SQL 迁移文件
+│   ├── 2026_05_16_000000_init_tables.sql
+│   └── 2026_05_20_000001_seed_permissions.sql
+├── docs/                       # 文档
+│   ├── ARCHITECTURE.md         # Mermaid 架构图
+│   ├── DESIGN.md               # 设计文档
+│   ├── diagrams/               # 分解架构图
+│   └── superpowers/            # 规范与计划
+│       ├── specs/              # 设计规范
+│       └── plans/              # 实现计划
+├── public/                     # 公共入口
+├── runtime/                    # 运行时文件
+├── tests/                      # 测试
+├── vendor/                     # Composer 依赖
+├── CLAUDE.md                   # 本文件
+├── README.md                   # 中文说明
+├── README_EN.md                # 英文说明
+├── .env                        # 环境变量（不纳入版本控制）
+├── .env.example                # 环境变量模板
+├── composer.json               # PHP 依赖
+├── Dockerfile                  # Docker 构建
+└── docker-compose.yml          # Docker 编排
+```
+
+## 中间件执行链
+
+```
+全局:  Cors → RateLimit → {路由中间件}
+/admin: Cors → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
+/api:   Cors → RateLimit → ApiVersion → Controller
+/health: Cors → RateLimit → Controller
+```
+
+## API 版本策略
+
+版本通过请求头 `API-Version` 控制（默认 `v1`），不在 URL 中体现：
+
+```bash
+curl -H "API-Version: v1" http://localhost:8787/api/auth/login
+```
+
+新增版本只需创建 `app/api/{version}/controller/` 目录并注册到 `ApiVersion` 中间件。
+
+## 限流策略
+
+Redis 滑动窗口（Lua 原子化），默认 60 次/分钟/IP/路由：
+- 登录: 10 次/分钟
+- 注册: 5 次/分钟
+- 响应头: `X-RateLimit-Limit/Remaining/Reset`，超限附加 `Retry-After`
 
 ## 代码规范
 
@@ -43,5 +148,11 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
 ### Flutter
 - Web 端布局使用 PC 管理后台风格（侧边栏 + 顶栏 + 内容区）
-- 响应式断点: 移动端 (< 768px) 与桌面端 (>= 768px) 共用，但 Web 端默认桌面布局
-- 使用 `responsive_framework` 处理响应式
+- 使用 GetX 状态管理，`ApiService` 单例（Dio + JWT 拦截器）
+- Token 持久化使用 `shared_preferences`
+- 响应式断点: 移动端 (< 768px) 与桌面端 (>= 768px)
+
+### HarmonyOS
+- 使用 `@ohos.net.http` 原生 HTTP 客户端
+- Token 无感刷新：401 时自动调用 `/api/auth/refresh`
+- 刷新失败自动重定向登录页
