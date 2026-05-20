@@ -473,6 +473,7 @@ erDiagram
         VARCHAR method
         VARCHAR path
         VARCHAR ip
+        VARCHAR source "来源端"
         TEXT input "脱敏"
         DATETIME created_at
     }
@@ -609,7 +610,7 @@ flowchart TB
     end
 
     subgraph "第7层: 审计追溯"
-        L7["OperationLog<br/>记录所有操作<br/>用户/IP/时间/参数"]
+        L7["OperationLog<br/>记录所有操作<br/>用户/IP/时间/来源端/参数"]
     end
 
     L1 --> L2 --> L3 --> L4 --> L5 --> L6 --> L7

@@ -89,7 +89,7 @@ Route 匹配
   AdminPermission ────► RBAC 权限校验
   │ (失败返回 403)
   ▼
-  OperationLog ───────► 操作日志记录 (POST/PUT/DELETE)
+  OperationLog ───────► 操作日志记录 (POST/PUT/DELETE)，自动检测来源端
   │
   ▼
 Controller::method()
@@ -150,7 +150,7 @@ erik_system_config (系统配置) — 独立表
 | `erik_admin_user_role` | 2 | 用户-角色多对多中间表 |
 | `erik_admin_role_permission` | 2 | 角色-权限多对多中间表 |
 | `erik_system_config` | 8 | 键值对配置，group+key 联合唯一 |
-| `erik_operation_log` | 8 | 操作审计日志 |
+| `erik_operation_log` | 9 | 操作审计日志（含 source 来源端） |
 
 ### 3.3 主键规范
 
@@ -360,7 +360,7 @@ curl /api/auth/login
 | 数据库 | AES-128-ECB 敏感字段加密存储 |
 | 认证 | JWT HS256，2h 过期 + refresh token |
 | 授权 | RBAC，method.path 粒度权限控制 |
-| 审计 | OperationLog 记录所有操作 |
+| 审计 | OperationLog 记录所有操作（含来源端 source 自动检测） |
 
 ### 6.2 密钥管理
 

@@ -61,7 +61,7 @@ open-admin/
 │   │   ├── ApiVersion.php      # API 版本校验
 │   │   ├── AdminAuth.php       # JWT 认证 + 黑名单
 │   │   ├── AdminPermission.php # RBAC 权限校验
-│   │   └── OperationLog.php    # 操作日志自动记录
+│   │   └── OperationLog.php    # 操作日志自动记录（含来源端检测）
 │   ├── model/                  # 数据模型
 │   ├── queue/                  # 队列任务
 │   └── process/                # 进程 (Http, Monitor)

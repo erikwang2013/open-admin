@@ -66,7 +66,7 @@ open-admin/
 │   │   ├── ApiVersion.php      # API version validation
 │   │   ├── AdminAuth.php       # JWT auth + blacklist
 │   │   ├── AdminPermission.php # RBAC authorization
-│   │   └── OperationLog.php    # Auto operation logging
+│   │   └── OperationLog.php    # Auto operation logging (with source detection)
 │   └── model/                  # Eloquent models
 ├── apps/
 │   ├── flutter/                # Flutter Web admin panel
@@ -214,7 +214,7 @@ Cors (preflight + response headers)
   → ApiVersion (API version validation, /api group)
   → AdminAuth (JWT + blacklist, /admin group)
   → AdminPermission (RBAC, /admin group)
-  → OperationLog (auto-log POST/PUT/DELETE, /admin group)
+  → OperationLog (auto-log POST/PUT/DELETE with source detection, /admin group)
 ```
 
 `/health` and `/api/docs` are public, only passing through `Cors → RateLimit`.

@@ -64,7 +64,7 @@ open-admin/
 │   │   ├── ApiVersion.php      # API 版本校验
 │   │   ├── AdminAuth.php       # JWT 认证 + 黑名单
 │   │   ├── AdminPermission.php # RBAC 权限校验
-│   │   └── OperationLog.php    # 操作日志自动记录
+│   │   └── OperationLog.php    # 操作日志自动记录（含来源端检测）
 │   └── model/                  # 数据模型
 ├── apps/
 │   ├── flutter/                # Flutter Web 管理后台（PC 风格）
@@ -224,7 +224,7 @@ Cors（跨域预处理 + 响应头）
   → ApiVersion（API 版本校验，/api 路由组）
   → AdminAuth（JWT 认证 + 黑名单，/admin 路由组）
   → AdminPermission（RBAC 鉴权，/admin 路由组）
-  → OperationLog（POST/PUT/DELETE 自动记录，/admin 路由组）
+  → OperationLog（POST/PUT/DELETE 自动记录，含来源端检测，/admin 路由组）
 ```
 
 `/health` 和 `/api/docs` 为公开端点，仅经过 `Cors → RateLimit`。
