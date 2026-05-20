@@ -13,7 +13,7 @@
 | PHP 版本 | 8.3+ | |
 | 数据库 | MySQL 8.0+ | 表前缀 `erik_`，BIGINT 非自增主键 |
 | 搜索引擎 | Elasticsearch | 通过 `webman-scout` 同步与查询 |
-| 管理端前端 | Flutter 3.x | Web 端为 PC 管理后台风格（`apps/admin_app/`） |
+| 管理端前端 | Flutter 3.x | Web 端为 PC 管理后台风格（`apps/flutter/`） |
 | 移动端 | HarmonyOS ArkTS | 鸿蒙原生客户端（`apps/harmonyos/`），支持手机/平板/2in1 |
 
 ## 核心依赖
@@ -122,10 +122,13 @@ cp .env.example .env
 
 ### 3. 初始化数据库
 
-执行 `database/migrations/` 下的 SQL 文件：
+按顺序执行 `database/migrations/` 下的 SQL 文件：
 
 ```bash
+# 建表
 mysql -u root -p < database/migrations/2026_05_16_000000_init_tables.sql
+# 播种权限数据
+mysql -u root -p < database/migrations/2026_05_20_000001_seed_permissions.sql
 ```
 
 ### 4. 启动服务
@@ -141,7 +144,7 @@ php start.php start
 **Flutter 管理后台（Web 端）:**
 
 ```bash
-cd apps/admin_app
+cd apps/flutter
 flutter pub get
 flutter run -d chrome    # Web 端（PC 管理后台风格）
 ```
@@ -210,6 +213,21 @@ API-Version: v1
 - 注册：5 次/分钟
 
 响应头包含 `X-RateLimit-Limit`、`X-RateLimit-Remaining`、`X-RateLimit-Reset`。超限返回 429 并附带 `Retry-After`。
+
+### 中间件架构
+
+全局中间件对所有请求生效，按序执行：
+
+```
+Cors（跨域预处理 + 响应头）
+  → RateLimit（Redis 滑动窗口限流）
+  → ApiVersion（API 版本校验，/api 路由组）
+  → AdminAuth（JWT 认证 + 黑名单，/admin 路由组）
+  → AdminPermission（RBAC 鉴权，/admin 路由组）
+  → OperationLog（POST/PUT/DELETE 自动记录，/admin 路由组）
+```
+
+`/health` 和 `/api/docs` 为公开端点，仅经过 `Cors → RateLimit`。
 
 ### 认证
 
@@ -304,17 +322,21 @@ Authorization: Bearer <token>
 
 ## 前端说明
 
-Flutter 应用采用了 PC 管理后台风格设计：
+### Flutter 管理后台（PC 风格）
 
-- **布局**: 侧边栏（可折叠 64px/240px）+ 顶栏 + 内容区
-- **仪表盘**: 统计卡片、趋势折线图、饼图、最近操作日志
-- **导出**: 支持 Excel 和 PDF 导出，PDF 文件含不可移除版权信息
+- **布局**: 侧边栏（可折叠 64px/240px）+ 顶栏 + 内容区，响应式三断点（手机/平板/桌面）
+- **页面**: 登录、仪表盘、用户管理、角色权限、系统配置、操作日志、个人中心
+- **状态管理**: GetX（`ApiService` 单例 + `AuthService` Token 持久化）
+- **仪表盘**: 统计卡片、趋势折线图（fl_chart）、饼图、最近操作日志
+- **导出**: Excel/PDF 导出，PDF 含不可移除版权信息
+- **批量操作**: 多选批量删除、批量启用/禁用
 - **主题**: Material 3 浅色/深色双主题
 
-Web 端与移动端 App 的差异：
-- Web 使用侧边栏导航，App 使用底部导航栏
-- Web 表格密度高，支持多选批量操作
-- Web 交互以鼠标悬停和右键菜单为主
+### HarmonyOS 移动端
+
+- **页面**: 登录、仪表盘、用户列表/详情、个人中心
+- **认证**: JWT Bearer + 401 自动无感刷新 Token，刷新失败自动重定向登录页
+- **存储**: Token 通过 AppStorage 管理
 
 ## 开发规范
 

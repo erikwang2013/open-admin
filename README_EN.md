@@ -20,7 +20,7 @@ This copyright notice is permanent, must not be modified, removed, or reversed. 
 | PHP | 8.3+ | |
 | Database | MySQL 8.0+ | Table prefix `erik_`, BIGINT non-auto-increment PKs |
 | Search | Elasticsearch | Synced via `webman-scout` |
-| Admin Frontend | Flutter 3.x | Web renders as desktop admin panel (`apps/admin_app/`) |
+| Admin Frontend | Flutter 3.x | Web renders as desktop admin panel (`apps/flutter/`) |
 | Mobile | HarmonyOS ArkTS | Native HarmonyOS client (`apps/harmonyos/`), supports phone/tablet/2in1 |
 
 ## Core Packages
@@ -113,8 +113,13 @@ Key environment variables:
 
 ### 3. Initialize Database
 
+Run the SQL migration files in order:
+
 ```bash
+# Create tables
 mysql -u root -p < database/migrations/2026_05_16_000000_init_tables.sql
+# Seed permissions
+mysql -u root -p < database/migrations/2026_05_20_000001_seed_permissions.sql
 ```
 
 ### 4. Start Server
@@ -130,7 +135,7 @@ Default: `http://0.0.0.0:8787`.
 **Flutter admin panel (Web):**
 
 ```bash
-cd apps/admin_app
+cd apps/flutter
 flutter pub get
 flutter run -d chrome    # Web (desktop admin panel style)
 ```
@@ -198,6 +203,21 @@ Redis sliding-window algorithm, default 60 req/min/IP/route. Stricter limits for
 - Register: 5 req/min
 
 Responses include `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` headers. 429 responses include `Retry-After`.
+
+### Middleware Architecture
+
+Global middleware runs for every request in order:
+
+```
+Cors (preflight + response headers)
+  → RateLimit (Redis sliding-window)
+  → ApiVersion (API version validation, /api group)
+  → AdminAuth (JWT + blacklist, /admin group)
+  → AdminPermission (RBAC, /admin group)
+  → OperationLog (auto-log POST/PUT/DELETE, /admin group)
+```
+
+`/health` and `/api/docs` are public, only passing through `Cors → RateLimit`.
 
 ### Authentication
 
@@ -294,17 +314,21 @@ Authorization: Bearer <token>
 
 ## Frontend Notes
 
-The Flutter app is designed as a desktop-style admin panel:
+### Flutter Admin Panel (Desktop Style)
 
-- **Layout**: Collapsible sidebar (64px/240px) + header + content area
-- **Dashboard**: Stats cards, line charts, pie charts, recent activity log
-- **Export**: Excel and PDF export, PDF files include non-removable copyright info
+- **Layout**: Collapsible sidebar (64px/240px) + header + content area, responsive breakpoints (phone/tablet/desktop)
+- **Pages**: Login, Dashboard, User Management, Roles & Permissions, System Config, Operation Logs, Profile
+- **State**: GetX (`ApiService` singleton + `AuthService` token persistence)
+- **Dashboard**: Stats cards, trend line chart (fl_chart), pie chart, recent activity log
+- **Export**: Excel/PDF with non-removable copyright info
+- **Batch Ops**: Multi-select batch delete, batch enable/disable
 - **Theme**: Material 3 light/dark dual theme
 
-Differences from mobile app:
-- Web uses sidebar navigation instead of bottom navigation bar
-- High-density data tables with multi-select batch operations
-- Mouse hover and right-click interactions
+### HarmonyOS Mobile Client
+
+- **Pages**: Login, Dashboard, User List/Detail, Profile
+- **Auth**: JWT Bearer + silent token refresh on 401, auto-redirect to login on refresh failure
+- **Storage**: Token managed via AppStorage
 
 ## Development Rules
 
