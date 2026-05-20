@@ -59,7 +59,7 @@
 |---|------|------|
 | 路由 | `config/route.php` | URL 到控制器的映射，中间件绑定，版本化路由 |
 | 中间件 | `app/middleware/` | 认证(JWT)、授权(RBAC)、API版本(ApiVersion) |
-| 控制器 | `app/admin/controller/` `app/api/v1/controller/` | 请求参数校验、调用业务逻辑、响应格式化 |
+| 控制器 | 14 个：Dashboard/User/Role/Permission/Config/Log/Profile/Export/Import/Upload/Health/Docs (管理端) + Captcha/Auth (API v1) | 请求参数校验、调用业务逻辑、响应格式化 |
 | 业务服务 | `app/service/` | 可复用的业务逻辑（预留） |
 | 数据模型 | `app/model/` | ORM 映射、关联关系、字段加解密 |
 | 公共工具 | `app/common/` | Hashids、Snowflake、Encryption 服务 |
@@ -77,6 +77,9 @@ Route 匹配
   │
   ▼
 中间件链:
+  RateLimit ───────────► Redis 滑动窗口限流
+  │ (失败返回 429 + Retry-After 头)
+  ▼
   ApiVersion ─────────► API-Version 头校验，注入 $request->apiVersion
   │ (失败返回 400)
   ▼
@@ -85,6 +88,9 @@ Route 匹配
   ▼
   AdminPermission ────► RBAC 权限校验
   │ (失败返回 403)
+  ▼
+  OperationLog ───────► 操作日志记录 (POST/PUT/DELETE)
+  │
   ▼
 Controller::method()
   │
@@ -170,6 +176,15 @@ erik_system_config (系统配置) — 独立表
   GET    /admin/user/{hashid} → 详情
   PUT    /admin/user/{hashid} → 更新
   DELETE /admin/user/{hashid} → 删除（需密码确认）
+
+系统配置:  /admin/config[/{hashid}]
+操作日志:  /admin/log
+个人中心:  /admin/profile[/password|/logout]
+导入:     /admin/import/users
+上传:     /admin/upload
+批量:     /admin/user/batch/{destroy|status}
+文档:     /api/docs     (OpenAPI 3.0)
+健康:     /health
 ```
 
 ### 4.2 API 版本策略
@@ -203,7 +218,19 @@ curl -H "API-Version: v2" /api/auth/login
 curl /api/auth/login
 ```
 
-### 4.3 统一响应
+### 4.3 限流策略
+
+基于 Redis Sorted Set 滑动窗口算法，原子化 Lua 脚本执行：
+
+| 接口 | 限制 |
+|------|------|
+| 默认 | 60 次/分钟/IP/路由 |
+| POST /api/auth/login | 10 次/分钟 |
+| POST /api/auth/register | 5 次/分钟 |
+
+超限返回 429，响应头包含 X-RateLimit-Limit / Remaining / Reset / Retry-After。
+
+### 4.4 统一响应
 
 ```json
 {
@@ -223,7 +250,7 @@ curl /api/auth/login
 | 422 | 验证失败 | 表单参数不符合规则 / 密码确认失败 |
 | 500 | 服务端错误 | 未预期异常 |
 
-### 4.4 认证流程（含点击验证码）
+### 4.5 认证流程（含点击验证码）
 
 ```
 客户端                               服务端
@@ -248,7 +275,7 @@ curl /api/auth/login
   │◄── 200 {dashboard data}           │
 ```
 
-### 4.5 权限模型 (RBAC)
+### 4.6 权限模型 (RBAC)
 
 ```
   用户 ──┬── 角色 ──┬── 权限
@@ -263,7 +290,7 @@ curl /api/auth/login
   超级管理员标识: * (跳过所有权限检查)
 ```
 
-### 4.6 敏感操作二次确认
+### 4.7 敏感操作二次确认
 
 删除用户、角色、权限等敏感操作，需要在请求体中传入当前用户密码进行身份复核：
 
@@ -324,6 +351,7 @@ curl /api/auth/login
 | 层面 | 措施 |
 |------|------|
 | 人机验证 | 点击验证码（Click Captcha），登录/注册强制校验 |
+| 限流 | RateLimit 中间件，Redis 滑动窗口，Lua 原子化 |
 | 操作确认 | 删除等敏感操作需输入当前用户密码二次确认 |
 | 传输 | HTTPS + JWT Bearer Token |
 | 接口ID | Hashids 加密，外部不可逆推真实 ID |

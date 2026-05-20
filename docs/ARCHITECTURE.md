@@ -79,6 +79,7 @@ flowchart TD
     end
 
     subgraph "中间件层 Middleware Layer"
+        M_RL["RateLimit<br/>Redis 滑动窗口限流<br/>X-RateLimit 响应头"]
         M0["ApiVersion<br/>API 版本校验<br/>注入 apiVersion"]
         M1["AdminAuth<br/>JWT Token 校验<br/>注入 adminId"]
         M2["AdminPermission<br/>RBAC 鉴权<br/>method.path 匹配"]
@@ -115,7 +116,7 @@ flowchart TD
         D3["Redis"]
     end
 
-    R1 --> M0
+    R1 --> M_RL --> M0
     M0 --> M1
     M1 --> M2
     M2 --> CT2 & CT3 & CT4 & CT5 & CT6
@@ -128,6 +129,7 @@ flowchart TD
     CT7 --> D3
 
     style R1 fill:#722ED1,color:#fff
+    style M_RL fill:#EB2F96,color:#fff
     style M0 fill:#EB2F96,color:#fff
     style M1 fill:#FA8C16,color:#fff
     style M2 fill:#FA8C16,color:#fff
@@ -142,6 +144,7 @@ flowchart TD
 sequenceDiagram
     participant C as 客户端
     participant N as Nginx
+    participant MW_RL as RateLimit
     participant MW0 as ApiVersion
     participant MW1 as AdminAuth
     participant MW2 as AdminPermission
@@ -149,9 +152,16 @@ sequenceDiagram
     participant SVC as Service
     participant MDL as Model
     participant DB as MySQL
+    participant OPLOG as OperationLog
 
     C->>N: HTTPS 请求<br/>Header: API-Version: v1
-    N->>MW0: 转发
+    N->>MW_RL: 转发
+
+    alt 限流触发
+        MW_RL-->>C: 429 + Retry-After
+    end
+
+    MW_RL->>MW0: 通过
 
     alt 不支持的版本
         MW0-->>C: 400 不支持的API版本
@@ -193,6 +203,7 @@ sequenceDiagram
 
     CTL->>CTL: 构建响应 JSON
     CTL-->>C: 200 { code: 0, data: {...} }
+    CTL-->>OPLOG: 记录操作日志 (POST/PUT/DELETE)
 ```
 
 ---

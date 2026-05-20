@@ -35,36 +35,51 @@
 
 ```
 open-admin/
-├── app/                        # 应用目录
+├── app/
 │   ├── admin/controller/       # 管理端控制器
-│   ├── api/                    # 公开 API
-│   │   └── v1/controller/      # API v1 控制器（版本由请求头 API-Version 控制）
-│   │       ├── CaptchaController.php# 点击验证码（生成/校验）
-│   │       └── AuthController.php   # 登录/注册/刷新令牌
+│   │   ├── DashboardController.php # 仪表盘（Redis缓存）
+│   │   ├── UserController.php      # 用户 CRUD + 批量操作
+│   │   ├── RoleController.php      # 角色 CRUD
+│   │   ├── PermissionController.php# 权限 CRUD
+│   │   ├── ConfigController.php    # 系统配置 CRUD
+│   │   ├── LogController.php       # 操作日志查询
+│   │   ├── ProfileController.php   # 个人中心 + 登出
+│   │   ├── ExportController.php    # Excel/PDF 导出
+│   │   ├── ImportController.php    # Excel 导入用户
+│   │   ├── UploadController.php    # 文件上传
+│   │   ├── HealthController.php    # 健康检查
+│   │   ├── DocsController.php      # OpenAPI 文档
+│   │   └── BaseController.php      # 基础控制器
+│   ├── api/
+│   │   └── v1/controller/          # API v1 控制器（版本由请求头 API-Version 控制）
+│   │       ├── CaptchaController.php # 点击验证码
+│   │       └── AuthController.php    # 登录/注册/刷新令牌
 │   ├── common/                 # 公共工具类
 │   │   ├── HashidsService.php  # ID 编解码
 │   │   ├── SnowflakeService.php# Snowflake ID 生成
 │   │   └── EncryptionService.php # 数据加解密 + 脱敏
 │   ├── middleware/             # 中间件
-│   │   ├── ApiVersion.php      # API 版本校验（请求头 API-Version）
-│   │   ├── AdminAuth.php       # JWT 认证
-│   │   └── AdminPermission.php # RBAC 权限校验
+│   │   ├── Cors.php            # 跨域
+│   │   ├── RateLimit.php       # Redis 限流（滑动窗口 + 响应头）
+│   │   ├── ApiVersion.php      # API 版本校验
+│   │   ├── AdminAuth.php       # JWT 认证 + 黑名单
+│   │   ├── AdminPermission.php # RBAC 权限校验
+│   │   └── OperationLog.php    # 操作日志自动记录
 │   └── model/                  # 数据模型
-├── apps/                       # 前端应用
-│   ├── admin_app/              # Flutter Web 管理后台（PC 风格）
-│   └── harmonyos/              # HarmonyOS 原生客户端
+├── apps/
+│   ├── flutter/                # Flutter Web 管理后台（PC 风格）
+│   │   └── lib/app/
+│   │       ├── pages/          # 5 个完整页面（仪表盘/用户/角色/配置/日志/个人中心）
+│   │       ├── services/       # ApiService（JWT 拦截器）+ AuthService（Token 持久化）
+│   │       └── layouts/        # 响应式管理后台布局（侧边栏+顶栏+内容区）
+│   └── harmonyos/              # HarmonyOS 原生客户端（Token 无感刷新）
 ├── config/                     # 配置文件（含中文注释）
 │   ├── route.php               # 路由 + API 版本策略
-│   ├── snowflake.php           # Snowflake 配置
-│   ├── hashids.php             # Hashids 配置
-│   ├── jwt.php                 # JWT 配置
-│   ├── encryption.php          # API 加解密配置
-│   ├── encryptable.php         # 数据库加解密配置
-│   ├── scout.php               # ES 搜索引擎配置
-│   └── plugin/                 # 插件自动生成的配置
-├── database/migrations/        # SQL 迁移文件
+│   ├── middleware.php           # 全局中间件注册
+│   └── ...                     # 各组件配置
+├── database/migrations/        # SQL 迁移文件（含权限种子数据）
 ├── public/                     # 公共入口
-├── runtime/                    # 运行时文件（日志、缓存、临时导出文件）
+├── runtime/                    # 运行时文件
 └── vendor/                     # Composer 依赖
 ```
 
@@ -159,15 +174,16 @@ flutter run -d chrome    # Web 端（PC 管理后台风格）
 
 ### 业务错误码
 
-| 错误码 | 含义 |
-|-------|------|
-| `0` | 成功 |
-| `400` | 请求参数错误 |
-| `401` | 未登录（Token 无效或过期） |
-| `403` | 无权限 |
-| `404` | 资源不存在 |
-| `422` | 参数验证失败 |
-| `500` | 服务器内部错误 |
+| 错误码 | 含义 | 说明 |
+|-------|------|------|
+| `0` | 成功 | |
+| `400` | 请求参数错误 | |
+| `401` | 未登录（Token 无效或过期） | |
+| `403` | 无权限 | |
+| `404` | 资源不存在 | |
+| `422` | 参数验证失败 | |
+| `429` | 请求过于频繁 | RateLimit 触发 |
+| `500` | 服务器内部错误 | |
 
 ### ID 处理
 
@@ -186,6 +202,14 @@ API-Version: v1
 - 未携带版本号时默认使用 `v1`
 - 不支持的版本返回 `400 Bad Request`
 - 新增版本时只需创建 `app/api/{version}/controller/` 目录，中间件注册新版本即可
+
+### 限流
+
+基于 Redis 滑动窗口算法，默认 60 次/分钟/IP/路由。敏感接口更严格：
+- 登录：10 次/分钟
+- 注册：5 次/分钟
+
+响应头包含 `X-RateLimit-Limit`、`X-RateLimit-Remaining`、`X-RateLimit-Reset`。超限返回 429 并附带 `Retry-After`。
 
 ### 认证
 
@@ -215,6 +239,8 @@ Authorization: Bearer <token>
 
 登录成功后返回 access_token，有效期 2 小时；另返回 refresh_token，有效期 14 天。
 
+登出时 Token 加入 Redis 黑名单，有效期内不可复用。POST /admin/profile/logout
+
 ### 敏感操作二次确认
 
 删除用户、角色、权限等敏感操作需要在请求体中传入当前登录用户的 `password` 进行身份二次确认：
@@ -235,8 +261,10 @@ Authorization: Bearer <token>
 
 | 方法 | 路径 | 说明 |
 |-----|------|------|
-| `POST` | `/api/captcha/generate` | 生成点击验证码（返回 key + base64 图片 + 目标文字） |
-| `POST` | `/api/captcha/verify` | 校验点击坐标（调试用） |
+| `GET` | `/health` | 健康检查（DB/Redis/ES 状态） |
+| `GET` | `/api/docs` | OpenAPI 3.0 规范文档 |
+| `POST` | `/api/captcha/generate` | 生成点击验证码 |
+| `POST` | `/api/captcha/verify` | 校验点击验证码 |
 | `POST` | `/api/auth/login` | 登录（需 captcha） |
 | `POST` | `/api/auth/register` | 注册（需 captcha） |
 | `POST` | `/api/auth/refresh` | 刷新令牌 |
@@ -245,12 +273,14 @@ Authorization: Bearer <token>
 
 | 方法 | 路径 | 说明 |
 |-----|------|------|
-| `GET` | `/admin/dashboard` | 仪表盘数据（统计卡片、趋势图、分布图） |
+| `GET` | `/admin/dashboard` | 仪表盘数据（Redis 缓存 5 分钟） |
 | `GET` | `/admin/user` | 用户列表（分页 + 搜索） |
 | `POST` | `/admin/user` | 创建用户 |
 | `GET` | `/admin/user/{id}` | 用户详情 |
 | `PUT` | `/admin/user/{id}` | 更新用户 |
 | `DELETE` | `/admin/user/{id}` | 删除用户（软删除，需密码确认） |
+| `POST` | `/admin/user/batch/destroy` | 批量删除用户（需密码确认） |
+| `POST` | `/admin/user/batch/status` | 批量启用/禁用用户 |
 | `GET` | `/admin/role` | 角色列表 |
 | `POST` | `/admin/role` | 创建角色 |
 | `PUT` | `/admin/role/{id}` | 更新角色 |
@@ -259,8 +289,18 @@ Authorization: Bearer <token>
 | `POST` | `/admin/permission` | 创建权限 |
 | `PUT` | `/admin/permission/{id}` | 更新权限 |
 | `DELETE` | `/admin/permission/{id}` | 删除权限（级联子权限，需密码确认） |
+| `GET` | `/admin/config` | 系统配置列表 |
+| `POST` | `/admin/config` | 创建配置项 |
+| `PUT` | `/admin/config/{id}` | 更新配置项 |
+| `DELETE` | `/admin/config/{id}` | 删除配置项（需密码确认） |
+| `GET` | `/admin/log` | 操作日志（分页 + 筛选） |
+| `PUT` | `/admin/profile` | 更新个人信息 |
+| `PUT` | `/admin/profile/password` | 修改密码 |
+| `POST` | `/admin/profile/logout` | 登出（JWT 黑名单） |
 | `POST` | `/admin/export/excel` | 导出 Excel |
 | `POST` | `/admin/export/pdf` | 导出 PDF |
+| `POST` | `/admin/import/users` | Excel 导入用户 |
+| `POST` | `/admin/upload` | 文件上传（图片/文档，最大 10MB） |
 
 ## 前端说明
 

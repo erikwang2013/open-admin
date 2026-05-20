@@ -44,27 +44,35 @@ This copyright notice is permanent, must not be modified, removed, or reversed. 
 open-admin/
 ├── app/
 │   ├── admin/controller/       # Admin controllers
-│   ├── api/                    # Public API
-│   │   └── v1/controller/      # API v1 controllers (version via API-Version header)
-│   │       ├── CaptchaController.php# Click captcha (generate/verify)
-│   │       └── AuthController.php   # Login/register/refresh token
-│   ├── common/                 # Shared services
-│   │   ├── HashidsService.php  # ID encode/decode
-│   │   ├── SnowflakeService.php# Snowflake ID generation
-│   │   └── EncryptionService.php # Encrypt/decrypt + masking
+│   │   ├── DashboardController.php # Dashboard (Redis cached)
+│   │   ├── UserController.php      # User CRUD + batch ops
+│   │   ├── RoleController.php      # Role CRUD
+│   │   ├── PermissionController.php# Permission CRUD
+│   │   ├── ConfigController.php    # System config CRUD
+│   │   ├── LogController.php       # Operation log viewer
+│   │   ├── ProfileController.php   # Profile + logout
+│   │   ├── ExportController.php    # Excel/PDF export
+│   │   ├── ImportController.php    # Excel import users
+│   │   ├── UploadController.php    # File upload
+│   │   ├── HealthController.php    # Health check
+│   │   └── DocsController.php      # OpenAPI docs
+│   ├── api/
+│   │   └── v1/controller/          # API v1 (version via API-Version header)
+│   │       ├── CaptchaController.php
+│   │       └── AuthController.php
 │   ├── middleware/             # Middleware
-│   │   ├── ApiVersion.php      # API version validation (API-Version header)
-│   │   ├── AdminAuth.php       # JWT authentication
-│   │   └── AdminPermission.php # RBAC authorization
+│   │   ├── Cors.php            # CORS
+│   │   ├── RateLimit.php       # Redis rate limiting
+│   │   ├── ApiVersion.php      # API version validation
+│   │   ├── AdminAuth.php       # JWT auth + blacklist
+│   │   ├── AdminPermission.php # RBAC authorization
+│   │   └── OperationLog.php    # Auto operation logging
 │   └── model/                  # Eloquent models
-├── apps/                       # Frontend applications
-│   ├── admin_app/              # Flutter web admin panel (desktop style)
-│   └── harmonyos/              # HarmonyOS native mobile client
-├── config/                     # Configuration files
-│   ├── route.php               # Routes + API version strategy
-├── database/migrations/        # SQL migration files
-├── public/                     # Web entry point
-├── runtime/                    # Runtime files (logs, cache, temp exports)
+├── apps/
+│   ├── flutter/                # Flutter Web admin panel
+│   └── harmonyos/              # HarmonyOS client (auto token refresh)
+├── config/                     # Config files
+├── database/migrations/        # SQL migrations (incl. permission seeds)
 └── vendor/                     # Composer dependencies
 ```
 
@@ -162,6 +170,7 @@ Open `apps/harmonyos/` in DevEco Studio and run on a device or emulator.
 | `403` | Forbidden |
 | `404` | Not found |
 | `422` | Validation failed |
+| `429` | Rate limited | RateLimit triggered |
 | `500` | Server error |
 
 ### ID Handling
@@ -181,6 +190,14 @@ API-Version: v1
 - Defaults to `v1` when the header is absent
 - Unsupported versions return `400 Bad Request`
 - To add a new version, create `app/api/{version}/controller/` and register it in the middleware
+
+### Rate Limiting
+
+Redis sliding-window algorithm, default 60 req/min/IP/route. Stricter limits for auth:
+- Login: 10 req/min
+- Register: 5 req/min
+
+Responses include `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` headers. 429 responses include `Retry-After`.
 
 ### Authentication
 
@@ -210,6 +227,8 @@ Authorization: Bearer <token>
 
 Login returns an `access_token` (2h TTL) and a `refresh_token` (14d TTL).
 
+Logout blacklists the token in Redis for its remaining TTL: `POST /admin/profile/logout`
+
 ### Sensitive Operation Confirmation
 
 Destructive operations (delete user, role, permission) require the current user's `password` in the request body for identity re-verification:
@@ -230,8 +249,10 @@ Authorization: Bearer <token>
 
 | Method | Path | Description |
 |-----|------|------|
-| `POST` | `/api/captcha/generate` | Generate click captcha (key + base64 image + targets) |
-| `POST` | `/api/captcha/verify` | Verify click positions (debugging) |
+| `GET` | `/health` | Health check (DB/Redis/ES status) |
+| `GET` | `/api/docs` | OpenAPI 3.0 specification |
+| `POST` | `/api/captcha/generate` | Generate click captcha |
+| `POST` | `/api/captcha/verify` | Verify click positions |
 | `POST` | `/api/auth/login` | Login (requires captcha) |
 | `POST` | `/api/auth/register` | Register (requires captcha) |
 | `POST` | `/api/auth/refresh` | Refresh token |
@@ -246,16 +267,30 @@ Authorization: Bearer <token>
 | `GET` | `/admin/user/{id}` | User detail |
 | `PUT` | `/admin/user/{id}` | Update user |
 | `DELETE` | `/admin/user/{id}` | Delete user (soft delete, requires password) |
+| `POST` | `/admin/user/batch/destroy` | Batch delete users |
+| `POST` | `/admin/user/batch/status` | Batch update user status |
 | `GET` | `/admin/role` | Role list |
 | `POST` | `/admin/role` | Create role |
+| `GET` | `/admin/role/{id}` | Role detail |
 | `PUT` | `/admin/role/{id}` | Update role |
 | `DELETE` | `/admin/role/{id}` | Delete role (requires password) |
 | `GET` | `/admin/permission` | Permission tree |
 | `POST` | `/admin/permission` | Create permission |
+| `GET` | `/admin/permission/{id}` | Permission detail |
 | `PUT` | `/admin/permission/{id}` | Update permission |
 | `DELETE` | `/admin/permission/{id}` | Delete permission (cascades children, requires password) |
+| `GET` | `/admin/config` | Config list |
+| `POST` | `/admin/config` | Create config |
+| `PUT` | `/admin/config/{id}` | Update config |
+| `DELETE` | `/admin/config/{id}` | Delete config |
+| `GET` | `/admin/log` | Operation log list (paginated) |
+| `PUT` | `/admin/profile` | Update profile |
+| `PUT` | `/admin/profile/password` | Change password |
+| `POST` | `/admin/profile/logout` | Logout (blacklist token) |
 | `POST` | `/admin/export/excel` | Export to Excel |
 | `POST` | `/admin/export/pdf` | Export to PDF |
+| `POST` | `/admin/import/users` | Import users from Excel |
+| `POST` | `/admin/upload` | Upload file |
 
 ## Frontend Notes
 
