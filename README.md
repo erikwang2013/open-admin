@@ -37,14 +37,16 @@
 open-admin/
 ├── app/                        # 应用目录
 │   ├── admin/controller/       # 管理端控制器
-│   ├── api/controller/         # 公开 API 控制器
-│   │   ├── CaptchaController.php# 点击验证码（生成/校验）
-│   │   └── AuthController.php   # 登录/注册/刷新令牌
+│   ├── api/                    # 公开 API
+│   │   └── v1/controller/      # API v1 控制器（版本由请求头 API-Version 控制）
+│   │       ├── CaptchaController.php# 点击验证码（生成/校验）
+│   │       └── AuthController.php   # 登录/注册/刷新令牌
 │   ├── common/                 # 公共工具类
 │   │   ├── HashidsService.php  # ID 编解码
 │   │   ├── SnowflakeService.php# Snowflake ID 生成
 │   │   └── EncryptionService.php # 数据加解密 + 脱敏
 │   ├── middleware/             # 中间件
+│   │   ├── ApiVersion.php      # API 版本校验（请求头 API-Version）
 │   │   ├── AdminAuth.php       # JWT 认证
 │   │   └── AdminPermission.php # RBAC 权限校验
 │   └── model/                  # 数据模型
@@ -52,6 +54,7 @@ open-admin/
 │   ├── admin_app/              # Flutter Web 管理后台（PC 风格）
 │   └── harmonyos/              # HarmonyOS 原生客户端
 ├── config/                     # 配置文件（含中文注释）
+│   ├── route.php               # 路由 + API 版本策略
 │   ├── snowflake.php           # Snowflake 配置
 │   ├── hashids.php             # Hashids 配置
 │   ├── jwt.php                 # JWT 配置
@@ -172,6 +175,18 @@ flutter run -d chrome    # Web 端（PC 管理后台风格）
 - **接口路径**: `GET /admin/user/{hashid}` — 路径中的 `{id}` 为 hashid 字符串
 - **数据库存储**: BIGINT 原值，由 snowflake 生成
 
+### API 版本
+
+API 版本通过请求头控制，**不在 URL 中体现**：
+
+```http
+API-Version: v1
+```
+
+- 未携带版本号时默认使用 `v1`
+- 不支持的版本返回 `400 Bad Request`
+- 新增版本时只需创建 `app/api/{version}/controller/` 目录，中间件注册新版本即可
+
 ### 认证
 
 登录与注册需要先通过**点击验证码**校验：
@@ -213,6 +228,8 @@ Authorization: Bearer <token>
 ```
 
 ## API 列表
+
+> 所有 `/api/*` 接口需要在请求头中携带 `API-Version: v1`（不传则默认 v1）。
 
 ### 公开接口
 

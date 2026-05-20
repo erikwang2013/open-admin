@@ -57,9 +57,9 @@
 
 | 层 | 目录 | 职责 |
 |---|------|------|
-| 路由 | `config/route.php` | URL 到控制器的映射，中间件绑定 |
-| 中间件 | `app/middleware/` | 认证(JWT)、授权(RBAC) |
-| 控制器 | `app/admin/controller/` `app/api/controller/` | 请求参数校验、调用业务逻辑、响应格式化 |
+| 路由 | `config/route.php` | URL 到控制器的映射，中间件绑定，版本化路由 |
+| 中间件 | `app/middleware/` | 认证(JWT)、授权(RBAC)、API版本(ApiVersion) |
+| 控制器 | `app/admin/controller/` `app/api/v1/controller/` | 请求参数校验、调用业务逻辑、响应格式化 |
 | 业务服务 | `app/service/` | 可复用的业务逻辑（预留） |
 | 数据模型 | `app/model/` | ORM 映射、关联关系、字段加解密 |
 | 公共工具 | `app/common/` | Hashids、Snowflake、Encryption 服务 |
@@ -77,6 +77,9 @@ Route 匹配
   │
   ▼
 中间件链:
+  ApiVersion ─────────► API-Version 头校验，注入 $request->apiVersion
+  │ (失败返回 400)
+  ▼
   AdminAuth ──────────► JWT 验证，注入 $request->adminId
   │ (失败返回 401)
   ▼
@@ -169,7 +172,38 @@ erik_system_config (系统配置) — 独立表
   DELETE /admin/user/{hashid} → 删除（需密码确认）
 ```
 
-### 4.2 统一响应
+### 4.2 API 版本策略
+
+API 版本通过请求头控制，**不在 URL 路径中体现**：
+
+```http
+API-Version: v1
+```
+
+| 机制 | 说明 |
+|------|------|
+| 默认版本 | 未携带 `API-Version` 头时默认 `v1` |
+| 校验 | `ApiVersion` 中间件校验，不支持的版本返回 400 |
+| 路由 | `v()` 辅助函数根据版本动态解析控制器类 |
+| 目录 | 控制器按版本组织: `app/api/{version}/controller/` |
+
+扩展示例——新增 v2 API：
+1. 创建 `app/api/v2/controller/AuthController.php`
+2. `ApiVersion` 中间件 `SUPPORTED` 常量添加 `'v2'`
+3. 路由定义无需修改
+
+```bash
+# 使用 v1
+curl -H "API-Version: v1" /api/auth/login
+
+# 使用 v2
+curl -H "API-Version: v2" /api/auth/login
+
+# 不传，默认 v1
+curl /api/auth/login
+```
+
+### 4.3 统一响应
 
 ```json
 {
@@ -189,7 +223,7 @@ erik_system_config (系统配置) — 独立表
 | 422 | 验证失败 | 表单参数不符合规则 / 密码确认失败 |
 | 500 | 服务端错误 | 未预期异常 |
 
-### 4.3 认证流程（含点击验证码）
+### 4.4 认证流程（含点击验证码）
 
 ```
 客户端                               服务端
@@ -214,7 +248,7 @@ erik_system_config (系统配置) — 独立表
   │◄── 200 {dashboard data}           │
 ```
 
-### 4.4 权限模型 (RBAC)
+### 4.5 权限模型 (RBAC)
 
 ```
   用户 ──┬── 角色 ──┬── 权限
@@ -229,7 +263,7 @@ erik_system_config (系统配置) — 独立表
   超级管理员标识: * (跳过所有权限检查)
 ```
 
-### 4.5 敏感操作二次确认
+### 4.6 敏感操作二次确认
 
 删除用户、角色、权限等敏感操作，需要在请求体中传入当前用户密码进行身份复核：
 

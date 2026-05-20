@@ -20,10 +20,11 @@ flowchart TB
     end
 
     subgraph "应用层 (webman v2)"
+        C0["ApiVersion 中间件<br/>API-Version 头校验"]
         C1["AdminAuth 中间件<br/>JWT 验证"]
         C2["AdminPermission 中间件<br/>RBAC 权限校验"]
         C3["管理端 Controller<br/>Dashboard / User / Role / Permission"]
-        C4["公开 Controller<br/>Captcha / Auth"]
+        C4["公开 Controller v1<br/>Captcha / Auth"]
         C5["Common Services<br/>Hashids / Snowflake / Encryption"]
     end
 
@@ -40,10 +41,11 @@ flowchart TB
 
     A1 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
     A2 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
-    B1 --> C1
+    B1 --> C0
+    C0 --> C1
     C1 --> C2
     C2 --> C3
-    C1 --> C4
+    C0 --> C4
     C3 --> C5
     C4 --> C5
     C3 --> D1
@@ -55,6 +57,7 @@ flowchart TB
     style A1 fill:#1677FF,color:#fff
     style A2 fill:#1677FF,color:#fff
     style B1 fill:#722ED1,color:#fff
+    style C0 fill:#EB2F96,color:#fff
     style C1 fill:#FA8C16,color:#fff
     style C2 fill:#FA8C16,color:#fff
     style C3 fill:#52C41A,color:#fff
@@ -76,6 +79,7 @@ flowchart TD
     end
 
     subgraph "中间件层 Middleware Layer"
+        M0["ApiVersion<br/>API 版本校验<br/>注入 apiVersion"]
         M1["AdminAuth<br/>JWT Token 校验<br/>注入 adminId"]
         M2["AdminPermission<br/>RBAC 鉴权<br/>method.path 匹配"]
     end
@@ -111,10 +115,11 @@ flowchart TD
         D3["Redis"]
     end
 
-    R1 --> M1
+    R1 --> M0
+    M0 --> M1
     M1 --> M2
     M2 --> CT2 & CT3 & CT4 & CT5 & CT6
-    M1 --> CT7 & CT8
+    M0 --> CT7 & CT8
     CT1 -.->|extends| CT2 & CT3 & CT4 & CT5 & CT6
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> S1 & S2 & S3
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> MD1 & MD2 & MD3 & MD4 & MD5
@@ -123,6 +128,7 @@ flowchart TD
     CT7 --> D3
 
     style R1 fill:#722ED1,color:#fff
+    style M0 fill:#EB2F96,color:#fff
     style M1 fill:#FA8C16,color:#fff
     style M2 fill:#FA8C16,color:#fff
     style CT1 fill:#1677FF,color:#fff
@@ -136,6 +142,7 @@ flowchart TD
 sequenceDiagram
     participant C as 客户端
     participant N as Nginx
+    participant MW0 as ApiVersion
     participant MW1 as AdminAuth
     participant MW2 as AdminPermission
     participant CTL as Controller
@@ -143,8 +150,14 @@ sequenceDiagram
     participant MDL as Model
     participant DB as MySQL
 
-    C->>N: HTTPS 请求
-    N->>MW1: 转发
+    C->>N: HTTPS 请求<br/>Header: API-Version: v1
+    N->>MW0: 转发
+
+    alt 不支持的版本
+        MW0-->>C: 400 不支持的API版本
+    else 版本有效
+        MW0->>MW0: $request->apiVersion = v1
+    end
 
     alt Token 缺失或无效
         MW1-->>C: 401 Unauthorized

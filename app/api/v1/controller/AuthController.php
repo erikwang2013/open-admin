@@ -5,7 +5,7 @@
 
 declare(strict_types=1);
 
-namespace app\api\controller;
+namespace app\api\v1\controller;
 
 use app\model\AdminUser;
 use app\common\SnowflakeService;
