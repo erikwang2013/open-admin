@@ -48,6 +48,10 @@ struct UserDetailPage {
       this.formEmail = this.user.email ?? '';
       this.formStatus = this.user.status;
     } catch (e) {
+      if ((e as Error).message === 'UNAUTHORIZED') {
+        router.replaceUrl({ url: 'pages/LoginPage' });
+        return;
+      }
       this.hasError = true;
     } finally {
       this.isLoading = false;
@@ -87,6 +91,10 @@ struct UserDetailPage {
       }
       router.back();
     } catch (e) {
+      if ((e as Error).message === 'UNAUTHORIZED') {
+        router.replaceUrl({ url: 'pages/LoginPage' });
+        return;
+      }
       promptAction.showToast({ message: '保存失败' });
     } finally {
       this.isSubmitting = false;
@@ -108,6 +116,10 @@ struct UserDetailPage {
             promptAction.showToast({ message: '删除成功' });
             router.back();
           } catch (e) {
+            if ((e as Error).message === 'UNAUTHORIZED') {
+              router.replaceUrl({ url: 'pages/LoginPage' });
+              return;
+            }
             promptAction.showToast({ message: '删除失败' });
           }
         }

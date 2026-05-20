@@ -46,6 +46,10 @@ struct UserListPage {
       }
       this.total = result.total;
     } catch (e) {
+      if ((e as Error).message === 'UNAUTHORIZED') {
+        router.replaceUrl({ url: 'pages/LoginPage' });
+        return;
+      }
       this.hasError = true;
       promptAction.showToast({ message: '加载失败' });
     } finally {

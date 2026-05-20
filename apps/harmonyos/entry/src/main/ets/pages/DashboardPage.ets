@@ -24,6 +24,10 @@ struct DashboardPage {
     try {
       this.dashboardData = await DashboardService.getDashboard();
     } catch (e) {
+      if ((e as Error).message === 'UNAUTHORIZED') {
+        router.replaceUrl({ url: 'pages/LoginPage' });
+        return;
+      }
       this.hasError = true;
     } finally {
       this.isLoading = false;
