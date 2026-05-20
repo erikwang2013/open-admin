@@ -9,6 +9,7 @@ namespace app\middleware;
 
 use support\Request;
 use support\Response;
+use support\Redis;
 use Erikwang2013\Jwt\JWT;
 use Erikwang2013\Jwt\JWTFactory;
 use Erikwang2013\Jwt\JWTException;
@@ -33,6 +34,12 @@ class AdminAuth
 
         if (empty($token)) {
             return json(['code' => 401, 'message' => '未登录', 'data' => []]);
+        }
+
+        // 检查 JWT 黑名单
+        $blacklistKey = 'jwt_blacklist:' . md5($token);
+        if (Redis::get($blacklistKey)) {
+            return json(['code' => 401, 'message' => 'Token已失效，请重新登录', 'data' => []]);
         }
 
         try {
