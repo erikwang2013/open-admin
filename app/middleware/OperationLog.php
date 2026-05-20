@@ -23,15 +23,23 @@ class OperationLog implements MiddlewareInterface
 
         $response = $handler($request);
 
-        $log = new \app\model\OperationLog();
-        $log->user_id    = $request->adminId ?? 0;
-        $log->action     = $method;
-        $log->method     = $method;
-        $log->path       = $request->path();
-        $log->ip         = $request->getRealIp();
-        $log->input      = json_encode($request->all(), JSON_UNESCAPED_UNICODE);
-        $log->created_at = date('Y-m-d H:i:s');
-        $log->save();
+        try {
+            // 过滤敏感字段
+            $input = $request->all();
+            unset($input['password'], $input['old_password'], $input['new_password'], $input['new_password_confirmation']);
+
+            $log = new \app\model\OperationLog();
+            $log->user_id    = $request->adminId ?? 0;
+            $log->action     = $method;
+            $log->method     = $method;
+            $log->path       = $request->path();
+            $log->ip         = $request->getRealIp();
+            $log->input      = json_encode($input, JSON_UNESCAPED_UNICODE);
+            $log->created_at = date('Y-m-d H:i:s');
+            $log->save();
+        } catch (\Throwable $e) {
+            // 日志记录失败不应影响业务请求
+        }
 
         return $response;
     }
