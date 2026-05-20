@@ -2,7 +2,7 @@
 
 A full-stack admin dashboard built with webman v2 + Flutter.
 
-> [中文文档](README.md) | [Architecture Diagrams](docs/ARCHITECTURE.md) | [Design Doc](docs/DESIGN.md)
+> [中文文档](README.md) | [Architecture Diagrams](docs/ARCHITECTURE.md) | [Design Doc](docs/DESIGN.md) | [Security](docs/SECURITY.md) | [API Reference](docs/API.md)
 
 ## Copyright
 

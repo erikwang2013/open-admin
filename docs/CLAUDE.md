@@ -90,6 +90,8 @@ open-admin/
 ├── docs/                       # 文档
 │   ├── ARCHITECTURE.md         # Mermaid 架构图
 │   ├── DESIGN.md               # 设计文档
+│   ├── SECURITY.md             # 安全架构设计
+│   ├── API.md                  # API 参考文档
 │   ├── diagrams/               # 分解架构图
 │   └── superpowers/            # 规范与计划
 │       ├── specs/              # 设计规范
