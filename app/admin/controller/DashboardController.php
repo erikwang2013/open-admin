@@ -10,6 +10,7 @@ namespace app\admin\controller;
 use app\model\AdminUser;
 use app\common\EncryptionService;
 use app\model\OperationLog;
+use support\Redis;
 use support\Request;
 
 class DashboardController extends BaseController
@@ -20,15 +21,26 @@ class DashboardController extends BaseController
      */
     public function index(Request $request): Response
     {
+        // Redis 缓存 5 分钟，避免每次请求跑 5+ 条 SQL
+        $cacheKey = 'dashboard:data';
+        $cached = Redis::get($cacheKey);
+        if ($cached) {
+            return $this->success(json_decode($cached, true));
+        }
+
         $today = date('Y-m-d');
         $startOfRange = date('Y-m-d', strtotime('-29 days'));
 
-        return $this->success([
+        $data = [
             'stats' => $this->getStats($today),
             'trends' => $this->getTrends($startOfRange),
             'distribution' => $this->getDistribution(),
             'recent_logs' => $this->getRecentLogs(),
-        ]);
+        ];
+
+        Redis::setex($cacheKey, 300, json_encode($data, JSON_UNESCAPED_UNICODE));
+
+        return $this->success($data);
     }
 
     private function getStats(string $today): array

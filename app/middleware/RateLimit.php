@@ -55,15 +55,28 @@ redis.call('EXPIRE', KEYS[1], ARGV[5])
 return {1, count + 1}
 LUA;
         $result = Redis::eval($lua, 1, $key, $windowStart, $limit, $now, $now . '.' . mt_rand(), $window + 10);
+        $count     = (int) ($result[1] ?? 0);
+        $remaining = max($limit - $count, 0);
+        $reset     = time() + $window;
 
         if (empty($result[0])) {
             return json([
                 'code'    => 429,
                 'message' => '请求过于频繁，请稍后再试',
                 'data'    => [],
-            ])->withStatus(429);
+            ])->withStatus(429)->withHeaders([
+                'X-RateLimit-Limit'     => (string) $limit,
+                'X-RateLimit-Remaining' => '0',
+                'X-RateLimit-Reset'     => (string) $reset,
+                'Retry-After'           => (string) $window,
+            ]);
         }
 
-        return $handler($request);
+        $response = $handler($request);
+        return $response->withHeaders([
+            'X-RateLimit-Limit'     => (string) $limit,
+            'X-RateLimit-Remaining' => (string) $remaining,
+            'X-RateLimit-Reset'     => (string) $reset,
+        ]);
     }
 }

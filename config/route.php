@@ -37,6 +37,9 @@ function v(string $controller, string $action): \Closure
 // ============================================================
 Route::get('/health', [app\admin\controller\HealthController::class, 'index']);
 
+// API 文档（全局，无需认证）
+Route::get('/api/docs', [app\admin\controller\DocsController::class, 'index']);
+
 // ============================================================
 // 管理端路由
 // ============================================================
