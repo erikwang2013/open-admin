@@ -38,23 +38,31 @@ class RateLimit implements MiddlewareInterface
             }
         }
 
-        $key         = "rate_limit:{$ip}:" . md5($path);
-        $now         = (int) (microtime(true) * 1000);
+        $safePath = str_replace([':', '/'], '_', $path);
+        $key = "rate_limit:{$ip}:{$safePath}";
+        $now = (int) (microtime(true) * 1000);
         $windowStart = $now - $window * 1000;
 
-        Redis::zremrangebyscore($key, 0, $windowStart);
-        $count = Redis::zcard($key);
+        // 原子化滑动窗口：Lua 脚本避免 TOCTOU 竞态
+        $lua = <<<'LUA'
+redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, ARGV[1])
+local count = redis.call('ZCARD', KEYS[1])
+if count >= tonumber(ARGV[2]) then
+    return {0, count}
+end
+redis.call('ZADD', KEYS[1], ARGV[3], ARGV[4])
+redis.call('EXPIRE', KEYS[1], ARGV[5])
+return {1, count + 1}
+LUA;
+        $result = Redis::eval($lua, 1, $key, $windowStart, $limit, $now, $now . '.' . mt_rand(), $window + 10);
 
-        if ($count >= $limit) {
+        if (empty($result[0])) {
             return json([
                 'code'    => 429,
                 'message' => '请求过于频繁，请稍后再试',
                 'data'    => [],
             ])->withStatus(429);
         }
-
-        Redis::zadd($key, $now, $now . '.' . mt_rand());
-        Redis::expire($key, $window + 10);
 
         return $handler($request);
     }
