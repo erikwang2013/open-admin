@@ -3,6 +3,7 @@
  */
 
 import router from '@ohos.router';
+import promptAction from '@ohos.promptAction';
 import { DashboardService } from '../service/DataService';
 import { DashboardData, StatCard as StatCardType, OperationLogItem } from '../model/DataModels';
 import { StatCard, LoadingView, ErrorView, EmptyView, CopyrightBar } from '../common/Components';
@@ -24,7 +25,7 @@ struct DashboardPage {
     try {
       this.dashboardData = await DashboardService.getDashboard();
     } catch (e) {
-      if ((e as Error).message === 'UNAUTHORIZED') {
+      if (e instanceof Error && e.message === 'UNAUTHORIZED') {
         router.replaceUrl({ url: 'pages/LoginPage' });
         return;
       }

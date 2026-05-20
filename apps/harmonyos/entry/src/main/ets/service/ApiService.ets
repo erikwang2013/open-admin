@@ -6,6 +6,9 @@ import http from '@ohos.net.http';
 import { ApiResponse } from '../model/DataModels';
 import { TokenManager } from '../utils/TokenManager';
 
+// 开发环境地址 — 真机部署时修改为实际服务器地址
+// 模拟器: http://10.0.2.2:8787
+// 真机: http://<服务器IP>:8787
 const BASE_URL = 'http://10.0.2.2:8787'; // 模拟器访问宿主机
 
 /**
@@ -30,7 +33,7 @@ export class ApiService {
         'Content-Type': 'application/json',
         'API-Version': 'v1',
         'X-Client-Platform': 'harmonyos',
-        'Authorization': token ? `Bearer ${token}` : '',
+        'Authorization': (token && token.length > 0) ? `Bearer ${token}` : '',
       },
       connectTimeout: 15000,
       readTimeout: 15000,

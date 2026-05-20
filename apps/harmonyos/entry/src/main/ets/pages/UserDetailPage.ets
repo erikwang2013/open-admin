@@ -27,7 +27,7 @@ struct UserDetailPage {
   @State formStatus: number = 1;
 
   aboutToAppear(): void {
-    const params = router.getParams() as Record<string, Object>;
+    const params = (router.getParams() ?? {}) as Record<string, Object>;
     this.mode = (params?.['mode'] as string) ?? 'view';
     this.userId = (params?.['userId'] as string) ?? '';
 
@@ -48,7 +48,7 @@ struct UserDetailPage {
       this.formEmail = this.user.email ?? '';
       this.formStatus = this.user.status;
     } catch (e) {
-      if ((e as Error).message === 'UNAUTHORIZED') {
+      if (e instanceof Error && e.message === 'UNAUTHORIZED') {
         router.replaceUrl({ url: 'pages/LoginPage' });
         return;
       }
@@ -91,7 +91,7 @@ struct UserDetailPage {
       }
       router.back();
     } catch (e) {
-      if ((e as Error).message === 'UNAUTHORIZED') {
+      if (e instanceof Error && e.message === 'UNAUTHORIZED') {
         router.replaceUrl({ url: 'pages/LoginPage' });
         return;
       }
@@ -116,7 +116,7 @@ struct UserDetailPage {
             promptAction.showToast({ message: '删除成功' });
             router.back();
           } catch (e) {
-            if ((e as Error).message === 'UNAUTHORIZED') {
+            if (e instanceof Error && e.message === 'UNAUTHORIZED') {
               router.replaceUrl({ url: 'pages/LoginPage' });
               return;
             }

@@ -46,7 +46,7 @@ struct UserListPage {
       }
       this.total = result.total;
     } catch (e) {
-      if ((e as Error).message === 'UNAUTHORIZED') {
+      if (e instanceof Error && e.message === 'UNAUTHORIZED') {
         router.replaceUrl({ url: 'pages/LoginPage' });
         return;
       }

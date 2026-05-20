@@ -7,6 +7,9 @@ import promptAction from '@ohos.promptAction';
 import http from '@ohos.net.http';
 import { TokenManager } from '../utils/TokenManager';
 
+// 开发环境地址 — 真机部署时修改为实际服务器地址
+// 模拟器: http://10.0.2.2:8787
+// 真机: http://<服务器IP>:8787
 const BASE_URL = 'http://10.0.2.2:8787';
 
 interface CaptchaTarget {
@@ -82,8 +85,8 @@ struct LoginPage {
     if (!this.captchaData || this.clicks.length >= this.captchaData.targets.length) return;
 
     // 点击坐标 (相对于组件)
-    const widgetW = 360; // 组件近似宽度
-    const widgetH = 220;
+    const widgetW = 400; // 组件近似宽度
+    const widgetH = 250;
     const imgW = 400;
     const imgH = 250;
     const scaleX = imgW / widgetW;
@@ -249,7 +252,9 @@ struct LoginPage {
 
                 // 验证码图片
                 Stack({ alignContent: Alignment.TopStart }) {
-                  Image(`data:image/png;base64,${this.captchaData!.image}`)
+                  Image((this.captchaData!.image.startsWith('data:') ?? false)
+                    ? this.captchaData!.image
+                    : `data:image/png;base64,${this.captchaData!.image}`)
                     .width('100%')
                     .height(200)
                     .objectFit(ImageFit.Contain)
