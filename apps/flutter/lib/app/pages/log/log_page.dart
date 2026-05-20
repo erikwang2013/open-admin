@@ -42,7 +42,9 @@ class LogPage extends GetView<LogController> {
 
   @override
   Widget build(BuildContext context) {
-    Get.put(LogController(), permanent: false);
+    if (!Get.isRegistered<LogController>()) {
+      Get.put(LogController(), permanent: false);
+    }
     final ctrl = controller;
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

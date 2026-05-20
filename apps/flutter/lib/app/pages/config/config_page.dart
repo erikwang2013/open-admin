@@ -53,7 +53,9 @@ class ConfigPage extends GetView<ConfigController> {
 
   @override
   Widget build(BuildContext context) {
-    Get.put(ConfigController(), permanent: false);
+    if (!Get.isRegistered<ConfigController>()) {
+      Get.put(ConfigController(), permanent: false);
+    }
     final ctrl = controller;
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

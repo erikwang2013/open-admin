@@ -44,6 +44,14 @@ class _AdminLayoutState extends State<AdminLayout> {
   void initState() {
     super.initState();
     _currentChild = _pages[_selectedIndex];
+    _checkAuth();
+  }
+
+  void _checkAuth() async {
+    final loggedIn = await AuthService.isLoggedIn();
+    if (!loggedIn && mounted) {
+      Navigator.of(context).pushReplacementNamed('/login');
+    }
   }
 
   @override

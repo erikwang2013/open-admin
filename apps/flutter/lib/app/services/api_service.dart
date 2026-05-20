@@ -3,6 +3,7 @@
  */
 
 import 'package:dio/dio.dart';
+import 'package:get/get.dart' hide Response;
 import 'auth_service.dart';
 
 class ApiService {
@@ -10,7 +11,7 @@ class ApiService {
   factory ApiService() => _instance;
 
   late final Dio dio;
-  static const String baseUrl = 'http://localhost:8787';
+  static const String baseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:8787');
 
   ApiService._() {
     dio = Dio(BaseOptions(
@@ -31,9 +32,13 @@ class ApiService {
         }
         handler.next(options);
       },
-      onError: (error, handler) {
+      onError: (error, handler) async {
         if (error.response?.statusCode == 401) {
-          AuthService.clearToken();
+          final refreshed = await tryRefresh();
+          if (!refreshed) {
+            await AuthService.clearToken();
+            Future.microtask(() => Get.offAllNamed('/login'));
+          }
         }
         handler.next(error);
       },
@@ -66,6 +71,24 @@ class ApiService {
       throw ApiException(body['code'] as int, body['message'] as String? ?? '请求失败');
     }
     return body;
+  }
+
+  Future<bool> tryRefresh() async {
+    final refreshToken = await AuthService.getRefreshToken();
+    if (refreshToken == null) return false;
+    try {
+      final resp = await dio.post('/api/auth/refresh', data: {'refresh_token': refreshToken});
+      final data = resp.data['data'];
+      if (resp.data['code'] == 0) {
+        await AuthService.saveLogin(
+          token: data['access_token'],
+          refreshToken: data['refresh_token'],
+          username: data['user']?['username'] ?? '',
+        );
+        return true;
+      }
+    } catch (_) {}
+    return false;
   }
 }
 

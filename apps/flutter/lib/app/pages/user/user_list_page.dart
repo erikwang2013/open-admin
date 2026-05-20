@@ -12,7 +12,9 @@ class UserListPage extends GetView<UserController> {
 
   @override
   Widget build(BuildContext context) {
-    Get.put(UserController(), permanent: false);
+    if (!Get.isRegistered<UserController>()) {
+      Get.put(UserController(), permanent: false);
+    }
     final ctrl = controller;
 
     return Column(
@@ -79,7 +81,7 @@ class UserListPage extends GetView<UserController> {
             return SingleChildScrollView(
               child: DataTable(
                 columns: [
-                  DataColumn(label: Checkbox(checked: ctrl.selectedIds.length == ctrl.users.length && ctrl.users.isNotEmpty, onChanged: (_) => ctrl.toggleSelectAll())),
+                  DataColumn(label: Checkbox(value: ctrl.selectedIds.length == ctrl.users.length && ctrl.users.isNotEmpty, onChanged: (_) => ctrl.toggleSelectAll())),
                   const DataColumn(label: Text('用户名')),
                   const DataColumn(label: Text('姓名')),
                   const DataColumn(label: Text('手机号')),

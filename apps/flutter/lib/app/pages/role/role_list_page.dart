@@ -11,7 +11,9 @@ class RoleListPage extends GetView<RoleController> {
 
   @override
   Widget build(BuildContext context) {
-    Get.put(RoleController(), permanent: false);
+    if (!Get.isRegistered<RoleController>()) {
+      Get.put(RoleController(), permanent: false);
+    }
     final ctrl = controller;
 
     return Column(

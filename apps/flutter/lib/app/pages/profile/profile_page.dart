@@ -30,9 +30,8 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _loadProfile() async {
     setState(() => _loading = true);
     try {
-      // 从 AuthService 获取当前用户名作为回退显示
-      final username = await AuthService.getUsername();
-      _realNameCtrl.text = username ?? '';
+      // Leave real_name field empty for user to fill; show username as label
+      // User can update real_name via this form
     } finally {
       setState(() => _loading = false);
     }

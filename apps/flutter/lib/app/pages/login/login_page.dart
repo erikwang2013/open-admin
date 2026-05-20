@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/captcha_service.dart';
 
@@ -17,8 +18,8 @@ class _LoginPageState extends State<LoginPage> {
   final _usernameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   static final _headers = {'API-Version': 'v1'};
-  final _dio = Dio(BaseOptions(baseUrl: 'http://localhost:8787', headers: _headers));
-  final _captcha = CaptchaService(Dio(BaseOptions(baseUrl: 'http://localhost:8787', headers: _headers)));
+  final _dio = Dio(BaseOptions(baseUrl: ApiService.baseUrl, headers: _headers));
+  final _captcha = CaptchaService(Dio(BaseOptions(baseUrl: ApiService.baseUrl, headers: _headers)));
 
   bool _loading = false;
   String? _error;
@@ -55,8 +56,8 @@ class _LoginPageState extends State<LoginPage> {
     final dy = detail.localPosition.dy;
 
     // Convert from widget coordinates to image coordinates
-    final scaleX = 300.0 / constraints.maxWidth;
-    final scaleY = 200.0 / constraints.maxHeight;
+    final scaleX = 400.0 / constraints.maxWidth;
+    final scaleY = 250.0 / constraints.maxHeight;
     final imgX = (dx * scaleX).round();
     final imgY = (dy * scaleY).round();
 
