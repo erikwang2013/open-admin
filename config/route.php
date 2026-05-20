@@ -12,7 +12,7 @@ use support\Request;
  * 路由分组说明:
  * - /admin/*  管理端接口，需要 JWT 认证 + 权限校验
  * - /api/*    客户端接口（部分白名单，部分需认证）
- * - /common/* 公共服务（文件上传等），无需认证
+ * - /health   健康检查（无需认证）
  *
  * API 版本策略:
  * - 版本号通过请求头 API-Version 携带（如 "v1"、"v2"），不在 URL 中体现
@@ -22,9 +22,6 @@ use support\Request;
 
 /**
  * 创建版本化 API 路由闭包
- *
- * 根据请求头 API-Version 动态解析控制器类。
- * 控制器目录结构: app/api/{version}/controller/{Controller}.php
  */
 function v(string $controller, string $action): \Closure
 {
@@ -36,7 +33,12 @@ function v(string $controller, string $action): \Closure
 }
 
 // ============================================================
-// 管理端路由（保持不变，不参与版本化）
+// 健康检查（全局，无需认证）
+// ============================================================
+Route::get('/health', [app\admin\controller\HealthController::class, 'index']);
+
+// ============================================================
+// 管理端路由
 // ============================================================
 Route::group('/admin', function () {
     // 仪表盘
@@ -44,6 +46,8 @@ Route::group('/admin', function () {
 
     // 用户管理
     Route::resource('/user', app\admin\controller\UserController::class);
+    Route::post('/user/batch/destroy', [app\admin\controller\UserController::class, 'batchDestroy']);
+    Route::post('/user/batch/status', [app\admin\controller\UserController::class, 'batchStatus']);
 
     // 角色管理
     Route::resource('/role', app\admin\controller\RoleController::class);
@@ -51,12 +55,33 @@ Route::group('/admin', function () {
     // 权限管理
     Route::resource('/permission', app\admin\controller\PermissionController::class);
 
+    // 系统配置
+    Route::get('/config', [app\admin\controller\ConfigController::class, 'index']);
+    Route::post('/config', [app\admin\controller\ConfigController::class, 'store']);
+    Route::put('/config/{id}', [app\admin\controller\ConfigController::class, 'update']);
+    Route::delete('/config/{id}', [app\admin\controller\ConfigController::class, 'destroy']);
+
+    // 操作日志
+    Route::get('/log', [app\admin\controller\LogController::class, 'index']);
+
+    // 个人中心
+    Route::put('/profile', [app\admin\controller\ProfileController::class, 'updateProfile']);
+    Route::put('/profile/password', [app\admin\controller\ProfileController::class, 'updatePassword']);
+    Route::post('/profile/logout', [app\admin\controller\ProfileController::class, 'logout']);
+
     // 导出
     Route::post('/export/excel', [app\admin\controller\ExportController::class, 'excel']);
     Route::post('/export/pdf', [app\admin\controller\ExportController::class, 'pdf']);
+
+    // 导入
+    Route::post('/import/users', [app\admin\controller\ImportController::class, 'users']);
+
+    // 文件上传
+    Route::post('/upload', [app\admin\controller\UploadController::class, 'upload']);
 })->middleware([
     app\middleware\AdminAuth::class,
     app\middleware\AdminPermission::class,
+    app\middleware\OperationLog::class,
 ]);
 
 // ============================================================
@@ -75,5 +100,5 @@ Route::group('/api', function () {
     app\middleware\ApiVersion::class,
 ]);
 
-// 关闭默认路由（生产环境建议关闭）
+// 关闭默认路由
 Route::disableDefaultRoute();
