@@ -17,7 +17,7 @@ class OperationLog extends Model
     public $timestamps = false;
     protected $keyType = 'int';
 
-    protected $fillable = ['user_id', 'action', 'method', 'path', 'ip', 'input'];
+    protected $fillable = ['user_id', 'action', 'method', 'path', 'ip', 'source', 'input'];
     protected $casts = ['user_id' => 'integer'];
 
     public function user()
