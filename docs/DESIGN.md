@@ -58,7 +58,7 @@
 | 层 | 目录 | 职责 |
 |---|------|------|
 | 路由 | `config/route.php` | URL 到控制器的映射，中间件绑定，版本化路由 |
-| 中间件 | `app/middleware/` | 认证(JWT)、授权(RBAC)、API版本(ApiVersion) |
+| 中间件 | `app/middleware/` | 攻击拦截(SecurityFilter)、限流(RateLimit)、认证(JWT)、授权(RBAC)、API版本(ApiVersion) |
 | 控制器 | 14 个：Dashboard/User/Role/Permission/Config/Log/Profile/Export/Import/Upload/Health/Docs (管理端) + Captcha/Auth (API v1) | 请求参数校验、调用业务逻辑、响应格式化 |
 | 业务服务 | `app/service/` | 可复用的业务逻辑（预留） |
 | 数据模型 | `app/model/` | ORM 映射、关联关系、字段加解密 |
@@ -77,6 +77,9 @@ Route 匹配
   │
   ▼
 中间件链:
+  SecurityFilter ──────► XSS/SQL注入/路径遍历/命令注入/CSRF 攻击拦截 (403)
+  │
+  ▼
   RateLimit ───────────► Redis 滑动窗口限流
   │ (失败返回 429 + Retry-After 头)
   ▼
@@ -350,6 +353,7 @@ curl /api/auth/login
 
 | 层面 | 措施 |
 |------|------|
+| 攻击拦截 | SecurityFilter 中间件，XSS/SQL注入/路径遍历/命令注入/CSRF 检测拦截 |
 | 人机验证 | 点击验证码（Click Captcha），登录/注册强制校验 |
 | 限流 | RateLimit 中间件，Redis 滑动窗口，Lua 原子化 |
 | 操作确认 | 删除等敏感操作需输入当前用户密码二次确认 |

@@ -60,6 +60,7 @@ open-admin/
 │   │   └── EncryptionService.php # 数据加解密 + 脱敏
 │   ├── middleware/             # 中间件
 │   │   ├── Cors.php            # 跨域
+│   │   ├── SecurityFilter.php  # 攻击检测拦截（XSS/SQL注入/路径遍历/命令注入/CSRF）
 │   │   ├── RateLimit.php       # Redis 限流（滑动窗口 + 响应头）
 │   │   ├── ApiVersion.php      # API 版本校验
 │   │   ├── AdminAuth.php       # JWT 认证 + 黑名单
@@ -220,6 +221,7 @@ API-Version: v1
 
 ```
 Cors（跨域预处理 + 响应头）
+  → SecurityFilter（XSS/SQL注入/路径遍历/命令注入/CSRF 攻击拦截）
   → RateLimit（Redis 滑动窗口限流）
   → ApiVersion（API 版本校验，/api 路由组）
   → AdminAuth（JWT 认证 + 黑名单，/admin 路由组）
@@ -227,7 +229,7 @@ Cors（跨域预处理 + 响应头）
   → OperationLog（POST/PUT/DELETE 自动记录，含来源端检测，/admin 路由组）
 ```
 
-`/health` 和 `/api/docs` 为公开端点，仅经过 `Cors → RateLimit`。
+`/health` 和 `/api/docs` 为公开端点，仅经过 `Cors → SecurityFilter → RateLimit`。
 
 ### 认证
 

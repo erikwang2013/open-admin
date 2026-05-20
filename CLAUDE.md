@@ -57,6 +57,7 @@ open-admin/
 │   │   └── EncryptionService.php
 │   ├── middleware/             # 中间件（6 个）
 │   │   ├── Cors.php            # 跨域（全局）
+│   │   ├── SecurityFilter.php  # 攻击拦截（全局：XSS/SQL注入/路径遍历/命令注入/CSRF）
 │   │   ├── RateLimit.php       # Redis 限流（全局，Lua 原子化）
 │   │   ├── ApiVersion.php      # API 版本校验
 │   │   ├── AdminAuth.php       # JWT 认证 + 黑名单
@@ -110,10 +111,10 @@ open-admin/
 ## 中间件执行链
 
 ```
-全局:  Cors → RateLimit → {路由中间件}
-/admin: Cors → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
-/api:   Cors → RateLimit → ApiVersion → Controller
-/health: Cors → RateLimit → Controller
+全局:  Cors → SecurityFilter → RateLimit → {路由中间件}
+/admin: Cors → SecurityFilter → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
+/api:   Cors → SecurityFilter → RateLimit → ApiVersion → Controller
+/health: Cors → SecurityFilter → RateLimit → Controller
 ```
 
 ## API 版本策略

@@ -62,6 +62,7 @@ open-admin/
 │   │       └── AuthController.php
 │   ├── middleware/             # Middleware
 │   │   ├── Cors.php            # CORS
+│   │   ├── SecurityFilter.php  # Attack detection (XSS/SQLi/path traversal/cmd injection/CSRF)
 │   │   ├── RateLimit.php       # Redis rate limiting
 │   │   ├── ApiVersion.php      # API version validation
 │   │   ├── AdminAuth.php       # JWT auth + blacklist
@@ -210,6 +211,7 @@ Global middleware runs for every request in order:
 
 ```
 Cors (preflight + response headers)
+  → SecurityFilter (XSS/SQLi/path traversal/cmd injection/CSRF blocking)
   → RateLimit (Redis sliding-window)
   → ApiVersion (API version validation, /api group)
   → AdminAuth (JWT + blacklist, /admin group)
@@ -217,7 +219,7 @@ Cors (preflight + response headers)
   → OperationLog (auto-log POST/PUT/DELETE with source detection, /admin group)
 ```
 
-`/health` and `/api/docs` are public, only passing through `Cors → RateLimit`.
+`/health` and `/api/docs` are public, only passing through `Cors → SecurityFilter → RateLimit`.
 
 ### Authentication
 
