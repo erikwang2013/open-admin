@@ -6,6 +6,11 @@ import 'app/theme/app_theme.dart';
 import 'app/layouts/admin_layout.dart';
 import 'app/pages/login/login_page.dart';
 import 'app/pages/dashboard/dashboard_page.dart';
+import 'app/pages/user/user_list_page.dart';
+import 'app/pages/role/role_list_page.dart';
+import 'app/pages/config/config_page.dart';
+import 'app/pages/log/log_page.dart';
+import 'app/pages/profile/profile_page.dart';
 
 void main() {
   runApp(const AdminApp());
@@ -31,7 +36,12 @@ class AdminApp extends StatelessWidget {
       ),
       getPages: [
         GetPage(name: '/login', page: () => const LoginPage()),
-        GetPage(name: '/dashboard', page: () => AdminLayout(child: const DashboardPage())),
+        GetPage(name: '/dashboard', page: () => const AdminLayout(child: DashboardPage())),
+        GetPage(name: '/users', page: () => const AdminLayout(child: UserListPage(), initialIndex: 1)),
+        GetPage(name: '/roles', page: () => const AdminLayout(child: RoleListPage(), initialIndex: 2)),
+        GetPage(name: '/config', page: () => const AdminLayout(child: ConfigPage(), initialIndex: 3)),
+        GetPage(name: '/logs', page: () => const AdminLayout(child: LogPage(), initialIndex: 4)),
+        GetPage(name: '/profile', page: () => const ProfilePage()),
       ],
       initialRoute: '/login',
     );

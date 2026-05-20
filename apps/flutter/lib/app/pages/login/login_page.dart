@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import '../../services/auth_service.dart';
 import '../../services/captcha_service.dart';
 
 class LoginPage extends StatefulWidget {
@@ -94,6 +95,12 @@ class _LoginPageState extends State<LoginPage> {
       });
 
       if (resp.data['code'] == 0) {
+        final data = resp.data['data'];
+        await AuthService.saveLogin(
+          token: data['access_token'] as String,
+          refreshToken: data['refresh_token'] as String,
+          username: data['user']['username'] as String,
+        );
         if (mounted) Navigator.of(context).pushReplacementNamed('/dashboard');
       } else {
         setState(() => _error = resp.data['message'] ?? '登录失败');

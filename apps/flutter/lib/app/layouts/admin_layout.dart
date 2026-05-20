@@ -1,25 +1,50 @@
 // Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:responsive_framework/responsive_framework.dart';
+import '../services/auth_service.dart';
+import '../pages/user/user_list_page.dart';
+import '../pages/role/role_list_page.dart';
+import '../pages/config/config_page.dart';
+import '../pages/log/log_page.dart';
+import '../pages/dashboard/dashboard_page.dart';
+import '../pages/profile/profile_page.dart';
 
 class AdminLayout extends StatefulWidget {
   final Widget child;
-  const AdminLayout({super.key, required this.child});
+  final int initialIndex;
+  const AdminLayout({super.key, required this.child, this.initialIndex = 0});
 
   @override
   State<AdminLayout> createState() => _AdminLayoutState();
 }
 
 class _AdminLayoutState extends State<AdminLayout> {
+  late int _selectedIndex = widget.initialIndex;
+  late Widget _currentChild;
   bool _sidebarCollapsed = false;
   String? _previousBreakpoint;
   static const double sidebarWidth = 240;
   static const double sidebarCollapsedWidth = 64;
   static const double headerHeight = 56;
 
+  static const _pages = <Widget>[
+    DashboardPage(),
+    UserListPage(),
+    RoleListPage(),
+    ConfigPage(),
+    LogPage(),
+  ];
+
   ResponsiveBreakpointsData get _bp => ResponsiveBreakpoints.of(context);
   bool get _isPhone => _bp.smallerThan(TABLET);
   bool get _isTablet => _bp.equals(TABLET);
+
+  @override
+  void initState() {
+    super.initState();
+    _currentChild = _pages[_selectedIndex];
+  }
 
   @override
   void didChangeDependencies() {
@@ -29,6 +54,13 @@ class _AdminLayoutState extends State<AdminLayout> {
       _sidebarCollapsed = _isTablet;
     }
     _previousBreakpoint = current;
+  }
+
+  void _onNavChanged(int index) {
+    setState(() {
+      _selectedIndex = index;
+      _currentChild = _pages[index.clamp(0, _pages.length - 1)];
+    });
   }
 
   @override
@@ -47,8 +79,8 @@ class _AdminLayoutState extends State<AdminLayout> {
       ),
       drawer: Drawer(
         child: NavigationDrawer(
-          selectedIndex: 0,
-          onDestinationSelected: (i) {},
+          selectedIndex: _selectedIndex,
+          onDestinationSelected: _onNavChanged,
           children: [
             Container(
               height: headerHeight,
@@ -70,7 +102,8 @@ class _AdminLayoutState extends State<AdminLayout> {
       ),
       body: Container(
         color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        child: widget.child,
+        padding: const EdgeInsets.all(16),
+        child: _currentChild,
       ),
     );
   }
@@ -89,7 +122,8 @@ class _AdminLayoutState extends State<AdminLayout> {
                 Expanded(
                   child: Container(
                     color: Theme.of(context).colorScheme.surfaceContainerLowest,
-                    child: widget.child,
+                    padding: const EdgeInsets.all(16),
+                    child: _currentChild,
                   ),
                 ),
               ],
@@ -106,8 +140,8 @@ class _AdminLayoutState extends State<AdminLayout> {
       duration: const Duration(milliseconds: 200),
       width: width,
       child: NavigationDrawer(
-        selectedIndex: 0,
-        onDestinationSelected: (i) {},
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: _onNavChanged,
         children: [
           Container(
             height: headerHeight,
@@ -198,7 +232,9 @@ class _AdminLayoutState extends State<AdminLayout> {
         ],
       ),
       onSelected: (value) {
-        if (value == 'logout') {
+        if (value == 'profile') {
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfilePage()));
+        } else if (value == 'logout') {
           showDialog(
             context: context,
             builder: (ctx) => AlertDialog(
@@ -207,8 +243,9 @@ class _AdminLayoutState extends State<AdminLayout> {
               actions: [
                 TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
                 TextButton(
-                  onPressed: () {
+                  onPressed: () async {
                     Navigator.pop(ctx);
+                    await AuthService.clearToken();
                     Navigator.of(context).pushReplacementNamed('/login');
                   },
                   child: const Text('确定退出', style: TextStyle(color: Colors.red)),
