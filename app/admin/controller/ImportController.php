@@ -7,7 +7,6 @@ declare(strict_types=1);
 
 namespace app\admin\controller;
 
-use app\common\EncryptionService;
 use app\model\AdminUser;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use support\Request;
@@ -81,8 +80,8 @@ class ImportController extends BaseController
                 $user->password  = password_hash($password, PASSWORD_BCRYPT);
                 $user->real_name = $realName;
                 $user->status    = in_array($status, [0, 1], true) ? $status : 1;
-                $user->phone     = EncryptionService::encrypt($phone);
-                $user->email     = EncryptionService::encrypt($email);
+                $user->phone     = $phone;
+                $user->email     = $email;
                 $user->save();
                 $success++;
             } catch (\Throwable $e) {

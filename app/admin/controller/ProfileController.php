@@ -7,7 +7,6 @@ declare(strict_types=1);
 
 namespace app\admin\controller;
 
-use app\common\EncryptionService;
 use app\model\AdminUser;
 use support\Request;
 use support\Response;
@@ -40,22 +39,17 @@ class ProfileController extends BaseController
             $user->real_name = $request->input('real_name');
         }
         if ($request->has('phone')) {
-            $user->phone = EncryptionService::encrypt($request->input('phone', ''));
+            $user->phone = $request->input('phone', '');
         }
         if ($request->has('email')) {
-            $user->email = EncryptionService::encrypt($request->input('email', ''));
+            $user->email = $request->input('email', '');
         }
 
         $user->save();
 
         $data = $user->toArray();
         unset($data['password'], $data['id_card']);
-        if (!empty($data['phone'])) {
-            $data['phone'] = EncryptionService::decrypt($data['phone']);
-        }
-        if (!empty($data['email'])) {
-            $data['email'] = EncryptionService::decrypt($data['email']);
-        }
+        // phone/email 由 Encryptable cast 自动加解密，无需额外处理
 
         return $this->success($this->encodeIds($data), '更新成功');
     }

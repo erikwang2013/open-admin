@@ -10,6 +10,7 @@ namespace app\middleware;
 use Webman\MiddlewareInterface;
 use Webman\Http\Response;
 use Webman\Http\Request;
+use app\common\SnowflakeService;
 
 class OperationLog implements MiddlewareInterface
 {
@@ -29,6 +30,7 @@ class OperationLog implements MiddlewareInterface
             unset($input['password'], $input['old_password'], $input['new_password'], $input['new_password_confirmation']);
 
             $log = new \app\model\OperationLog();
+            $log->id        = SnowflakeService::generate();
             $log->user_id    = $request->adminId ?? 0;
             $log->action     = $method;
             $log->method     = $method;

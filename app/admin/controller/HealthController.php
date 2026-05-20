@@ -36,8 +36,8 @@ class HealthController
         try {
             Db::select('SELECT 1');
             return 'ok';
-        } catch (Throwable $e) {
-            return $e->getMessage();
+        } catch (Throwable) {
+            return 'unavailable';
         }
     }
 
@@ -46,8 +46,8 @@ class HealthController
         try {
             Redis::ping();
             return 'ok';
-        } catch (Throwable $e) {
-            return $e->getMessage();
+        } catch (Throwable) {
+            return 'unavailable';
         }
     }
 
@@ -59,8 +59,8 @@ class HealthController
             $resp = $client->get(rtrim($hosts[0], '/') . '/_cluster/health');
             $body = json_decode((string) $resp->getBody(), true);
             return $body['status'] ?? 'unknown';
-        } catch (Throwable $e) {
-            return $e->getMessage();
+        } catch (Throwable) {
+            return 'unavailable';
         }
     }
 }

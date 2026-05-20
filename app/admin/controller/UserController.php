@@ -10,6 +10,7 @@ namespace app\admin\controller;
 use app\model\AdminUser;
 use app\common\EncryptionService;
 use support\Request;
+use support\Response;
 
 class UserController extends BaseController
 {
