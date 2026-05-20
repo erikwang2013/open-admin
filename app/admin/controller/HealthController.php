@@ -19,6 +19,7 @@ class HealthController
     {
         return json([
             'code' => 0,
+            'message' => 'success',
             'data' => [
                 'app'           => 'open-admin',
                 'version'       => '1.0',

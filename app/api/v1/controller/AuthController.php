@@ -124,8 +124,8 @@ class AuthController
         $user->username = $username;
         $user->password = password_hash($request->input('password'), PASSWORD_BCRYPT);
         $user->real_name = $request->input('real_name');
-        $user->phone = EncryptionService::encrypt($request->input('phone', ''));
-        $user->email = EncryptionService::encrypt($request->input('email', ''));
+        $user->phone = $request->input('phone', '');
+        $user->email = $request->input('email', '');
         $user->status = 1;
         $user->save();
 
@@ -166,6 +166,17 @@ class AuthController
         try {
             $jwt = self::getJWT();
             $payload = $jwt->decode($refreshToken);
+
+            // 刷新时更新最后登录时间和IP
+            $userId = $payload['sub'] ?? 0;
+            if ($userId) {
+                $user = AdminUser::find($userId);
+                if ($user) {
+                    $user->last_login_at = date('Y-m-d H:i:s');
+                    $user->last_login_ip = $request->getRealIp();
+                    $user->save();
+                }
+            }
 
             $token = $jwt->encode(['sub' => $payload['sub'], 'username' => $payload['username'] ?? '']);
             $newRefresh = $jwt->encode(['sub' => $payload['sub'], 'token_type' => 'refresh'],

@@ -50,7 +50,7 @@ class LogController extends BaseController
                            $data = $log->toArray();
                            $data['id']        = $this->encodeId($data['id']);
                            $data['user_name'] = $log->user->username ?? '系统';
-                           unset($data['user']);
+                           unset($data['user'], $data['user_id']);
                            return $data;
                        });
 

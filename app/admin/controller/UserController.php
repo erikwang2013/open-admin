@@ -44,16 +44,13 @@ class UserController extends BaseController
                       ->map(function ($user) {
                           $data = $user->toArray();
                           unset($data['password'], $data['id_card']);
-                          // 脱敏处理
+                          // 脱敏处理（Encryptable cast 已自动解密，直接对明文脱敏）
                           if (!empty($data['phone'])) {
-                              $data['phone'] = EncryptionService::maskPhone(
-                                  EncryptionService::decrypt($data['phone'])
-                              );
+                              $data['phone'] = preg_replace('/^(\d{3})\d+(\d{4})$/', '$1****$2', $data['phone']);
                           }
                           if (!empty($data['email'])) {
-                              $data['email'] = EncryptionService::maskEmail(
-                                  EncryptionService::decrypt($data['email'])
-                              );
+                              $parts = explode('@', $data['email']);
+                              $data['email'] = mb_substr($parts[0], 0, 1) . '***@' . ($parts[1] ?? '');
                           }
                           return $this->encodeIds($data);
                       });
@@ -94,8 +91,8 @@ class UserController extends BaseController
         $user->password = password_hash($request->input('password'), PASSWORD_BCRYPT);
         $user->real_name = $request->input('real_name');
         $user->status = (int) $request->input('status', 1);
-        $user->phone = EncryptionService::encrypt($request->input('phone', ''));
-        $user->email = EncryptionService::encrypt($request->input('email', ''));
+        $user->phone = $request->input('phone', '');
+        $user->email = $request->input('email', '');
         $user->save();
 
         $data = $user->toArray();
@@ -117,12 +114,7 @@ class UserController extends BaseController
 
         $data = $user->toArray();
         unset($data['password'], $data['id_card']);
-        if (!empty($data['phone'])) {
-            $data['phone'] = EncryptionService::decrypt($data['phone']);
-        }
-        if (!empty($data['email'])) {
-            $data['email'] = EncryptionService::decrypt($data['email']);
-        }
+        // Encryptable cast 已自动解密，phone/email 直接为明文
         return $this->success($this->encodeIds($data));
     }
 
@@ -145,10 +137,10 @@ class UserController extends BaseController
             $user->password = password_hash($request->input('password'), PASSWORD_BCRYPT);
         }
         if ($request->has('phone')) {
-            $user->phone = EncryptionService::encrypt($request->input('phone', ''));
+            $user->phone = $request->input('phone', '');
         }
         if ($request->has('email')) {
-            $user->email = EncryptionService::encrypt($request->input('email', ''));
+            $user->email = $request->input('email', '');
         }
 
         $user->save();
@@ -199,7 +191,19 @@ class UserController extends BaseController
             return $this->fail($error, 422);
         }
 
-        $decodedIds = array_map(fn($hashid) => $this->decodeId($hashid), $ids);
+        $decodedIds = [];
+        $invalidIds = [];
+        foreach ($ids as $hashid) {
+            try {
+                $decodedIds[] = $this->decodeId($hashid);
+            } catch (\InvalidArgumentException $e) {
+                $invalidIds[] = $hashid;
+            }
+        }
+        if (!empty($invalidIds)) {
+            return $this->fail('无效的ID: ' . implode(', ', $invalidIds), 422);
+        }
+
         AdminUser::whereIn('id', $decodedIds)->delete();
 
         return $this->success(['count' => count($decodedIds)], '删除成功');
@@ -222,7 +226,19 @@ class UserController extends BaseController
             return $this->fail('状态值无效', 422);
         }
 
-        $decodedIds = array_map(fn($hashid) => $this->decodeId($hashid), $ids);
+        $decodedIds = [];
+        $invalidIds = [];
+        foreach ($ids as $hashid) {
+            try {
+                $decodedIds[] = $this->decodeId($hashid);
+            } catch (\InvalidArgumentException $e) {
+                $invalidIds[] = $hashid;
+            }
+        }
+        if (!empty($invalidIds)) {
+            return $this->fail('无效的ID: ' . implode(', ', $invalidIds), 422);
+        }
+
         AdminUser::whereIn('id', $decodedIds)->update(['status' => $status]);
 
         $label = $status === 1 ? '启用' : '禁用';

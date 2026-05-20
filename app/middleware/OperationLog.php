@@ -25,9 +25,8 @@ class OperationLog implements MiddlewareInterface
         $response = $handler($request);
 
         try {
-            // 过滤敏感字段
-            $input = $request->all();
-            unset($input['password'], $input['old_password'], $input['new_password'], $input['new_password_confirmation']);
+            // 递归过滤敏感字段
+            $input = $this->filterSensitive($request->all());
 
             $log = new \app\model\OperationLog();
             $log->id         = SnowflakeService::generate();
@@ -45,6 +44,22 @@ class OperationLog implements MiddlewareInterface
         }
 
         return $response;
+    }
+
+    /**
+     * 递归过滤敏感字段，防止密码等泄露到日志
+     */
+    private function filterSensitive(array $data): array
+    {
+        $keys = ['password', 'old_password', 'new_password', 'new_password_confirmation', 'token', 'secret', 'access_token', 'refresh_token'];
+        foreach ($data as $key => $value) {
+            if (in_array($key, $keys, true)) {
+                $data[$key] = '***';
+            } elseif (is_array($value)) {
+                $data[$key] = $this->filterSensitive($value);
+            }
+        }
+        return $data;
     }
 
     /**

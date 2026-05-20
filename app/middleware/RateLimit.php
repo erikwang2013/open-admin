@@ -31,14 +31,14 @@ class RateLimit implements MiddlewareInterface
         $window = $this->defaultWindow;
 
         foreach ($this->sensitive as $pattern => $cfg) {
-            if (str_starts_with($path, $pattern)) {
+            if ($path === $pattern || str_starts_with($path, rtrim($pattern, '/') . '/')) {
                 $limit  = $cfg['limit'];
                 $window = $cfg['window'];
                 break;
             }
         }
 
-        $safePath = str_replace([':', '/'], '_', $path);
+        $safePath = preg_replace('/[^a-zA-Z0-9_-]/', '_', $path);
         $key = "rate_limit:{$ip}:{$safePath}";
         $now = (int) (microtime(true) * 1000);
         $windowStart = $now - $window * 1000;
@@ -54,7 +54,11 @@ redis.call('ZADD', KEYS[1], ARGV[3], ARGV[4])
 redis.call('EXPIRE', KEYS[1], ARGV[5])
 return {1, count + 1}
 LUA;
-        $result = Redis::eval($lua, 1, $key, $windowStart, $limit, $now, $now . '.' . mt_rand(), $window + 10);
+        try {
+            $result = Redis::eval($lua, 1, $key, $windowStart, $limit, $now, $now . '.' . mt_rand(), $window + 10);
+        } catch (\Throwable $e) {
+            return $handler($request); // Redis down, fail open
+        }
         $count     = (int) ($result[1] ?? 0);
         $remaining = max($limit - $count, 0);
         $reset     = time() + $window;

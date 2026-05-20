@@ -38,8 +38,12 @@ class AdminAuth
 
         // 检查 JWT 黑名单
         $blacklistKey = 'jwt_blacklist:' . md5($token);
-        if (Redis::get($blacklistKey)) {
-            return json(['code' => 401, 'message' => 'Token已失效，请重新登录', 'data' => []]);
+        try {
+            if (Redis::get($blacklistKey)) {
+                return json(['code' => 401, 'message' => 'Token已失效，请重新登录', 'data' => []]);
+            }
+        } catch (\Throwable $e) {
+            // Redis down, skip blacklist check
         }
 
         try {
