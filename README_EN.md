@@ -173,9 +173,11 @@ Open `apps/harmonyos/` in DevEco Studio and run on a device or emulator.
 | `0` | Success |
 | `400` | Bad request |
 | `401` | Unauthenticated |
-| `403` | Forbidden |
+| `403` | Forbidden / Security blocked | RBAC / SecurityFilter attack detected |
 | `404` | Not found |
 | `422` | Validation failed |
+| `413` | Payload too large | SecurityFilter triggered, >10MB |
+| `415` | Unsupported media type | SecurityFilter triggered, non-JSON Content-Type |
 | `429` | Rate limited | RateLimit triggered |
 | `500` | Server error |
 

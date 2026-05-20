@@ -55,7 +55,7 @@ open-admin/
 │   │   ├── HashidsService.php
 │   │   ├── SnowflakeService.php
 │   │   └── EncryptionService.php
-│   ├── middleware/             # 中间件（6 个）
+│   ├── middleware/             # 中间件（7 个）
 │   │   ├── Cors.php            # 跨域（全局）
 │   │   ├── SecurityFilter.php  # 攻击拦截（全局：XSS/SQL注入/路径遍历/命令注入/CSRF）
 │   │   ├── RateLimit.php       # Redis 限流（全局，Lua 原子化）

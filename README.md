@@ -183,9 +183,11 @@ flutter run -d chrome    # Web 端（PC 管理后台风格）
 | `0` | 成功 | |
 | `400` | 请求参数错误 | |
 | `401` | 未登录（Token 无效或过期） | |
-| `403` | 无权限 | |
+| `403` | 无权限 / 安全拦截 | RBAC 鉴权失败 / SecurityFilter 攻击检测 |
 | `404` | 资源不存在 | |
 | `422` | 参数验证失败 | |
+| `413` | 请求体过大 | SecurityFilter 触发，超过 10MB |
+| `415` | 不支持的媒体类型 | SecurityFilter 触发，Content-Type 非 JSON |
 | `429` | 请求过于频繁 | RateLimit 触发 |
 | `500` | 服务器内部错误 | |
 
