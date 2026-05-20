@@ -58,7 +58,7 @@ struct LoginPage {
     try {
       const resp = await this.httpClient.request(`${BASE_URL}/api/captcha/generate`, {
         method: http.RequestMethod.POST,
-        header: { 'Content-Type': 'application/json' },
+        header: { 'Content-Type': 'application/json', 'API-Version': 'v1', 'X-Client-Platform': 'harmonyos' },
         extraData: JSON.stringify({ difficulty: 'medium' }),
         connectTimeout: 10000,
         readTimeout: 10000
@@ -120,7 +120,7 @@ struct LoginPage {
     try {
       const resp = await this.httpClient.request(`${BASE_URL}/api/auth/login`, {
         method: http.RequestMethod.POST,
-        header: { 'Content-Type': 'application/json' },
+        header: { 'Content-Type': 'application/json', 'API-Version': 'v1', 'X-Client-Platform': 'harmonyos' },
         extraData: JSON.stringify({
           username: trimmedUsername,
           password: this.password,

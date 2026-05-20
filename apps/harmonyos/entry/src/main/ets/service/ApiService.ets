@@ -28,6 +28,8 @@ export class ApiService {
       method: method,
       header: {
         'Content-Type': 'application/json',
+        'API-Version': 'v1',
+        'X-Client-Platform': 'harmonyos',
         'Authorization': token ? `Bearer ${token}` : '',
       },
       connectTimeout: 15000,

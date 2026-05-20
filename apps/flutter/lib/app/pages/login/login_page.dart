@@ -16,8 +16,9 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _usernameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
-  final _dio = Dio(BaseOptions(baseUrl: 'http://localhost:8787'));
-  final _captcha = CaptchaService(Dio(BaseOptions(baseUrl: 'http://localhost:8787')));
+  static final _headers = {'API-Version': 'v1', 'X-Client-Platform': 'web'};
+  final _dio = Dio(BaseOptions(baseUrl: 'http://localhost:8787', headers: _headers));
+  final _captcha = CaptchaService(Dio(BaseOptions(baseUrl: 'http://localhost:8787', headers: _headers)));
 
   bool _loading = false;
   String? _error;

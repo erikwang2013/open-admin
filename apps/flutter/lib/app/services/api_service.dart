@@ -20,6 +20,7 @@ class ApiService {
       headers: {
         'Content-Type': 'application/json',
         'API-Version': 'v1',
+        'X-Client-Platform': 'web',
       },
     ));
 
