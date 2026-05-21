@@ -37,6 +37,9 @@ function v(string $controller, string $action): \Closure
 // ============================================================
 Route::get('/health', [app\admin\controller\HealthController::class, 'index']);
 
+// Prometheus 指标（无需认证）
+Route::get('/metrics', [app\admin\controller\MetricsController::class, 'index']);
+
 // security.txt — RFC 9116 安全漏洞报告联系人
 Route::get('/.well-known/security.txt', function () {
     return response(<<<'TXT'

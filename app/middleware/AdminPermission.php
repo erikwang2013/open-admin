@@ -8,11 +8,14 @@ declare(strict_types=1);
 namespace app\middleware;
 
 use app\model\AdminUser;
+use support\Redis;
 use support\Request;
 use support\Response;
 
 class AdminPermission
 {
+    private const CACHE_TTL = 60; // 权限缓存 60 秒
+
     public function process(Request $request, callable $next): Response
     {
         $adminId = $request->adminId ?? 0;
@@ -23,15 +26,12 @@ class AdminPermission
         $path = $request->path();
         $method = $request->method();
 
-        // 获取用户权限标识列表
         $permissions = $this->getUserPermissions($adminId);
 
-        // 超级管理员跳过检查
         if (in_array('*', $permissions)) {
             return $next($request);
         }
 
-        // 构造权限标识: method.path
         $requiredPermission = strtolower($method) . '.' . trim($path, '/');
 
         if (!in_array($requiredPermission, $permissions)) {
@@ -43,6 +43,15 @@ class AdminPermission
 
     private function getUserPermissions(int $adminId): array
     {
+        // Redis 缓存，避免每请求 N+1 查询
+        $cacheKey = "perm:{$adminId}";
+        try {
+            $cached = Redis::get($cacheKey);
+            if ($cached) {
+                return json_decode($cached, true);
+            }
+        } catch (\Throwable) {}
+
         $user = AdminUser::find($adminId);
         if (!$user) return [];
 
@@ -53,6 +62,12 @@ class AdminPermission
                 $permissions[] = $perm->slug;
             }
         }
-        return array_unique($permissions);
+        $permissions = array_unique($permissions);
+
+        try {
+            Redis::setex($cacheKey, self::CACHE_TTL, json_encode($permissions));
+        } catch (\Throwable) {}
+
+        return $permissions;
     }
 }

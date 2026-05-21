@@ -1,0 +1,92 @@
+# ============================================================
+# CI/CD — 语法检查 → 单元测试 → 构建
+# Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+# ============================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ============================================================
+  # PHP — 语法检查 + 单元测试
+  # ============================================================
+  php:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: open_admin
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo, pdo_mysql, redis, mbstring, gd, xml, dom, xmlwriter
+          tools: composer:v2
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Copy .env
+        run: cp .env.example .env
+
+      - name: Init database
+        run: |
+          mysql -h 127.0.0.1 -u root -proot open_admin < database/migrations/2026_05_16_000000_init_tables.sql
+          mysql -h 127.0.0.1 -u root -proot open_admin < database/migrations/2026_05_20_000001_seed_permissions.sql
+
+      - name: PHP Syntax Check
+        run: find app config -name "*.php" -exec php -l {} \; | grep -v "No syntax"
+
+      - name: PHPUnit Tests
+        run: php vendor/bin/phpunit --no-configuration --bootstrap tests/bootstrap.php tests/
+
+  # ============================================================
+  # Flutter — 静态分析
+  # ============================================================
+  flutter:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/flutter
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
