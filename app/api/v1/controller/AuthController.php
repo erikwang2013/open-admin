@@ -89,10 +89,14 @@ class AuthController
 
         // 签发 JWT
         $jwt = self::getJWT();
+        $tokenExpire = (int)(config('plugin.erikwang2013.jwt.jwt.default_expire') ?: 7200);
         $token = $jwt->encode(['sub' => $user->id, 'username' => $user->username]);
         $refreshToken = $jwt->encode(['sub' => $user->id, 'token_type' => 'refresh'],
             (int)(config('plugin.erikwang2013.jwt.jwt.refresh_expire') ?: 1209600)
         );
+
+        // 并发会话限制
+        $this->trackSession($user->id, $token, $tokenExpire);
 
         // 更新登录信息
         $user->last_login_at = date('Y-m-d H:i:s');
@@ -153,10 +157,13 @@ class AuthController
         $user->save();
 
         $jwt = self::getJWT();
+        $tokenExpire = (int)(config('plugin.erikwang2013.jwt.jwt.default_expire') ?: 7200);
         $token = $jwt->encode(['sub' => $user->id, 'username' => $user->username]);
         $refreshToken = $jwt->encode(['sub' => $user->id, 'token_type' => 'refresh'],
             (int)(config('plugin.erikwang2013.jwt.jwt.refresh_expire') ?: 1209600)
         );
+
+        $this->trackSession($user->id, $token, $tokenExpire);
 
         return json([
             'code'    => 0,
@@ -201,10 +208,15 @@ class AuthController
                 }
             }
 
+            $tokenExpire = (int)(config('plugin.erikwang2013.jwt.jwt.default_expire') ?: 7200);
             $token = $jwt->encode(['sub' => $payload['sub'], 'username' => $payload['username'] ?? '']);
             $newRefresh = $jwt->encode(['sub' => $payload['sub'], 'token_type' => 'refresh'],
                 (int)(config('plugin.erikwang2013.jwt.jwt.refresh_expire') ?: 1209600)
             );
+
+            // 并发会话限制：注册新 token，移除旧 refresh token 的活跃状态
+            $this->trackSession($userId, $token, $tokenExpire);
+            try { Redis::zrem("user_tokens:{$userId}", md5($refreshToken)); } catch (\Throwable) {}
 
             return json([
                 'code'    => 0,
@@ -217,6 +229,43 @@ class AuthController
             ]);
         } catch (Throwable $e) {
             return json(['code' => 401, 'message' => '刷新令牌无效或已过期', 'data' => []]);
+        }
+    }
+
+    /**
+     * 并发会话限制 — 同一用户最多 3 个有效 token
+     * @param int $userId 用户 ID
+     * @param string $token JWT access_token
+     * @param int $expiresIn token 有效期（秒）
+     */
+    private function trackSession(int $userId, string $token, int $expiresIn): void
+    {
+        try {
+            $key = "user_tokens:{$userId}";
+            $exp = time() + $expiresIn;
+            $member = md5($token);
+
+            // 清理已过期的 token
+            Redis::zremrangebyscore($key, 0, time());
+            // 添加新 token
+            Redis::zadd($key, $exp, $member);
+            // 超过 3 个 → 踢出最旧的
+            $count = Redis::zcard($key);
+            if ($count > 3) {
+                $oldest = Redis::zrange($key, 0, 0, true);
+                if ($oldest) {
+                    $oldMember = array_key_first($oldest);
+                    $oldExp = (int) $oldest[$oldMember];
+                    $ttl = max($oldExp - time(), 0);
+                    Redis::zrem($key, $oldMember);
+                    if ($ttl > 0) {
+                        Redis::setex("jwt_blacklist:{$oldMember}", $ttl, '1');
+                    }
+                }
+            }
+            Redis::expire($key, $expiresIn + 3600);
+        } catch (\Throwable) {
+            // Redis 故障不影响登录
         }
     }
 }
