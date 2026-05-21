@@ -4,6 +4,23 @@ A full-stack admin dashboard built with webman v2 + Flutter.
 
 > [中文文档](README.md) | [Architecture Diagrams](docs/ARCHITECTURE.md) | [Design Doc](docs/DESIGN.md) | [Security](docs/SECURITY.md) | [API Reference](docs/API.md)
 
+## Features
+
+| Domain | Feature | Notes |
+|--------|---------|-------|
+| 🔐 Auth | Login/Register/Refresh/Logout | Click captcha + JWT + blacklist |
+| | Account lockout | 5 failures → 15 min lock |
+| | Concurrent session limit | Max 3 active tokens per user |
+| 📊 Dashboard | Real-time stats/trends/distribution/logs | Redis cached 5 min |
+| 👥 Users | CRUD + batch delete/toggle status | Soft delete + password confirmation |
+| | Excel batch import | Row-level validation + error report |
+| 🔒 Roles & Perms | Role CRUD + permission tree | RBAC method.path granularity |
+| ⚙ Config | Key-value CRUD | Grouped management |
+| 📋 Audit | Log query + source detection | 8 platforms auto-detected |
+| 📁 Files | Upload/Excel export/PDF export | Sensitive data auto-masked |
+| 🛡 Security | 18-layer defense-in-depth | XSS/SQLi/path traversal/cmd injection/CSRF/rate limit/CSP... |
+| 🏥 Ops | Health check/metrics/API docs/security.txt | Prometheus + OpenAPI 3.0 |
+
 ## Copyright
 
 ```

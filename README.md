@@ -4,6 +4,22 @@
 
 > [English version](README_EN.md) | [架构设计图](docs/ARCHITECTURE.md) | [设计文档](docs/DESIGN.md) | [安全架构](docs/SECURITY.md) | [API 参考](docs/API.md)
 
+## 功能清单
+
+| 业务域 | 功能 | 说明 |
+|--------|------|------|
+| 🔐 认证 | 登录/注册/刷新令牌/登出 | 点击验证码 + JWT + 黑名单 |
+| | 账号锁定 | 5 次失败锁定 15 分钟 |
+| | 并发会话限制 | 同一用户最多 3 个有效 Token |
+| 📊 仪表盘 | 实时统计/趋势图/分布图/最近操作 | Redis 缓存 5 分钟 |
+| 👥 用户管理 | CRUD + 批量删除/启禁用 | 软删除 + 密码二次确认 |
+| | Excel 批量导入 | 逐行校验 + 错误报告 |
+| 🔒 角色权限 | 角色 CRUD + 权限树 | RBAC method.path 粒度鉴权 |
+| ⚙ 系统配置 | 键值对 CRUD | 分组管理 |
+| 📋 操作审计 | 日志查询 + 来源端检测 | 8 平台自动识别 |
+| 📁 文件管理 | 上传/Excel 导出/PDF 导出 | 敏感数据自动脱敏 |
+| 🛡 安全防护 | 18 层纵深防御 | XSS/SQL注入/路径遍历/命令注入/CSRF/限流/CSP... |
+| 🏥 运维 | 健康检查/metrics/API 文档/security.txt | Prometheus + OpenAPI 3.0 |
 
 ## 技术栈
 
