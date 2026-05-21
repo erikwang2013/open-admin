@@ -26,12 +26,14 @@ class Cors implements MiddlewareInterface
 
         $response = $handler($request);
         $response = $response->withHeaders([
-            'Access-Control-Allow-Origin'  => '*',
-            'X-Content-Type-Options'       => 'nosniff',
-            'X-Frame-Options'              => 'DENY',
-            'X-XSS-Protection'             => '1; mode=block',
-            'Referrer-Policy'              => 'strict-origin-when-cross-origin',
-            'Permissions-Policy'           => 'camera=(), microphone=(), geolocation=()',
+            'Access-Control-Allow-Origin'   => '*',
+            'X-Content-Type-Options'        => 'nosniff',
+            'X-Frame-Options'               => 'DENY',
+            'X-XSS-Protection'              => '1; mode=block',
+            'Referrer-Policy'               => 'strict-origin-when-cross-origin',
+            'Permissions-Policy'            => 'camera=(), microphone=(), geolocation=()',
+            'Content-Security-Policy'       => "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' http: https:;",
+            'X-Permitted-Cross-Domain-Policies' => 'none',
         ]);
         return $response;
     }

@@ -37,6 +37,17 @@ function v(string $controller, string $action): \Closure
 // ============================================================
 Route::get('/health', [app\admin\controller\HealthController::class, 'index']);
 
+// security.txt — RFC 9116 安全漏洞报告联系人
+Route::get('/.well-known/security.txt', function () {
+    return response(<<<'TXT'
+Contact: mailto:erik@erik.xyz
+Expires: 2027-12-31T23:59:59Z
+Preferred-Languages: zh, en
+Canonical: https://erik.xyz/.well-known/security.txt
+TXT
+    , 200, ['Content-Type' => 'text/plain; charset=utf-8']);
+});
+
 // API 文档（全局，无需认证）
 Route::get('/api/docs', [app\admin\controller\DocsController::class, 'index']);
 
