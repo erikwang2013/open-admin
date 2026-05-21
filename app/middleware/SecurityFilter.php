@@ -63,6 +63,12 @@ class SecurityFilter implements MiddlewareInterface
 
     public function process(Request $request, callable $handler): Response
     {
+        // 0. HTTP 方法限制 — 仅允许标准方法
+        $method = $request->method();
+        if (!in_array($method, ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], true)) {
+            return response('<h1>405 Method Not Allowed</h1>', 405, ['Allow' => 'GET,POST,PUT,DELETE,OPTIONS']);
+        }
+
         $ip = $request->getRealIp();
 
         // 1. IP 黑名单检查（攻击升级后的临时封禁）

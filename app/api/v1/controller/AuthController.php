@@ -11,6 +11,7 @@ use app\model\AdminUser;
 use app\common\SnowflakeService;
 use app\common\EncryptionService;
 use support\Container;
+use support\Redis;
 use support\Request;
 use support\Response;
 use Erikwang2013\Jwt\JWT;
@@ -56,9 +57,31 @@ class AuthController
         $username = $request->input('username');
         $user = AdminUser::where('username', $username)->first();
 
+        // 账号锁定检查（5次失败/15分钟）
+        $lockKey = "account_lock:{$username}";
+        try {
+            if (Redis::get($lockKey)) {
+                return json(['code' => 429, 'message' => '账号已被临时锁定，请15分钟后再试', 'data' => []]);
+            }
+        } catch (\Throwable) {}
+
         if (!$user || !password_verify($request->input('password'), $user->password)) {
+            // 登录失败：计数 + 锁定
+            try {
+                $failKey = "login_fail:{$username}";
+                $fails = Redis::incr($failKey);
+                if ($fails === 1) Redis::expire($failKey, 900);
+                if ($fails >= 5) {
+                    Redis::setex($lockKey, 900, '1');
+                    Redis::del($failKey);
+                    return json(['code' => 429, 'message' => '账号已被临时锁定，请15分钟后再试', 'data' => []]);
+                }
+            } catch (\Throwable) {}
             return json(['code' => 401, 'message' => '用户名或密码错误', 'data' => []]);
         }
+
+        // 登录成功：清除失败计数
+        try { Redis::del("login_fail:{$username}"); Redis::del($lockKey); } catch (\Throwable) {}
 
         if ($user->status === 0) {
             return json(['code' => 403, 'message' => '账号已被禁用', 'data' => []]);
