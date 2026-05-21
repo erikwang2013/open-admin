@@ -92,6 +92,7 @@ open-admin/
 │   ├── DESIGN.md               # 设计文档
 │   ├── SECURITY.md             # 安全架构设计
 │   ├── API.md                  # API 参考文档
+│   ├── nginx-security.conf     # Nginx 安全参考配置
 │   ├── diagrams/               # 分解架构图
 │   └── superpowers/            # 规范与计划
 │       ├── specs/              # 设计规范
@@ -113,11 +114,20 @@ open-admin/
 ## 中间件执行链
 
 ```
-全局:  Cors → SecurityFilter → RateLimit → {路由中间件}
-/admin: Cors → SecurityFilter → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
-/api:   Cors → SecurityFilter → RateLimit → ApiVersion → Controller
-/health: Cors → SecurityFilter → RateLimit → Controller
+全局:  Cors → SecurityFilter(方法检查→405) → RateLimit → {路由中间件}
+/admin: Cors → SecurityFilter(方法检查→405) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
+/api:   Cors → SecurityFilter(方法检查→405) → RateLimit → ApiVersion → Controller
+/health: Cors → SecurityFilter(方法检查→405) → RateLimit → Controller
 ```
+
+## 安全增强
+
+- **HTTP 方法限制**：SecurityFilter 仅允许 GET/POST/PUT/DELETE/OPTIONS/HEAD，非标准方法返回 405
+- **CSP 头**：Content-Security-Policy + X-Permitted-Cross-Domain-Policies 注入所有响应
+- **账号锁定**：连续 5 次登录失败，账号锁定 15 分钟
+- **并发会话限制**：同一用户最多 3 个有效 Token，超出时最旧 Token 加入黑名单
+- **security.txt**：`/.well-known/security.txt` RFC 9116 端点
+- **Nginx 安全配置**：`docs/nginx-security.conf` 反向代理安全加固参考
 
 ## API 版本策略
 

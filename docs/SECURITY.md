@@ -28,6 +28,22 @@
 
 ## 2. 攻击检测引擎
 
+### 2.0 HTTP 方法限制
+
+SecurityFilter 在所有攻击检测之前首先校验 HTTP 方法，仅允许以下标准方法：
+
+```
+GET, POST, PUT, DELETE, OPTIONS, HEAD
+```
+
+非标准方法（如 TRACE、CONNECT、PATCH、自定义方法等）直接返回 **405 Method Not Allowed**，响应体为空 HTML，不进入后续攻击检测或业务逻辑。
+
+这是纵深防御的第一道防线，有效阻止：
+- TRACE 跨站追踪攻击（XST）
+- CONNECT 隧道代理滥用
+- 非标准 WebDAV 方法探测
+- 自动化扫描器的 HTTP 方法枚举
+
 ### 2.1 XSS 跨站脚本
 
 所有正则来自 `SecurityFilter::PATTERNS['XSS']`，大小写不敏感匹配。
@@ -168,6 +184,22 @@ POST/PUT 请求**必须**声明 `Content-Type` 为 `application/json` 或 `appli
 
 OPTIONS 预检请求直接返回 204 空响应，不进入后续中间件链。
 
+### 4.2 Content-Security-Policy (CSP)
+
+与其他安全头一起在 Cors 中间件中注入，提供深度防御，限制浏览器可加载和执行的资源来源。
+
+| 头 | 值 | 作用 |
+|----|-----|------|
+| Content-Security-Policy | `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'` | 限制脚本/样式/图片/连接/框架/表单等资源来源 |
+| X-Permitted-Cross-Domain-Policies | `none` | 禁止 Adobe Flash/PDF 等跨域策略文件加载 |
+
+CSP 策略要点：
+- `default-src 'self'`：默认仅允许同源资源
+- `script-src 'self' 'unsafe-inline' 'unsafe-eval'`：允许同源脚本 + 内联脚本（Flutter Web 必需）+ eval（Flutter Web 调试必需）
+- `frame-ancestors 'none'`：禁止被任何页面 iframe 嵌入，与 X-Frame-Options: DENY 双保险
+- `base-uri 'self'`：限制 `<base>` 标签只能指向同源
+- `form-action 'self'`：限制表单只能提交到同源
+
 ---
 
 ## 5. 限流策略
@@ -227,6 +259,34 @@ try {
 
 宁可短时间丧失限流保护，也不阻断正常业务请求。
 
+### 5.4 账号锁定机制
+
+登录接口在速率限制的基础上，额外增加了**账号锁定**机制，防止针对特定用户的定向暴力破解。
+
+**锁定流程**：
+
+```
+登录失败 → Redis INCR account_lockout:{userId} TTL=900s
+连续 5 次失败 → Redis SETEX account_locked:{userId} 900 1
+            → 返回 429 "账号已被锁定，请15分钟后再试"
+            → 清除计数器 DEL account_lockout:{userId}
+```
+
+**锁定期间行为**：
+
+锁定期间所有登录请求直接返回 429，不进行密码校验，完全阻止暴力破解尝试。
+
+**配置常量**：
+
+| 常量 | 值 | 含义 |
+|------|-----|------|
+| MAX_LOGIN_ATTEMPTS | 5 | 最大连续失败次数 |
+| LOCKOUT_DURATION | 900 | 锁定持续时间（秒），即 15 分钟 |
+
+注意：账号锁定基于 `userId` 而非 IP，因此攻击者更换 IP 无法绕过锁定。与 IP 限流（10次/分钟）叠加形成双重防护：
+- IP 层面：10 次/分钟限流阻止分布式暴力破解
+- 账号层面：5 次失败锁定阻止定向暴力破解
+
 ---
 
 ## 6. 认证与鉴权
@@ -256,7 +316,34 @@ AdminAuth 中间件实现，挂载在需要认证的路由组上。
 
 **黑名单机制**：用户登出时，将 `md5(token)` 写入 Redis，TTL 设为 JWT 剩余有效期。Redis 故障时黑名单检查被跳过（fail-open），此时已登出的 Token 仍可短期使用，但 JWT 本身的短期有效期（2h）作为兜底保护。
 
-### 6.2 RBAC 权限模型
+### 6.2 并发会话限制
+
+为防止 Token 泄露后被多设备滥用，系统限制同一用户同时持有的有效 Token 数量。
+
+**限制逻辑**：
+
+```
+登录成功 → 签发新 Token
+         → 查询当前用户有效 Token 数量: Redis SCARD user_tokens:{userId}
+         → 若数量 >= 3（MAX_CONCURRENT_SESSIONS）:
+            → 按创建时间升序排列，移除最旧的 Token:
+              Redis SREM user_tokens:{userId} <oldest_token_id>
+              Redis SETEX jwt_blacklist:{md5(oldest_token)} TTL remaining
+         → 将新 Token 加入集合: Redis SADD user_tokens:{userId} <new_token_id>
+            Redis SET user_token:{token_id} {userId} EX {TTL}
+```
+
+**配置常量**：
+
+| 常量 | 值 | 含义 |
+|------|-----|------|
+| MAX_CONCURRENT_SESSIONS | 3 | 同一用户最大并发 Token 数 |
+
+**被挤下线场景**：当用户在第 4 台设备登录时，第 1 台设备的 Token 被强制加入黑名单，后续请求返回 401 "Token已失效，请重新登录"。
+
+登出时，当前 Token 从集合中移除。Token 自然过期时，Redis key 自动失效，集合成员随之减少。
+
+### 6.3 RBAC 权限模型
 
 AdminPermission 中间件实现。
 
@@ -426,13 +513,70 @@ OperationLog 中间件对 POST / PUT / DELETE 请求自动记录操作日志。G
 
 ---
 
-## 10. 威胁模型
+## 10. security.txt (RFC 9116)
 
-### 10.1 已防护威胁
+系统在 `/.well-known/security.txt` 提供符合 RFC 9116 标准的安全联系信息端点，方便安全研究人员在发现漏洞时快速找到报告渠道。
+
+**访问方式**：
+
+```
+GET /.well-known/security.txt
+```
+
+**响应内容**：
+
+```text
+Contact: mailto:security@erik.xyz
+Expires: 2027-05-20T00:00:00.000Z
+Preferred-Languages: zh, en
+Canonical: https://erik.xyz/.well-known/security.txt
+Policy: https://erik.xyz/security-policy
+```
+
+**字段说明**：
+
+| 字段 | 说明 |
+|------|------|
+| Contact | 安全漏洞报告联系方式 |
+| Expires | 文件过期时间，需定期更新 |
+| Preferred-Languages | 首选沟通语言 |
+| Canonical | 此文件的规范 URL |
+| Policy | 安全策略/漏洞披露政策链接 |
+
+该端点不受限流、认证等中间件限制，任何人都可直接访问。
+
+---
+
+## 11. Nginx 安全配置
+
+项目提供 `docs/nginx-security.conf` 作为生产环境 Nginx 反向代理的安全加固参考配置。
+
+**包含的安全措施**：
+
+| 配置项 | 作用 |
+|--------|------|
+| `server_tokens off` | 隐藏 Nginx 版本号 |
+| `client_max_body_size 10m` | 限制请求体大小，与 SecurityFilter 协同 |
+| `limit_req_zone` | Nginx 层面的请求频率限制 |
+| `limit_conn_zone` | 并发连接数限制 |
+| `add_header` 安全头 | 在 Nginx 层面追加 X-XSS-Protection 等安全头 |
+| `if ($request_method)` | Nginx 层面拒绝非标准 HTTP 方法 |
+| SSL/TLS 配置 | 现代 TLS 1.2/1.3 配置，禁用弱加密套件 |
+| 隐藏后端头 | `proxy_hide_header` 移除 webman 版本等敏感头 |
+
+**使用方式**：将 `docs/nginx-security.conf` 中的配置合并到您的 Nginx server 块中，根据实际域名和证书路径调整。
+
+---
+
+## 12. 威胁模型
+
+### 12.1 已防护威胁
 
 | 威胁类型 | 攻击向量 | 防御层次 |
 |----------|---------|---------|
-| 暴力破解 | 反复尝试用户名/密码 | RateLimit (登录 10/min) + Captcha |
+| HTTP 方法滥用 | TRACE/TRACK XST 攻击、CONNECT 隧道代理、WebDAV 方法探测 | SecurityFilter 405 方法白名单 (GET/POST/PUT/DELETE/OPTIONS/HEAD) |
+| 定向暴力破解 | 针对特定用户反复尝试密码 | 账号锁定 (5次失败锁定15分钟) + RateLimit (登录 10/min) + Captcha |
+| 暴力破解 | 分布式 IP 反复尝试用户名/密码 | RateLimit (登录 10/min) + Captcha |
 | XSS 跨站脚本 | `<script>`, onerror, javascript: | SecurityFilter (5 种模式) + X-XSS-Protection 响应头 + CSP |
 | SQL 注入 | UNION SELECT, OR 1=1, 注释绕过 | SecurityFilter (6 种模式) + Eloquent ORM 参数化查询 |
 | CSRF 跨站请求伪造 | 恶意网站代发请求 | SecurityFilter Origin/Referer 校验 |
@@ -445,7 +589,7 @@ OperationLog 中间件对 POST / PUT / DELETE 请求自动记录操作日志。G
 | 权限提升 | 低权限用户访问管理接口 | RBAC method.path 粒度鉴权 |
 | 文件上传攻击 | shell.php.png 双扩展名 | SecurityFilter 恶意文件检测 |
 
-### 10.2 已知局限
+### 12.2 已知局限
 
 | 局限 | 影响范围 | 缓解措施 |
 |------|---------|---------|

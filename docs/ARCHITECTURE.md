@@ -160,6 +160,12 @@ sequenceDiagram
     C->>N: HTTPS 请求<br/>Header: API-Version: v1
     N->>MW_SF: 转发
 
+    alt 非标准 HTTP 方法 (TRACE/CONNECT/PATCH...)
+        MW_SF-->>C: 405 Method Not Allowed
+    else 方法合法 (GET/POST/PUT/DELETE/OPTIONS/HEAD)
+        Note over MW_SF: 方法白名单检查通过
+    end
+
     alt 攻击检测触发
         MW_SF-->>C: 403 Forbidden
     end

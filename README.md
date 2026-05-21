@@ -60,7 +60,7 @@ open-admin/
 │   │   └── EncryptionService.php # 数据加解密 + 脱敏
 │   ├── middleware/             # 中间件
 │   │   ├── Cors.php            # 跨域
-│   │   ├── SecurityFilter.php  # 攻击检测拦截（XSS/SQL注入/路径遍历/命令注入/CSRF）
+│   │   ├── SecurityFilter.php  # 攻击检测拦截（HTTP方法限制/XSS/SQL注入/路径遍历/命令注入/CSRF）
 │   │   ├── RateLimit.php       # Redis 限流（滑动窗口 + 响应头）
 │   │   ├── ApiVersion.php      # API 版本校验
 │   │   ├── AdminAuth.php       # JWT 认证 + 黑名单
@@ -187,8 +187,9 @@ flutter run -d chrome    # Web 端（PC 管理后台风格）
 | `404` | 资源不存在 | |
 | `422` | 参数验证失败 | |
 | `413` | 请求体过大 | SecurityFilter 触发，超过 10MB |
+| `405` | 请求方法不允许 | SecurityFilter 触发，仅允许 GET/POST/PUT/DELETE/OPTIONS/HEAD |
 | `415` | 不支持的媒体类型 | SecurityFilter 触发，Content-Type 非 JSON |
-| `429` | 请求过于频繁 | RateLimit 触发 |
+| `429` | 请求过于频繁 | RateLimit 触发 / 账号锁定（5次登录失败锁定15分钟） |
 | `500` | 服务器内部错误 | |
 
 ### ID 处理
@@ -223,8 +224,8 @@ API-Version: v1
 
 ```
 Cors（跨域预处理 + 响应头）
-  → SecurityFilter（XSS/SQL注入/路径遍历/命令注入/CSRF 攻击拦截）
-  → RateLimit（Redis 滑动窗口限流）
+  → SecurityFilter（HTTP方法限制/请求体大小/Content-Type校验/XSS/SQL注入/路径遍历/命令注入/CSRF 攻击拦截）
+  → RateLimit（Redis 滑动窗口限流 + 账号锁定：5次登录失败锁定15分钟）
   → ApiVersion（API 版本校验，/api 路由组）
   → AdminAuth（JWT 认证 + 黑名单，/admin 路由组）
   → AdminPermission（RBAC 鉴权，/admin 路由组）
@@ -232,6 +233,12 @@ Cors（跨域预处理 + 响应头）
 ```
 
 `/health` 和 `/api/docs` 为公开端点，仅经过 `Cors → SecurityFilter → RateLimit`。
+
+安全增强：
+- **账号锁定**：连续 5 次登录失败，账号自动锁定 15 分钟，期间登录返回 429
+- **并发会话限制**：同一用户最多 3 个有效 Token，超出时最旧 Token 自动加入黑名单
+- **security.txt**：`GET /.well-known/security.txt` 提供 RFC 9116 标准安全联系信息
+- **Nginx 安全配置**：参考 `docs/nginx-security.conf` 提供完整的反向代理安全加固示例
 
 ### 认证
 

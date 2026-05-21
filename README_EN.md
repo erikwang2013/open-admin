@@ -62,7 +62,7 @@ open-admin/
 │   │       └── AuthController.php
 │   ├── middleware/             # Middleware
 │   │   ├── Cors.php            # CORS
-│   │   ├── SecurityFilter.php  # Attack detection (XSS/SQLi/path traversal/cmd injection/CSRF)
+│   │   ├── SecurityFilter.php  # Attack detection (HTTP method restriction/XSS/SQLi/path traversal/cmd injection/CSRF)
 │   │   ├── RateLimit.php       # Redis rate limiting
 │   │   ├── ApiVersion.php      # API version validation
 │   │   ├── AdminAuth.php       # JWT auth + blacklist
@@ -177,8 +177,9 @@ Open `apps/harmonyos/` in DevEco Studio and run on a device or emulator.
 | `404` | Not found |
 | `422` | Validation failed |
 | `413` | Payload too large | SecurityFilter triggered, >10MB |
+| `405` | Method not allowed | SecurityFilter triggered, only GET/POST/PUT/DELETE/OPTIONS/HEAD permitted |
 | `415` | Unsupported media type | SecurityFilter triggered, non-JSON Content-Type |
-| `429` | Rate limited | RateLimit triggered |
+| `429` | Rate limited | RateLimit triggered / Account locked (5 failed logins, 15 min lockout) |
 | `500` | Server error |
 
 ### ID Handling
@@ -213,8 +214,8 @@ Global middleware runs for every request in order:
 
 ```
 Cors (preflight + response headers)
-  → SecurityFilter (XSS/SQLi/path traversal/cmd injection/CSRF blocking)
-  → RateLimit (Redis sliding-window)
+  → SecurityFilter (HTTP method restriction/body size/Content-Type check/XSS/SQLi/path traversal/cmd injection/CSRF blocking)
+  → RateLimit (Redis sliding-window + account lockout: 5 failed logins = 15 min lock)
   → ApiVersion (API version validation, /api group)
   → AdminAuth (JWT + blacklist, /admin group)
   → AdminPermission (RBAC, /admin group)
@@ -222,6 +223,12 @@ Cors (preflight + response headers)
 ```
 
 `/health` and `/api/docs` are public, only passing through `Cors → SecurityFilter → RateLimit`.
+
+Security enhancements:
+- **Account lockout**: 5 consecutive failed login attempts lock the account for 15 minutes; login returns 429 during lockout
+- **Concurrent session limit**: Max 3 active tokens per user; exceeding this blacklists the oldest token automatically
+- **security.txt**: `GET /.well-known/security.txt` provides RFC 9116 standard security contact information
+- **Nginx security config**: See `docs/nginx-security.conf` for a complete reverse-proxy security hardening reference
 
 ### Authentication
 

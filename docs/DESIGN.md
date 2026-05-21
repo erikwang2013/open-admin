@@ -77,8 +77,8 @@ Route 匹配
   │
   ▼
 中间件链:
-  SecurityFilter ──────► XSS/SQL注入/路径遍历/命令注入/CSRF 攻击拦截 (403)
-  │
+  SecurityFilter ──────► HTTP方法检查 → 405 (仅允许 GET/POST/PUT/DELETE/OPTIONS/HEAD)
+  │                     XSS/SQL注入/路径遍历/命令注入/CSRF 攻击拦截 (403)
   ▼
   RateLimit ───────────► Redis 滑动窗口限流
   │ (失败返回 429 + Retry-After 头)
@@ -353,9 +353,13 @@ curl /api/auth/login
 
 | 层面 | 措施 |
 |------|------|
+| 方法限制 | SecurityFilter HTTP 方法白名单，仅允许 GET/POST/PUT/DELETE/OPTIONS/HEAD，非标准方法返回 405 |
 | 攻击拦截 | SecurityFilter 中间件，XSS/SQL注入/路径遍历/命令注入/CSRF 检测拦截 |
 | 人机验证 | 点击验证码（Click Captcha），登录/注册强制校验 |
+| 账号锁定 | 连续 5 次登录失败锁定账号 15 分钟，锁定期间返回 429 |
+| 会话限制 | 同一用户最多 3 个并发 Token，超出时最旧 Token 自动黑名单 |
 | 限流 | RateLimit 中间件，Redis 滑动窗口，Lua 原子化 |
+| CSP | Content-Security-Policy 头限制资源来源，防 XSS 与数据注入 |
 | 操作确认 | 删除等敏感操作需输入当前用户密码二次确认 |
 | 传输 | HTTPS + JWT Bearer Token |
 | 接口ID | Hashids 加密，外部不可逆推真实 ID |
