@@ -145,6 +145,30 @@ flutter run -d chrome    # Web (desktop admin panel style)
 
 Open `apps/harmonyos/` in DevEco Studio and run on a device or emulator.
 
+### 6. Docker Compose (Recommended for Production)
+
+Full Docker orchestration with 5 services: Nginx, PHP (webman app), MySQL, Redis, Elasticsearch.
+
+```bash
+# 1. Configure Docker environment variables
+cp .env.docker .env
+
+# 2. Start all services
+docker-compose up -d
+
+# 3. Initialize database (run inside the app container)
+docker-compose exec app mysql -h mysql -u root -p < database/migrations/2026_05_16_000000_init_tables.sql
+docker-compose exec app mysql -h mysql -u root -p < database/migrations/2026_05_20_000001_seed_permissions.sql
+
+# 4. Access
+# http://localhost:8787  (webman)
+# http://localhost:8080  (Nginx reverse proxy)
+```
+
+- `Dockerfile`: PHP 8.3 + OPcache + Composer, based on `php:8.3-cli`
+- `docker-compose.yml`: 5 services, isolated network, persistent volumes
+- `.env.docker`: Docker-specific environment variables
+
 ## Database Conventions
 
 - **Prefix**: `erik_`
@@ -287,6 +311,7 @@ Authorization: Bearer <token>
 | `POST` | `/api/auth/login` | Login (requires captcha) |
 | `POST` | `/api/auth/register` | Register (requires captcha) |
 | `POST` | `/api/auth/refresh` | Refresh token |
+| `GET` | `/metrics` | Prometheus metrics |
 
 ### Admin Endpoints (requires JWT + RBAC)
 
@@ -348,6 +373,47 @@ Authorization: Bearer <token>
 - All config files must include inline comments
 - Primary keys must be generated at the application layer via snowflake — no auto-increment
 - All IDs in API parameters and responses must be encoded/decoded via hashids
+- AdminPermission middleware uses Redis cache for user permissions (TTL=60s), eliminating N+1 query bottlenecks
+
+## Deployment
+
+### Docker Compose (Recommended)
+
+`docker-compose.yml` in the project root orchestrates 5 services:
+
+| Service | Image | Port |
+|------|------|------|
+| `nginx` | nginx:alpine | 80, 443 |
+| `app` | Local `Dockerfile` build | 8787 |
+| `mysql` | mysql:8.0 | 3306 |
+| `redis` | redis:7-alpine | 6379 |
+| `elasticsearch` | elasticsearch:8.x | 9200 |
+
+The PHP image is built from `Dockerfile`, based on `php:8.3-cli` with OPcache enabled.
+
+```bash
+cp .env.docker .env
+docker-compose up -d
+```
+
+### CI/CD
+
+GitHub Actions CI pipeline: `.github/workflows/ci.yml`
+
+- PHP syntax check (`php -l`)
+- PHPUnit tests
+- Flutter static analysis (`flutter analyze`)
+
+### Database Backup
+
+`database/backup/` directory:
+
+- `backup.sh` — mysqldump + gzip backup, auto-clears backups older than 30 days
+- `restore.sh` — interactive restore, lists available backups for selection
+
+### Nginx Security
+
+See `docs/nginx-security.conf` for production reverse-proxy security hardening.
 
 ## 开源不易，欢迎支持
 

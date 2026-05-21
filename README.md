@@ -154,6 +154,30 @@ flutter run -d chrome    # Web 端（PC 管理后台风格）
 
 使用 DevEco Studio 打开 `apps/harmonyos/` 目录，连接真机或模拟器运行。
 
+### 6. Docker Compose 一键部署（推荐生产环境）
+
+项目提供完整的 Docker 编排方案，包含 5 个服务：Nginx、PHP (webman app)、MySQL、Redis、Elasticsearch。
+
+```bash
+# 1. 配置 Docker 环境变量
+cp .env.docker .env
+
+# 2. 启动所有服务
+docker-compose up -d
+
+# 3. 初始化数据库（进入 app 容器执行）
+docker-compose exec app mysql -h mysql -u root -p < database/migrations/2026_05_16_000000_init_tables.sql
+docker-compose exec app mysql -h mysql -u root -p < database/migrations/2026_05_20_000001_seed_permissions.sql
+
+# 4. 访问
+# http://localhost:8787  (webman)
+# http://localhost:8080  (Nginx 反向代理)
+```
+
+- `Dockerfile`: PHP 8.3 + OPcache + Composer，基于 `php:8.3-cli`
+- `docker-compose.yml`: 5 个服务编排，网络隔离，数据卷持久化
+- `.env.docker`: Docker 环境专用环境变量
+
 
 ## 数据库规范
 
@@ -297,6 +321,7 @@ Authorization: Bearer <token>
 | `POST` | `/api/auth/login` | 登录（需 captcha） |
 | `POST` | `/api/auth/register` | 注册（需 captcha） |
 | `POST` | `/api/auth/refresh` | 刷新令牌 |
+| `GET` | `/metrics` | Prometheus 监控指标 |
 
 ### 管理端接口（需 JWT + RBAC）
 
@@ -356,6 +381,47 @@ Authorization: Bearer <token>
 - 所有配置文件必须包含中文注释说明
 - 数据库主键必须由应用层 snowflake 生成，禁止自增
 - API 层所有参数和响应中的 ID 必须通过 hashids 加解密
+- AdminPermission 中间件使用 Redis 缓存用户权限（TTL=60s），消除 N+1 查询瓶颈
+
+## 部署
+
+### Docker Compose（推荐）
+
+项目根目录提供 `docker-compose.yml`，编排 5 个服务：
+
+| 服务 | 镜像 | 端口 |
+|------|------|------|
+| `nginx` | nginx:alpine | 80, 443 |
+| `app` | 本地 `Dockerfile` 构建 | 8787 |
+| `mysql` | mysql:8.0 | 3306 |
+| `redis` | redis:7-alpine | 6379 |
+| `elasticsearch` | elasticsearch:8.x | 9200 |
+
+PHP 镜像通过 `Dockerfile` 构建，基础镜像 `php:8.3-cli`，启用 OPcache。
+
+```bash
+cp .env.docker .env
+docker-compose up -d
+```
+
+### CI/CD
+
+GitHub Actions 持续集成流水线：`.github/workflows/ci.yml`
+
+- PHP 语法检查 (`php -l`)
+- PHPUnit 单元测试
+- Flutter 静态分析 (`flutter analyze`)
+
+### 数据库备份
+
+`database/backup/` 目录：
+
+- `backup.sh` — mysqldump + gzip 备份，自动清理 30 天前旧备份
+- `restore.sh` — 交互式恢复，列出可用备份供选择
+
+### Nginx 安全配置
+
+生产部署请参考 `docs/nginx-security.conf` 配置反向代理安全加固。
 
 ## 开源不易，欢迎支持
 

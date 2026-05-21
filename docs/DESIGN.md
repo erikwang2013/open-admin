@@ -89,7 +89,7 @@ Route 匹配
   AdminAuth ──────────► JWT 验证，注入 $request->adminId
   │ (失败返回 401)
   ▼
-  AdminPermission ────► RBAC 权限校验
+  AdminPermission ────► RBAC 权限校验（Redis 60s 缓存）
   │ (失败返回 403)
   ▼
   OperationLog ───────► 操作日志记录 (POST/PUT/DELETE)，自动检测来源端
@@ -421,7 +421,42 @@ Nginx (:443 HTTPS) → webman worker × N (:8787) → MySQL + ES + Redis
                     静态文件: Flutter Web build/
 ```
 
-### 8.2 环境要求
+### 8.2 Docker Compose（推荐生产环境）
+
+项目根目录的 `docker-compose.yml` 编排了上述拓扑的全部服务：
+
+| 服务 | 镜像/构建 | 端口 | 说明 |
+|------|----------|------|------|
+| `nginx` | nginx:alpine | 80, 443 | 反向代理 + 静态文件 + Gzip |
+| `app` | 本地 `Dockerfile` 构建 | 8787 | PHP 8.3 + OPcache + webman |
+| `mysql` | mysql:8.0 | 3306 | 主数据库，数据卷持久化 |
+| `redis` | redis:7-alpine | 6379 | 缓存 / 限流 / 验证码 |
+| `elasticsearch` | elasticsearch:8.x | 9200 | 全文检索 |
+
+启动前将 `docker-compose.yml` 中的 `JWT_SECRET`、`HASHIDS_SALT`、`ENCRYPTION_KEY` 等密钥替换为随机字符串。
+
+```bash
+cp .env.docker .env
+docker-compose up -d
+```
+
+### 8.3 CI/CD
+
+GitHub Actions 持续集成定义在 `.github/workflows/ci.yml`：
+- PHP 语法检查 (`php -l`)
+- PHPUnit 单元测试
+- Flutter 静态分析 (`flutter analyze`)
+
+### 8.4 数据库备份
+
+`database/backup/backup.sh` — mysqldump + gzip 备份，自动清理 30 天前旧备份。
+`database/backup/restore.sh` — 交互式选择并恢复备份。
+
+### 8.5 监控
+
+`GET /metrics` 端点（`MetricsController`）以 Prometheus text format 暴露 5 个 gauge 指标：HTTP 请求总数、活跃用户数、数据库/Redis 连接状态、内存使用量。
+
+### 8.6 环境要求
 
 | 组件 | 最低版本 | 推荐配置 |
 |------|---------|---------|

@@ -318,6 +318,49 @@ POST /api/auth/refresh
 - 422: 缺少刷新令牌
 - 401: 刷新令牌无效或已过期
 
+### 3.8 Prometheus 监控指标
+
+```
+GET /metrics
+```
+
+- **认证**: 无需
+- **限流**: 无
+- **响应格式**: Prometheus text format (`text/plain; version=0.0.4`)
+
+公开 Prometheus 监控指标端点，供 Grafana/Prometheus 抓取。
+
+**响应示例**:
+```
+# HELP openadmin_http_requests_total Total number of HTTP requests.
+# TYPE openadmin_http_requests_total gauge
+openadmin_http_requests_total 15234
+
+# HELP openadmin_active_users Number of active users.
+# TYPE openadmin_active_users gauge
+openadmin_active_users 156
+
+# HELP openadmin_db_connection_status Database connection status (1=ok, 0=fail).
+# TYPE openadmin_db_connection_status gauge
+openadmin_db_connection_status 1
+
+# HELP openadmin_redis_connection_status Redis connection status (1=ok, 0=fail).
+# TYPE openadmin_redis_connection_status gauge
+openadmin_redis_connection_status 1
+
+# HELP openadmin_memory_usage_bytes Memory usage in bytes.
+# TYPE openadmin_memory_usage_bytes gauge
+openadmin_memory_usage_bytes 18874368
+```
+
+| 指标名 | 类型 | 说明 |
+|------|------|------|
+| `openadmin_http_requests_total` | gauge | 累计 HTTP 请求总数 |
+| `openadmin_active_users` | gauge | 当前活跃用户数（24小时内登录） |
+| `openadmin_db_connection_status` | gauge | 数据库连接状态，1=正常, 0=异常 |
+| `openadmin_redis_connection_status` | gauge | Redis 连接状态，1=正常, 0=异常 |
+| `openadmin_memory_usage_bytes` | gauge | PHP 进程当前内存使用量（bytes） |
+
 ## 4. 仪表盘
 
 所有管理端接口挂载在 `/admin` 分组下，经过 `AdminAuth`（JWT 认证）、`AdminPermission`（RBAC 权限校验）、`OperationLog`（操作记录）三个中间件。
@@ -1605,3 +1648,31 @@ POST /admin/upload
 - 敏感操作（删除用户、角色、权限、配置）需要当前登录用户密码二次确认
 - 并发会话限制：同一用户最多 3 个有效 Token，第 4 个设备登录时最旧 Token 被强制加入黑名单
 - 账号锁定：连续 5 次登录失败触发 15 分钟账号锁定，锁定期间返回 429
+
+## 15. 部署运维
+
+### Docker Compose
+
+项目根目录提供 `docker-compose.yml`，编排 5 个服务（Nginx、webman app、MySQL、Redis、Elasticsearch）。PHP 通过 `Dockerfile` 构建（基于 `php:8.3-cli`，启用 OPcache）。
+
+```bash
+cp .env.docker .env
+docker-compose up -d
+```
+
+### CI/CD
+
+`.github/workflows/ci.yml` 定义了 GitHub Actions 持续集成流水线：
+- `php -l` 语法检查
+- PHPUnit 单元测试
+- `flutter analyze` 静态分析
+
+### 数据库备份
+
+`database/backup/` 目录提供备份与恢复脚本：
+- `backup.sh` — mysqldump + gzip 压缩备份，自动清理 30 天前的旧备份文件
+- `restore.sh` — 交互式恢复，列出现有备份供用户选择
+
+### Nginx 安全配置
+
+生产环境部署请参考 `docs/nginx-security.conf` 进行反向代理安全加固配置。

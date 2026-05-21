@@ -47,7 +47,8 @@ open-admin/
 │   │   ├── ImportController.php    # Excel 导入用户
 │   │   ├── UploadController.php    # 文件上传
 │   │   ├── HealthController.php    # 健康检查
-│   │   └── DocsController.php      # OpenAPI 文档
+│   │   ├── DocsController.php      # OpenAPI 文档
+│   │   └── MetricsController.php   # Prometheus 监控指标
 │   ├── api/v1/controller/      # API v1 控制器（版本头控制）
 │   │   ├── CaptchaController.php
 │   │   └── AuthController.php
@@ -61,7 +62,7 @@ open-admin/
 │   │   ├── RateLimit.php       # Redis 限流（全局，Lua 原子化）
 │   │   ├── ApiVersion.php      # API 版本校验
 │   │   ├── AdminAuth.php       # JWT 认证 + 黑名单
-│   │   ├── AdminPermission.php # RBAC 权限校验
+│   │   ├── AdminPermission.php # RBAC 权限校验（Redis 60s 缓存）
 │   │   └── OperationLog.php    # 操作日志自动记录（含来源端检测）
 │   ├── model/                  # 数据模型
 │   ├── queue/                  # 队列任务
@@ -84,9 +85,13 @@ open-admin/
 ├── config/                     # 配置文件
 │   ├── route.php               # 路由 + API 版本策略
 │   └── middleware.php           # 全局中间件注册
-├── database/migrations/        # SQL 迁移文件
-│   ├── 2026_05_16_000000_init_tables.sql
-│   └── 2026_05_20_000001_seed_permissions.sql
+├── database/
+│   ├── migrations/             # SQL 迁移文件
+│   │   ├── 2026_05_16_000000_init_tables.sql
+│   │   └── 2026_05_20_000001_seed_permissions.sql
+│   └── backup/                 # 数据库备份脚本
+│       ├── backup.sh           # mysqldump+gzip，30天保留
+│       └── restore.sh          # 交互式恢复
 ├── docs/                       # 文档
 │   ├── ARCHITECTURE.md         # Mermaid 架构图
 │   ├── DESIGN.md               # 设计文档
@@ -106,9 +111,13 @@ open-admin/
 ├── README_EN.md                # 英文说明
 ├── .env                        # 环境变量（不纳入版本控制）
 ├── .env.example                # 环境变量模板
+├── .env.docker                 # Docker 环境变量
 ├── composer.json               # PHP 依赖
 ├── Dockerfile                  # Docker 构建
-└── docker-compose.yml          # Docker 编排
+├── docker-compose.yml          # Docker 编排
+└── .github/
+    └── workflows/
+        └── ci.yml              # CI/CD 流水线（PHP语法+PHPUnit+Flutter analyze）
 ```
 
 ## 中间件执行链
@@ -169,3 +178,44 @@ Redis 滑动窗口（Lua 原子化），默认 60 次/分钟/IP/路由：
 - 使用 `@ohos.net.http` 原生 HTTP 客户端
 - Token 无感刷新：401 时自动调用 `/api/auth/refresh`
 - 刷新失败自动重定向登录页
+
+## 部署
+
+### Docker Compose（推荐生产环境）
+
+项目根目录 `docker-compose.yml` 编排 5 个服务：
+
+| 服务 | 说明 |
+|------|------|
+| `nginx` | Nginx 反向代理（80/443），静态文件服务 |
+| `app` | webman PHP 8.3 应用，`Dockerfile` 构建（含 OPcache） |
+| `mysql` | MySQL 8.0，数据卷持久化 |
+| `redis` | Redis 7 Alpine，缓存/限流/Session |
+| `elasticsearch` | Elasticsearch 8.x，全文检索 |
+
+```bash
+cp .env.docker .env
+docker-compose up -d
+```
+
+### CI/CD
+
+`.github/workflows/ci.yml` 定义 GitHub Actions 流水线：
+
+- PHP 语法检查 (`php -l`)
+- PHPUnit 单元测试
+- Flutter 静态分析 (`flutter analyze`)
+
+### 数据库备份
+
+`database/backup/backup.sh` — mysqldump + gzip，自动清理 30 天前旧备份。
+`database/backup/restore.sh` — 交互式恢复，列出可用备份供选择。
+
+### 监控
+
+`GET /metrics` 端点（`MetricsController`）输出 Prometheus text format，包含 5 个 gauge 指标：
+- `openadmin_http_requests_total` — 请求总数
+- `openadmin_active_users` — 活跃用户数
+- `openadmin_db_connection_status` — 数据库连接状态 (0/1)
+- `openadmin_redis_connection_status` — Redis 连接状态 (0/1)
+- `openadmin_memory_usage_bytes` — 内存使用量

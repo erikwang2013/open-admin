@@ -15,8 +15,8 @@ flowchart TB
         A2["HarmonyOS ArkTS<br/>手机/平板客户端"]
     end
 
-    subgraph "网关层"
-        B1["Nginx<br/>反向代理 + HTTPS + Gzip"]
+    subgraph "网关/边缘层 (Nginx Edge)"
+        B1["Nginx Edge Node<br/>Docker nginx:alpine<br/>反向代理 + HTTPS + Gzip<br/>静态文件服务"]
     end
 
     subgraph "应用层 (webman v2)"
@@ -83,7 +83,7 @@ flowchart TD
         M_SF["SecurityFilter<br/>攻击检测拦截<br/>XSS/SQL注入/路径遍历/CSRF"]
         M0["ApiVersion<br/>API 版本校验<br/>注入 apiVersion"]
         M1["AdminAuth<br/>JWT Token 校验<br/>注入 adminId"]
-        M2["AdminPermission<br/>RBAC 鉴权<br/>method.path 匹配"]
+        M2["AdminPermission<br/>RBAC 鉴权<br/>method.path 匹配<br/>Redis 60s 缓存权限"]
     end
 
     subgraph "控制器层 Controller Layer"
