@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>开放管理后台 — API 文档</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f7fa;color:#333}
+.header{background:linear-gradient(135deg,#1677FF,#722ED1);color:#fff;padding:24px 32px}
+.header h1{font-size:24px;margin-bottom:4px}.header p{opacity:.85;font-size:13px}
+.container{max-width:1400px;margin:0 auto;padding:24px}
+.apps{display:grid;grid-template-columns:repeat(auto-fill,minmax(480px,1fr));gap:24px}
+.app-card{background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);overflow:hidden}
+.app-header{padding:16px 24px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:10px}
+.app-header .dot{width:10px;height:10px;border-radius:50%}
+.app-header .dot.service{background:#52C41A}
+.app-header .dot.admin{background:#1677FF}
+.app-header h2{font-size:16px;font-weight:600}
+.group{margin:12px 24px}
+.group-title{font-size:14px;font-weight:600;color:#1677FF;padding:8px 0;border-bottom:2px solid #e6f0ff;margin-bottom:8px}
+.api-item{display:flex;align-items:center;padding:10px 0;border-bottom:1px solid #f5f5f5;font-size:13px;cursor:pointer;transition:background .15s}
+.api-item:hover{background:#fafafa}
+.api-item .method{display:inline-block;width:50px;text-align:center;font-weight:700;font-size:11px;border-radius:4px;padding:2px 6px;margin-right:12px;flex-shrink:0}
+.method.GET{background:#e6f7ff;color:#1677FF}
+.method.POST{background:#f6ffed;color:#52C41A}
+.method.PUT{background:#fff7e6;color:#FA8C16}
+.method.DELETE{background:#fff2f0;color:#FF4D4F}
+.api-item .path{font-family:Consolas,monospace;color:#555;flex:1;word-break:break-all}
+.api-item .title{color:#999;margin-left:auto;flex-shrink:0;font-size:12px}
+.api-detail{margin-top:4px;padding:8px 12px;background:#fafafa;border-radius:6px;display:none;font-size:12px}
+.api-detail.open{display:block}
+.api-detail table{width:100%;border-collapse:collapse}
+.api-detail th,.api-detail td{border:1px solid #eee;padding:4px 8px;text-align:left;font-size:12px}
+.api-detail th{background:#f5f5f5}
+.loading{text-align:center;padding:60px;color:#999}
+.error{color:#FF4D4F;text-align:center;padding:30px}
+.footer{text-align:center;padding:24px;color:#999;font-size:12px}
+</style>
+</head>
+<body>
+<div class="header"><h1>开放管理后台 API 文档</h1><p>Service (公开服务) | Admin (管理端) — 基于 webman v2</p></div>
+<div class="container"><div class="apps" id="apps"></div></div>
+<div class="footer">Powered by hg/apidoc — Copyright (c) 2026 erik</div>
+<script>
+const BASE=window.location.origin;
+function toggleDetail(id){const el=document.getElementById(id);if(el)el.classList.toggle('open')}
+function renderList(apis,appKey){const groups={};apis.forEach(a=>{const g=a.group||'default';if(!groups[g])groups[g]=[];groups[g].push(a)});
+let h='';let idx=0;
+for(const[g,items]of Object.entries(groups)){h+='<div class="group"><div class="group-title">'+g+'</div>';
+items.forEach(a=>{const uid=appKey+'-'+idx++;
+h+='<div class="api-item" onclick="toggleDetail(\''+uid+'\')"><span class="method '+a.method+'">'+a.method+'</span><span class="path">'+(a.url||a.path||'')+'</span><span class="title">'+(a.title||'')+'</span></div>';
+h+='<div id="'+uid+'" class="api-detail">';
+if(a.desc)h+='<p style="margin-bottom:8px">'+a.desc+'</p>';
+if(a.params&&a.params.length){h+='<table><tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>';a.params.forEach(p=>h+='<tr><td>'+p.name+'</td><td>'+p.type+'</td><td>'+(p.require?'是':'否')+'</td><td>'+(p.desc||'')+'</td></tr>');h+='</table>'}
+h+='</div>'});h+='</div>'}return h}
+(async function(){const el=document.getElementById('apps');el.innerHTML='<div class="loading">加载中...</div>';
+try{const cfg=await(await fetch(BASE+'/apidoc/config')).json();el.innerHTML='';
+for(const app of cfg.apps||[]){const card=document.createElement('div');card.className='app-card';
+const c=app.key==='service'?'service':'admin';
+card.innerHTML='<div class="app-header"><span class="dot '+c+'"></span><h2>'+app.title+'</h2></div><div id="c-'+app.key+'"><div class="loading">加载中...</div></div>';
+el.appendChild(card);
+try{const list=await(await fetch(BASE+'/apidoc/list?appKey='+app.key)).json();
+const ct=document.getElementById('c-'+app.key);
+ct.innerHTML=list.data&&list.data.length?renderList(list.data,app.key):'<p style="padding:24px;color:#999;text-align:center">暂无接口 — 请给控制器添加 Apidoc 注解后刷新</p>'}catch(e){document.getElementById('c-'+app.key).innerHTML='<div class="error">加载失败</div>'}}}catch(e){el.innerHTML='<div class="error">无法连接 Apidoc — 请确保 webman 已启动</div>'}})()
+</script>
+</body>
+</html>

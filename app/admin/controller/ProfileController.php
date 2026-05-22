@@ -27,6 +27,16 @@ class ProfileController extends BaseController
         return self::$jwt;
     }
 
+    /**
+     * @Apidoc\Title("更新个人信息")
+     * @Apidoc\Group("profile")
+     * @Apidoc\Method("PUT")
+     * @Apidoc\Url("/admin/profile")
+     * @Apidoc\Desc("更新当前登录管理员的个人信息")
+     * @Apidoc\Param("real_name", type="string", require=false, desc="真实姓名")
+     * @Apidoc\Param("phone", type="string", require=false, desc="手机号")
+     * @Apidoc\Param("email", type="string", require=false, desc="邮箱")
+     */
     public function updateProfile(Request $request): Response
     {
         $adminId = $request->adminId ?? 0;
@@ -54,6 +64,15 @@ class ProfileController extends BaseController
         return $this->success($this->encodeIds($data), trans('messages.update_success'));
     }
 
+    /**
+     * @Apidoc\Title("修改密码")
+     * @Apidoc\Group("profile")
+     * @Apidoc\Method("PUT")
+     * @Apidoc\Url("/admin/profile/password")
+     * @Apidoc\Desc("修改当前登录管理员的密码")
+     * @Apidoc\Param("old_password", type="string", require=true, desc="旧密码")
+     * @Apidoc\Param("new_password", type="string", require=true, desc="新密码")
+     */
     public function updatePassword(Request $request): Response
     {
         $adminId = $request->adminId ?? 0;
@@ -83,6 +102,13 @@ class ProfileController extends BaseController
         return $this->success([], trans('messages.password_changed'));
     }
 
+    /**
+     * @Apidoc\Title("登出")
+     * @Apidoc\Group("profile")
+     * @Apidoc\Method("POST")
+     * @Apidoc\Url("/admin/profile/logout")
+     * @Apidoc\Desc("当前管理员登出，Token加入黑名单")
+     */
     public function logout(Request $request): Response
     {
         $token = $request->header('Authorization', '');

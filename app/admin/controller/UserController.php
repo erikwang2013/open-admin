@@ -15,8 +15,18 @@ use support\Response;
 class UserController extends BaseController
 {
     /**
-     * 用户列表（分页）
-     * GET /admin/user
+     * @Apidoc\Title("用户列表")
+     * @Apidoc\Group("user")
+     * @Apidoc\Url("/admin/user")
+     * @Apidoc\Desc("分页获取用户列表，支持关键词搜索和状态筛选")
+     * @Apidoc\Param("page", type="int", require=false, desc="页码", default="1")
+     * @Apidoc\Param("limit", type="int", require=false, desc="每页条数", default="15")
+     * @Apidoc\Param("keyword", type="string", require=false, desc="搜索关键词")
+     * @Apidoc\Param("status", type="int", require=false, desc="状态筛选(0禁用1启用)")
+     * @Apidoc\Returned("list", type="array", desc="用户列表")
+     * @Apidoc\Returned("total", type="int", desc="总数")
+     * @Apidoc\Returned("page", type="int", desc="当前页码")
+     * @Apidoc\Returned("limit", type="int", desc="每页条数")
      */
     public function index(Request $request): Response
     {
@@ -64,8 +74,17 @@ class UserController extends BaseController
     }
 
     /**
-     * 创建用户
-     * POST /admin/user
+     * @Apidoc\Title("创建用户")
+     * @Apidoc\Group("user")
+     * @Apidoc\Method("POST")
+     * @Apidoc\Url("/admin/user")
+     * @Apidoc\Desc("创建新用户")
+     * @Apidoc\Param("username", type="string", require=true, desc="用户名")
+     * @Apidoc\Param("password", type="string", require=true, desc="密码")
+     * @Apidoc\Param("real_name", type="string", require=true, desc="真实姓名")
+     * @Apidoc\Param("status", type="int", require=false, desc="状态(0禁用1启用)", default="1")
+     * @Apidoc\Param("phone", type="string", require=false, desc="手机号")
+     * @Apidoc\Param("email", type="string", require=false, desc="邮箱")
      */
     public function store(Request $request): Response
     {
@@ -101,8 +120,11 @@ class UserController extends BaseController
     }
 
     /**
-     * 用户详情
-     * GET /admin/user/{id}
+     * @Apidoc\Title("用户详情")
+     * @Apidoc\Group("user")
+     * @Apidoc\Url("/admin/user/{id}")
+     * @Apidoc\Desc("获取指定用户的详细信息")
+     * @Apidoc\Param("id", type="string", require=true, desc="用户hashid")
      */
     public function show(Request $request, string $hashid): Response
     {
@@ -119,8 +141,17 @@ class UserController extends BaseController
     }
 
     /**
-     * 更新用户
-     * PUT /admin/user/{id}
+     * @Apidoc\Title("更新用户")
+     * @Apidoc\Group("user")
+     * @Apidoc\Method("PUT")
+     * @Apidoc\Url("/admin/user/{id}")
+     * @Apidoc\Desc("更新指定用户的信息")
+     * @Apidoc\Param("id", type="string", require=true, desc="用户hashid")
+     * @Apidoc\Param("real_name", type="string", require=false, desc="真实姓名")
+     * @Apidoc\Param("status", type="int", require=false, desc="状态")
+     * @Apidoc\Param("password", type="string", require=false, desc="新密码")
+     * @Apidoc\Param("phone", type="string", require=false, desc="手机号")
+     * @Apidoc\Param("email", type="string", require=false, desc="邮箱")
      */
     public function update(Request $request, string $hashid): Response
     {
@@ -151,8 +182,13 @@ class UserController extends BaseController
     }
 
     /**
-     * 删除用户（软删除，需密码二次确认）
-     * DELETE /admin/user/{id}
+     * @Apidoc\Title("删除用户")
+     * @Apidoc\Group("user")
+     * @Apidoc\Method("DELETE")
+     * @Apidoc\Url("/admin/user/{id}")
+     * @Apidoc\Desc("软删除指定用户，需密码二次确认")
+     * @Apidoc\Param("id", type="string", require=true, desc="用户hashid")
+     * @Apidoc\Param("password", type="string", require=true, desc="当前管理员密码")
      */
     public function destroy(Request $request, string $hashid): Response
     {
@@ -173,8 +209,13 @@ class UserController extends BaseController
     }
 
     /**
-     * 批量删除
-     * POST /admin/user/batch/destroy
+     * @Apidoc\Title("批量删除")
+     * @Apidoc\Group("user")
+     * @Apidoc\Method("POST")
+     * @Apidoc\Url("/admin/user/batch/destroy")
+     * @Apidoc\Desc("批量删除用户，需密码二次确认")
+     * @Apidoc\Param("ids", type="array", require=true, desc="用户hashid数组")
+     * @Apidoc\Param("password", type="string", require=true, desc="当前管理员密码")
      */
     public function batchDestroy(Request $request): Response
     {
@@ -210,8 +251,13 @@ class UserController extends BaseController
     }
 
     /**
-     * 批量启用/禁用
-     * POST /admin/user/batch/status
+     * @Apidoc\Title("批量启用/禁用")
+     * @Apidoc\Group("user")
+     * @Apidoc\Method("POST")
+     * @Apidoc\Url("/admin/user/batch/status")
+     * @Apidoc\Desc("批量修改用户启用/禁用状态")
+     * @Apidoc\Param("ids", type="array", require=true, desc="用户hashid数组")
+     * @Apidoc\Param("status", type="int", require=true, desc="目标状态(0禁用1启用)")
      */
     public function batchStatus(Request $request): Response
     {

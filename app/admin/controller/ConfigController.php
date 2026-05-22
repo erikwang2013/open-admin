@@ -13,6 +13,17 @@ use support\Response;
 
 class ConfigController extends BaseController
 {
+    /**
+     * @Apidoc\Title("配置列表")
+     * @Apidoc\Group("config")
+     * @Apidoc\Url("/admin/config")
+     * @Apidoc\Desc("分页获取系统配置列表，支持按分组筛选")
+     * @Apidoc\Param("page", type="int", require=false, desc="页码", default="1")
+     * @Apidoc\Param("limit", type="int", require=false, desc="每页条数", default="15")
+     * @Apidoc\Param("group", type="string", require=false, desc="配置分组")
+     * @Apidoc\Returned("list", type="array", desc="配置列表")
+     * @Apidoc\Returned("total", type="int", desc="总数")
+     */
     public function index(Request $request): Response
     {
         $page  = (int) $request->input('page', 1);
@@ -40,6 +51,18 @@ class ConfigController extends BaseController
         ]);
     }
 
+    /**
+     * @Apidoc\Title("创建配置")
+     * @Apidoc\Group("config")
+     * @Apidoc\Method("POST")
+     * @Apidoc\Url("/admin/config")
+     * @Apidoc\Desc("创建新的系统配置项")
+     * @Apidoc\Param("group", type="string", require=true, desc="配置分组")
+     * @Apidoc\Param("key", type="string", require=true, desc="配置键名")
+     * @Apidoc\Param("value", type="string", require=true, desc="配置值")
+     * @Apidoc\Param("type", type="string", require=false, desc="值类型", default="string")
+     * @Apidoc\Param("description", type="string", require=false, desc="配置说明")
+     */
     public function store(Request $request): Response
     {
         $validator = validator($request->all(), [
@@ -71,6 +94,17 @@ class ConfigController extends BaseController
         return $this->success($this->encodeIds($config->toArray()), trans('messages.create_success'));
     }
 
+    /**
+     * @Apidoc\Title("更新配置")
+     * @Apidoc\Group("config")
+     * @Apidoc\Method("PUT")
+     * @Apidoc\Url("/admin/config/{id}")
+     * @Apidoc\Desc("更新指定配置项")
+     * @Apidoc\Param("id", type="string", require=true, desc="配置hashid")
+     * @Apidoc\Param("value", type="string", require=false, desc="配置值")
+     * @Apidoc\Param("type", type="string", require=false, desc="值类型")
+     * @Apidoc\Param("description", type="string", require=false, desc="配置说明")
+     */
     public function update(Request $request, string $hashid): Response
     {
         $id     = $this->decodeId($hashid);
@@ -94,6 +128,15 @@ class ConfigController extends BaseController
         return $this->success($this->encodeIds($config->toArray()), trans('messages.update_success'));
     }
 
+    /**
+     * @Apidoc\Title("删除配置")
+     * @Apidoc\Group("config")
+     * @Apidoc\Method("DELETE")
+     * @Apidoc\Url("/admin/config/{id}")
+     * @Apidoc\Desc("删除指定配置项，需密码二次确认")
+     * @Apidoc\Param("id", type="string", require=true, desc="配置hashid")
+     * @Apidoc\Param("password", type="string", require=true, desc="当前管理员密码")
+     */
     public function destroy(Request $request, string $hashid): Response
     {
         $id     = $this->decodeId($hashid);

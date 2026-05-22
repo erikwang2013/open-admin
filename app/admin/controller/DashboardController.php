@@ -17,8 +17,14 @@ use support\Response;
 class DashboardController extends BaseController
 {
     /**
-     * 仪表盘数据
-     * GET /admin/dashboard
+     * @Apidoc\Title("仪表盘数据")
+     * @Apidoc\Group("dashboard")
+     * @Apidoc\Url("/admin/dashboard")
+     * @Apidoc\Desc("聚合统计/趋势/分布/最近操作，Redis缓存5分钟")
+     * @Apidoc\Returned("stats", type="array", desc="统计卡片数据")
+     * @Apidoc\Returned("trends", type="array", desc="趋势图数据")
+     * @Apidoc\Returned("distribution", type="array", desc="分布数据")
+     * @Apidoc\Returned("recent_logs", type="array", desc="最近操作日志")
      */
     public function index(Request $request): Response
     {

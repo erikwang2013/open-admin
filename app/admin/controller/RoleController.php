@@ -13,8 +13,14 @@ use support\Request;
 class RoleController extends BaseController
 {
     /**
-     * 角色列表
-     * GET /admin/role
+     * @Apidoc\Title("角色列表")
+     * @Apidoc\Group("role")
+     * @Apidoc\Url("/admin/role")
+     * @Apidoc\Desc("分页获取角色列表")
+     * @Apidoc\Param("page", type="int", require=false, desc="页码", default="1")
+     * @Apidoc\Param("limit", type="int", require=false, desc="每页条数", default="15")
+     * @Apidoc\Returned("list", type="array", desc="角色列表")
+     * @Apidoc\Returned("total", type="int", desc="总数")
      */
     public function index(Request $request): Response
     {
@@ -38,8 +44,16 @@ class RoleController extends BaseController
     }
 
     /**
-     * 创建角色
-     * POST /admin/role
+     * @Apidoc\Title("创建角色")
+     * @Apidoc\Group("role")
+     * @Apidoc\Method("POST")
+     * @Apidoc\Url("/admin/role")
+     * @Apidoc\Desc("创建新角色并同步权限")
+     * @Apidoc\Param("name", type="string", require=true, desc="角色名称")
+     * @Apidoc\Param("slug", type="string", require=true, desc="角色标识")
+     * @Apidoc\Param("description", type="string", require=false, desc="角色描述")
+     * @Apidoc\Param("status", type="int", require=false, desc="状态", default="1")
+     * @Apidoc\Param("permission_ids", type="array", require=false, desc="权限ID数组")
      */
     public function store(Request $request): Response
     {
@@ -69,8 +83,16 @@ class RoleController extends BaseController
     }
 
     /**
-     * 更新角色
-     * PUT /admin/role/{id}
+     * @Apidoc\Title("更新角色")
+     * @Apidoc\Group("role")
+     * @Apidoc\Method("PUT")
+     * @Apidoc\Url("/admin/role/{id}")
+     * @Apidoc\Desc("更新指定角色信息并同步权限")
+     * @Apidoc\Param("id", type="string", require=true, desc="角色hashid")
+     * @Apidoc\Param("name", type="string", require=false, desc="角色名称")
+     * @Apidoc\Param("description", type="string", require=false, desc="角色描述")
+     * @Apidoc\Param("status", type="int", require=false, desc="状态")
+     * @Apidoc\Param("permission_ids", type="array", require=false, desc="权限ID数组")
      */
     public function update(Request $request, string $hashid): Response
     {
@@ -93,8 +115,13 @@ class RoleController extends BaseController
     }
 
     /**
-     * 删除角色（需密码二次确认）
-     * DELETE /admin/role/{id}
+     * @Apidoc\Title("删除角色")
+     * @Apidoc\Group("role")
+     * @Apidoc\Method("DELETE")
+     * @Apidoc\Url("/admin/role/{id}")
+     * @Apidoc\Desc("删除指定角色，需密码二次确认")
+     * @Apidoc\Param("id", type="string", require=true, desc="角色hashid")
+     * @Apidoc\Param("password", type="string", require=true, desc="当前管理员密码")
      */
     public function destroy(Request $request, string $hashid): Response
     {

@@ -13,6 +13,21 @@ use support\Response;
 
 class LogController extends BaseController
 {
+    /**
+     * @Apidoc\Title("操作日志")
+     * @Apidoc\Group("log")
+     * @Apidoc\Url("/admin/log")
+     * @Apidoc\Desc("分页获取操作日志，支持多条件筛选")
+     * @Apidoc\Param("page", type="int", require=false, desc="页码", default="1")
+     * @Apidoc\Param("limit", type="int", require=false, desc="每页条数", default="15")
+     * @Apidoc\Param("user_id", type="string", require=false, desc="用户ID")
+     * @Apidoc\Param("action", type="string", require=false, desc="操作动作")
+     * @Apidoc\Param("path", type="string", require=false, desc="请求路径")
+     * @Apidoc\Param("start_date", type="string", require=false, desc="开始日期")
+     * @Apidoc\Param("end_date", type="string", require=false, desc="结束日期")
+     * @Apidoc\Returned("list", type="array", desc="日志列表")
+     * @Apidoc\Returned("total", type="int", desc="总数")
+     */
     public function index(Request $request): Response
     {
         $page      = (int) $request->input('page', 1);

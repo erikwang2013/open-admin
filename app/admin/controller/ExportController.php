@@ -23,8 +23,15 @@ use support\Request;
 class ExportController extends BaseController
 {
     /**
-     * Excel 导出
-     * POST /admin/export/excel
+     * @Apidoc\Title("导出Excel")
+     * @Apidoc\Group("export")
+     * @Apidoc\Method("POST")
+     * @Apidoc\Url("/admin/export/excel")
+     * @Apidoc\Desc("导出数据为Excel文件，支持多表多字段")
+     * @Apidoc\Param("table", type="string", require=true, desc="表名(admin_user/operation_log/admin_role/system_config)")
+     * @Apidoc\Param("columns", type="array", require=false, desc="导出字段列表")
+     * @Apidoc\Param("conditions", type="object", require=false, desc="筛选条件")
+     * @Apidoc\Param("title", type="string", require=false, desc="导出标题", default="数据导出")
      */
     public function excel(Request $request): Response
     {
@@ -113,8 +120,14 @@ class ExportController extends BaseController
     }
 
     /**
-     * PDF 导出
-     * POST /admin/export/pdf
+     * @Apidoc\Title("导出PDF")
+     * @Apidoc\Group("export")
+     * @Apidoc\Method("POST")
+     * @Apidoc\Url("/admin/export/pdf")
+     * @Apidoc\Desc("导出数据为PDF文件")
+     * @Apidoc\Param("type", type="string", require=true, desc="导出类型(table/dashboard)")
+     * @Apidoc\Param("title", type="string", require=false, desc="导出标题", default="数据导出")
+     * @Apidoc\Param("data", type="object", require=false, desc="导出数据")
      */
     public function pdf(Request $request): Response
     {

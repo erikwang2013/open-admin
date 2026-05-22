@@ -14,6 +14,18 @@ use support\Response;
 
 class ImportController extends BaseController
 {
+    /**
+     * @Apidoc\Title("导入用户")
+     * @Apidoc\Group("import")
+     * @Apidoc\Method("POST")
+     * @Apidoc\Url("/admin/import/users")
+     * @Apidoc\Desc("通过Excel文件批量导入用户")
+     * @Apidoc\Param("file", type="file", require=true, desc="Excel文件(.xlsx/.xls)")
+     * @Apidoc\Returned("total", type="int", desc="总行数")
+     * @Apidoc\Returned("success", type="int", desc="成功数")
+     * @Apidoc\Returned("failed", type="int", desc="失败数")
+     * @Apidoc\Returned("errors", type="array", desc="失败详情")
+     */
     public function users(Request $request): Response
     {
         $file = $request->file('file');

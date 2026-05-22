@@ -15,6 +15,15 @@ class UploadController extends BaseController
     private array $allowExts = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'xlsx', 'docx'];
     private int $maxSize = 10 * 1024 * 1024;
 
+    /**
+     * @Apidoc\Title("文件上传")
+     * @Apidoc\Group("upload")
+     * @Apidoc\Method("POST")
+     * @Apidoc\Url("/admin/upload")
+     * @Apidoc\Desc("上传文件，支持jpg/png/gif/pdf/xlsx/docx")
+     * @Apidoc\Param("file", type="file", require=true, desc="上传文件")
+     * @Apidoc\Returned("url", type="string", desc="文件访问路径")
+     */
     public function upload(Request $request): Response
     {
         $file = $request->file('file');

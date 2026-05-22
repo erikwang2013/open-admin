@@ -14,10 +14,15 @@ use Throwable;
 class CaptchaController
 {
     /**
-     * 生成点击验证码
-     * POST /api/captcha/generate
-     *
-     * 返回: { key, image (base64), extra: { targets: [{order, text}] } }
+     * @Apidoc\Title("生成验证码")
+     * @Apidoc\Group("captcha")
+     * @Apidoc\Method("POST")
+     * @Apidoc\Url("/api/captcha/generate")
+     * @Apidoc\Desc("生成点击验证码，返回base64图片和点击目标")
+     * @Apidoc\Param("difficulty", type="string", require=false, desc="难度等级", default="medium")
+     * @Apidoc\Returned("key", type="string", desc="验证码key")
+     * @Apidoc\Returned("image", type="string", desc="base64图片")
+     * @Apidoc\Returned("extra", type="object", desc="额外信息(含targets)")
      */
     public function generate(Request $request): Response
     {
@@ -47,10 +52,14 @@ class CaptchaController
     }
 
     /**
-     * 校验点击验证码
-     * POST /api/captcha/verify
-     *
-     * 请求: { key, clicks: [{x, y}, ...] }
+     * @Apidoc\Title("校验验证码")
+     * @Apidoc\Group("captcha")
+     * @Apidoc\Method("POST")
+     * @Apidoc\Url("/api/captcha/verify")
+     * @Apidoc\Desc("校验点击验证码是否有效")
+     * @Apidoc\Param("key", type="string", require=true, desc="验证码key")
+     * @Apidoc\Param("clicks", type="array", require=true, desc="点击坐标数组[{x,y},...]")
+     * @Apidoc\Returned("valid", type="bool", desc="是否校验通过")
      */
     public function verify(Request $request): Response
     {
