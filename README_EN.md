@@ -19,7 +19,7 @@ A full-stack admin dashboard built with webman v2 + Flutter.
 | 📋 Audit | Log query + source detection | 8 platforms auto-detected |
 | 📁 Files | Upload/Excel export/PDF export | Sensitive data auto-masked |
 | 🛡 Security | 18-layer defense-in-depth | XSS/SQLi/path traversal/cmd injection/CSRF/rate limit/CSP... |
-| 🏥 Ops | Health check/metrics/API docs/security.txt | Prometheus + OpenAPI 3.0 |
+| 🏥 Ops | Health check/metrics/API docs/security.txt | Prometheus + OpenAPI 3.0 + hg/apidoc interactive docs |
 | 🌐 i18n | Chinese/English | Accept-Language header / ?lang= param |
 
 ## Copyright
@@ -342,6 +342,7 @@ Authorization: Bearer <token>
 |-----|------|------|
 | `GET` | `/health` | Health check (DB/Redis/ES status) |
 | `GET` | `/api/docs` | OpenAPI 3.0 specification |
+| `GET` | `/apidoc` | hg/apidoc interactive docs (Service/Admin grouping, password: admin888) |
 | `POST` | `/api/captcha/generate` | Generate click captcha |
 | `POST` | `/api/captcha/verify` | Verify click positions |
 | `POST` | `/api/auth/login` | Login (requires captcha) |

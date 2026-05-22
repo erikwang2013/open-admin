@@ -19,7 +19,7 @@
 | 📋 操作审计 | 日志查询 + 来源端检测 | 8 平台自动识别 |
 | 📁 文件管理 | 上传/Excel 导出/PDF 导出 | 敏感数据自动脱敏 |
 | 🛡 安全防护 | 18 层纵深防御 | XSS/SQL注入/路径遍历/命令注入/CSRF/限流/CSP... |
-| 🏥 运维 | 健康检查/metrics/API 文档/security.txt | Prometheus + OpenAPI 3.0 |
+| 🏥 运维 | 健康检查/metrics/API 文档/security.txt | Prometheus + OpenAPI 3.0 + hg/apidoc 交互文档 |
 | 🌐 国际化 | 中英文切换 | Accept-Language 头 / ?lang= 参数 |
 
 ## 技术栈
@@ -351,6 +351,7 @@ Authorization: Bearer <token>
 |-----|------|------|
 | `GET` | `/health` | 健康检查（DB/Redis/ES 状态） |
 | `GET` | `/api/docs` | OpenAPI 3.0 规范文档 |
+| `GET` | `/apidoc` | hg/apidoc 交互式接口文档（Service/Admin 分组，密码: admin888） |
 | `POST` | `/api/captcha/generate` | 生成点击验证码 |
 | `POST` | `/api/captcha/verify` | 校验点击验证码 |
 | `POST` | `/api/auth/login` | 登录（需 captcha） |
