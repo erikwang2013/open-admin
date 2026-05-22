@@ -280,6 +280,23 @@ Cors（跨域预处理 + 响应头）
 - **security.txt**：`GET /.well-known/security.txt` 提供 RFC 9116 标准安全联系信息
 - **Nginx 安全配置**：参考 `docs/nginx-security.conf` 提供完整的反向代理安全加固示例
 
+### 操作来源端检测
+
+OperationLog 中间件自动识别客户端平台，写入操作日志 `source` 字段：
+
+| 平台 | 检测方式 |
+|------|---------|
+| `ipados` | UA 含 iPad |
+| `macos` | UA 含 Macintosh/Mac OS |
+| `windows` | UA 含 Windows |
+| `linux` | UA 含 Linux（非 Android） |
+| `ios` | UA 含 iPhone / iOS / CFNetwork |
+| `android` | UA 含 Android |
+| `harmonyos` | UA 含 HarmonyOS / OpenHarmony 或 `X-Client-Platform` 头显式声明 |
+| `web` | 默认（未命中以上所有平台） |
+
+> 两级检测：`X-Client-Platform` 请求头（原生 App 声明）→ User-Agent 自动推断（兜底）。操作日志查询 `GET /admin/log` 的 `source` 字段即来源端。
+
 ### 认证
 
 登录与注册需要先通过**点击验证码**校验：

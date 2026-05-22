@@ -271,6 +271,23 @@ Security enhancements:
 - **security.txt**: `GET /.well-known/security.txt` provides RFC 9116 standard security contact information
 - **Nginx security config**: See `docs/nginx-security.conf` for a complete reverse-proxy security hardening reference
 
+### Client Source Detection
+
+The OperationLog middleware auto-detects the client platform and records it in the `source` field:
+
+| Platform | Detection |
+|----------|-----------|
+| `ipados` | UA contains iPad |
+| `macos` | UA contains Macintosh / Mac OS |
+| `windows` | UA contains Windows |
+| `linux` | UA contains Linux (non-Android) |
+| `ios` | UA contains iPhone / iOS / CFNetwork |
+| `android` | UA contains Android |
+| `harmonyos` | UA contains HarmonyOS / OpenHarmony, or `X-Client-Platform` header |
+| `web` | Default (no platform matched) |
+
+> Two-tier detection: `X-Client-Platform` header (native app declaration) → User-Agent inference (fallback). Query `GET /admin/log` — the `source` field shows the detected platform.
+
 ### Authentication
 
 Login and registration require **click captcha** verification:
