@@ -15,8 +15,11 @@ use app\model\AdminUser;
 use Throwable;
 
 /**
- * Prometheus 指标端点
- * GET /metrics
+ * @Apidoc\Title("Prometheus 指标")
+ * @Apidoc\Group("ops")
+ * @Apidoc\Method("GET")
+ * @Apidoc\Url("/metrics")
+ * @Apidoc\Desc("Prometheus 格式监控指标，含活跃用户/数据库状态/Redis状态")
  */
 class MetricsController
 {
@@ -24,55 +27,46 @@ class MetricsController
     {
         $metrics = [];
 
-        // HTTP 请求计数（简化版：按 webman worker 状态估算）
-        $metrics[] = '# HELP open_admin_http_requests_total Total HTTP requests processed';
-        $metrics[] = '# TYPE open_admin_http_requests_total counter';
-
-        // 活跃用户数
+        $metrics[] = '# HELP open_admin_active_users Active users today';
+        $metrics[] = '# TYPE open_admin_active_users gauge';
         try {
             $activeUsers = AdminUser::whereDate('last_login_at', date('Y-m-d'))->count();
         } catch (Throwable) {
             $activeUsers = 0;
         }
-        $metrics[] = "# HELP open_admin_active_users Active users today";
-        $metrics[] = "# TYPE open_admin_active_users gauge";
         $metrics[] = "open_admin_active_users {$activeUsers}";
 
-        // 用户总数
+        $metrics[] = '# HELP open_admin_total_users Total registered users';
+        $metrics[] = '# TYPE open_admin_total_users gauge';
         try {
             $totalUsers = AdminUser::count();
         } catch (Throwable) {
             $totalUsers = 0;
         }
-        $metrics[] = "# HELP open_admin_total_users Total registered users";
-        $metrics[] = "# TYPE open_admin_total_users gauge";
         $metrics[] = "open_admin_total_users {$totalUsers}";
 
-        // 数据库连接状态
+        $metrics[] = '# HELP open_admin_db_up Database connection status (1=up, 0=down)';
+        $metrics[] = '# TYPE open_admin_db_up gauge';
         try {
             Db::select('SELECT 1');
             $dbStatus = 1;
         } catch (Throwable) {
             $dbStatus = 0;
         }
-        $metrics[] = "# HELP open_admin_db_up Database connection status (1=up, 0=down)";
-        $metrics[] = "# TYPE open_admin_db_up gauge";
         $metrics[] = "open_admin_db_up {$dbStatus}";
 
-        // Redis 连接状态
+        $metrics[] = '# HELP open_admin_redis_up Redis connection status (1=up, 0=down)';
+        $metrics[] = '# TYPE open_admin_redis_up gauge';
         try {
             Redis::ping();
             $redisStatus = 1;
         } catch (Throwable) {
             $redisStatus = 0;
         }
-        $metrics[] = "# HELP open_admin_redis_up Redis connection status (1=up, 0=down)";
-        $metrics[] = "# TYPE open_admin_redis_up gauge";
         $metrics[] = "open_admin_redis_up {$redisStatus}";
 
-        // PHP 信息
-        $metrics[] = "# HELP open_admin_info Application info";
-        $metrics[] = "# TYPE open_admin_info gauge";
+        $metrics[] = '# HELP open_admin_info Application info';
+        $metrics[] = '# TYPE open_admin_info gauge';
         $metrics[] = 'open_admin_info{version="1.0",php="' . PHP_VERSION . '"} 1';
 
         return response(implode("\n", $metrics) . "\n", 200, [

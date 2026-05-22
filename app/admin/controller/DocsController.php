@@ -11,8 +11,11 @@ use support\Request;
 use support\Response;
 
 /**
- * OpenAPI 3.0 文档端点
- * GET /api/docs — 返回 JSON 格式 API 规范
+ * @Apidoc\Title("OpenAPI 规范文档")
+ * @Apidoc\Group("ops")
+ * @Apidoc\Method("GET")
+ * @Apidoc\Url("/api/docs")
+ * @Apidoc\Desc("返回 OpenAPI 3.0 JSON 格式的完整 API 规范文档")
  */
 class DocsController
 {

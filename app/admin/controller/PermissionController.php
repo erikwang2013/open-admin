@@ -9,12 +9,16 @@ namespace app\admin\controller;
 
 use app\model\AdminPermission;
 use support\Request;
+use support\Response;
 
 class PermissionController extends BaseController
 {
     /**
-     * 权限树
-     * GET /admin/permission
+     * @Apidoc\Title("权限树")
+     * @Apidoc\Group("permission")
+     * @Apidoc\Method("GET")
+     * @Apidoc\Url("/admin/permission")
+     * @Apidoc\Desc("获取完整权限树结构，按排序排列")
      */
     public function index(Request $request): Response
     {
@@ -28,8 +32,15 @@ class PermissionController extends BaseController
     }
 
     /**
-     * 创建权限
-     * POST /admin/permission
+     * @Apidoc\Title("创建权限")
+     * @Apidoc\Group("permission")
+     * @Apidoc\Method("POST")
+     * @Apidoc\Url("/admin/permission")
+     * @Apidoc\Desc("创建菜单/按钮/API权限节点")
+     * @Apidoc\Param("name", type="string", require=true, desc="权限名称")
+     * @Apidoc\Param("slug", type="string", require=true, desc="权限标识 (method.path)")
+     * @Apidoc\Param("type", type="int", require=true, desc="类型: 1=菜单 2=按钮 3=API")
+     * @Apidoc\Param("parent_id", type="int", require=false, desc="父权限ID")
      */
     public function store(Request $request): Response
     {
@@ -58,8 +69,11 @@ class PermissionController extends BaseController
     }
 
     /**
-     * 更新权限
-     * PUT /admin/permission/{id}
+     * @Apidoc\Title("更新权限")
+     * @Apidoc\Group("permission")
+     * @Apidoc\Method("PUT")
+     * @Apidoc\Url("/admin/permission/{id}")
+     * @Apidoc\Desc("更新权限节点属性")
      */
     public function update(Request $request, string $hashid): Response
     {
@@ -79,8 +93,12 @@ class PermissionController extends BaseController
     }
 
     /**
-     * 删除权限（需密码二次确认）
-     * DELETE /admin/permission/{id}
+     * @Apidoc\Title("删除权限")
+     * @Apidoc\Group("permission")
+     * @Apidoc\Method("DELETE")
+     * @Apidoc\Url("/admin/permission/{id}")
+     * @Apidoc\Desc("级联删除子权限，需密码二次确认")
+     * @Apidoc\Param("password", type="string", require=true, desc="当前用户密码")
      */
     public function destroy(Request $request, string $hashid): Response
     {
