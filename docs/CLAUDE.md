@@ -137,10 +137,10 @@ open-admin/
 ## 中间件执行链
 
 ```
-全局:  Cors → SecurityFilter(方法检查→405) → RateLimit → {路由中间件}
-/admin: Cors → SecurityFilter(方法检查→405) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
-/api:   Cors → SecurityFilter(方法检查→405) → RateLimit → ApiVersion → Controller
-/health: Cors → SecurityFilter(方法检查→405) → RateLimit → Controller
+全局:  Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → {路由中间件}
+/admin: Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
+/api:   Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → ApiVersion → Controller
+/health: Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → Controller
 ```
 
 ## 安全增强

@@ -20,6 +20,7 @@ A full-stack admin dashboard built with webman v2 + Flutter.
 | 📁 Files | Upload/Excel export/PDF export | Sensitive data auto-masked |
 | 🛡 Security | 18-layer defense-in-depth | XSS/SQLi/path traversal/cmd injection/CSRF/rate limit/CSP... |
 | 🏥 Ops | Health check/metrics/API docs/security.txt | Prometheus + OpenAPI 3.0 |
+| 🌐 i18n | Chinese/English | Accept-Language header / ?lang= param |
 
 ## Copyright
 
@@ -255,11 +256,12 @@ Global middleware runs for every request in order:
 
 ```
 Cors (preflight + response headers)
+  → Locale (Accept-Language detection / ?lang=zh_CN|en)
   → SecurityFilter (HTTP method restriction/body size/Content-Type check/XSS/SQLi/path traversal/cmd injection/CSRF blocking)
   → RateLimit (Redis sliding-window + account lockout: 5 failed logins = 15 min lock)
   → ApiVersion (API version validation, /api group)
   → AdminAuth (JWT + blacklist, /admin group)
-  → AdminPermission (RBAC, /admin group)
+  → AdminPermission (RBAC / Redis 60s cache, /admin group)
   → OperationLog (auto-log POST/PUT/DELETE with source detection, /admin group)
 ```
 

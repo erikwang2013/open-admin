@@ -20,6 +20,7 @@
 | 📁 文件管理 | 上传/Excel 导出/PDF 导出 | 敏感数据自动脱敏 |
 | 🛡 安全防护 | 18 层纵深防御 | XSS/SQL注入/路径遍历/命令注入/CSRF/限流/CSP... |
 | 🏥 运维 | 健康检查/metrics/API 文档/security.txt | Prometheus + OpenAPI 3.0 |
+| 🌐 国际化 | 中英文切换 | Accept-Language 头 / ?lang= 参数 |
 
 ## 技术栈
 
@@ -264,11 +265,12 @@ API-Version: v1
 
 ```
 Cors（跨域预处理 + 响应头）
+  → Locale（Accept-Language 语言检测 / ?lang=zh_CN|en）
   → SecurityFilter（HTTP方法限制/请求体大小/Content-Type校验/XSS/SQL注入/路径遍历/命令注入/CSRF 攻击拦截）
   → RateLimit（Redis 滑动窗口限流 + 账号锁定：5次登录失败锁定15分钟）
   → ApiVersion（API 版本校验，/api 路由组）
   → AdminAuth（JWT 认证 + 黑名单，/admin 路由组）
-  → AdminPermission（RBAC 鉴权，/admin 路由组）
+  → AdminPermission（RBAC 鉴权 / Redis 60s 缓存，/admin 路由组）
   → OperationLog（POST/PUT/DELETE 自动记录，含来源端检测，/admin 路由组）
 ```
 
