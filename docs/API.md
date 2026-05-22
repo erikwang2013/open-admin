@@ -8,6 +8,7 @@
 
 - **基础 URL**: `http://localhost:8787`
 - **API 版本**: 通过请求头 `API-Version: v1` 控制（缺失时默认 v1）
+- **语言**: 通过 `Accept-Language` 头或 `?lang=zh_CN|en` 参数切换（默认 zh_CN），Locale 中间件自动检测
 
 > **端点总览**: 认证(5) | 仪表盘(1) | 用户(7) | 角色(4) | 权限(4) | 配置(4) | 日志(1) | 个人中心(3) | 导入导出(3) | 上传(1) | 运维(4: health/metrics/docs/security.txt) | 共 37 端点
 - **认证**: `Authorization: Bearer <token>`（JWT）

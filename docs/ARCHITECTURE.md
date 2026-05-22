@@ -146,6 +146,7 @@ flowchart TD
 sequenceDiagram
     participant C as 客户端
     participant N as Nginx
+    participant MW_LOC as Locale
     participant MW_SF as SecurityFilter
     participant MW_RL as RateLimit
     participant MW0 as ApiVersion
@@ -157,8 +158,11 @@ sequenceDiagram
     participant DB as MySQL
     participant OPLOG as OperationLog
 
-    C->>N: HTTPS 请求<br/>Header: API-Version: v1
-    N->>MW_SF: 转发
+    C->>N: HTTPS 请求<br/>Header: API-Version: v1, Accept-Language: zh_CN
+    N->>MW_LOC: 转发
+
+    MW_LOC->>MW_LOC: locale = zh_CN (Accept-Language / ?lang=)
+    MW_LOC->>MW_SF: 通过
 
     alt 非标准 HTTP 方法 (TRACE/CONNECT/PATCH...)
         MW_SF-->>C: 405 Method Not Allowed

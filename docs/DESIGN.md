@@ -79,6 +79,9 @@ Route 匹配
   │
   ▼
 中间件链:
+  Locale ──────────────► Accept-Language / ?lang= 语言检测
+  │
+  ▼
   SecurityFilter ──────► HTTP方法检查 → 405 (仅允许 GET/POST/PUT/DELETE/OPTIONS/HEAD)
   │                     XSS/SQL注入/路径遍历/命令注入/CSRF 攻击拦截 (403)
   ▼

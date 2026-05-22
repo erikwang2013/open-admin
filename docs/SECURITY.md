@@ -9,7 +9,7 @@
 整个中间件链按以下顺序执行（见 `config/middleware.php`）：
 
 ```
-请求 → Cors → SecurityFilter → RateLimit → [路由组中间件: AdminAuth → AdminPermission → OperationLog] → Controller
+请求 → Cors → Locale(Accept-Language) → SecurityFilter → RateLimit → [路由组中间件: AdminAuth → AdminPermission → OperationLog] → Controller
 ```
 
 | 层 | 中间件/机制 | 防护目标 |
