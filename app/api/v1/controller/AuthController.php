@@ -50,7 +50,7 @@ class AuthController
 
         // 验证点击验证码
         if (!captcha_verify($request->input('captcha_key'), 'click', $request->input('clicks'))) {
-            return json(['code' => 422, 'message' => '验证码错误，请重试', 'data' => []]);
+            return json(['code' => 422, 'message' => trans('messages.captcha_error'), 'data' => []]);
         }
 
         // 校验用户凭证
@@ -61,7 +61,7 @@ class AuthController
         $lockKey = "account_lock:{$username}";
         try {
             if (Redis::get($lockKey)) {
-                return json(['code' => 429, 'message' => '账号已被临时锁定，请15分钟后再试', 'data' => []]);
+                return json(['code' => 429, 'message' => trans('messages.account_locked'), 'data' => []]);
             }
         } catch (\Throwable) {}
 
@@ -74,17 +74,17 @@ class AuthController
                 if ($fails >= 5) {
                     Redis::setex($lockKey, 900, '1');
                     Redis::del($failKey);
-                    return json(['code' => 429, 'message' => '账号已被临时锁定，请15分钟后再试', 'data' => []]);
+                    return json(['code' => 429, 'message' => trans('messages.account_locked'), 'data' => []]);
                 }
             } catch (\Throwable) {}
-            return json(['code' => 401, 'message' => '用户名或密码错误', 'data' => []]);
+            return json(['code' => 401, 'message' => trans('messages.invalid_credentials'), 'data' => []]);
         }
 
         // 登录成功：清除失败计数
         try { Redis::del("login_fail:{$username}"); Redis::del($lockKey); } catch (\Throwable) {}
 
         if ($user->status === 0) {
-            return json(['code' => 403, 'message' => '账号已被禁用', 'data' => []]);
+            return json(['code' => 403, 'message' => trans('messages.account_disabled'), 'data' => []]);
         }
 
         // 签发 JWT
@@ -105,7 +105,7 @@ class AuthController
 
         return json([
             'code'    => 0,
-            'message' => '登录成功',
+            'message' => trans('messages.login_success'),
             'data'    => [
                 'access_token'  => $token,
                 'refresh_token' => $refreshToken,
@@ -138,12 +138,12 @@ class AuthController
         }
 
         if (!captcha_verify($request->input('captcha_key'), 'click', $request->input('clicks'))) {
-            return json(['code' => 422, 'message' => '验证码错误，请重试', 'data' => []]);
+            return json(['code' => 422, 'message' => trans('messages.captcha_error'), 'data' => []]);
         }
 
         $username = $request->input('username');
         if (AdminUser::where('username', $username)->exists()) {
-            return json(['code' => 422, 'message' => '用户名已存在', 'data' => []]);
+            return json(['code' => 422, 'message' => trans('messages.username_exists'), 'data' => []]);
         }
 
         $user = new AdminUser();
@@ -167,7 +167,7 @@ class AuthController
 
         return json([
             'code'    => 0,
-            'message' => '注册成功',
+            'message' => trans('messages.register_success'),
             'data'    => [
                 'access_token'  => $token,
                 'refresh_token' => $refreshToken,
@@ -190,7 +190,7 @@ class AuthController
         $refreshToken = $request->input('refresh_token', '');
 
         if (empty($refreshToken)) {
-            return json(['code' => 422, 'message' => '缺少刷新令牌', 'data' => []]);
+            return json(['code' => 422, 'message' => trans('messages.refresh_missing'), 'data' => []]);
         }
 
         try {
@@ -228,7 +228,7 @@ class AuthController
                 ],
             ]);
         } catch (Throwable $e) {
-            return json(['code' => 401, 'message' => '刷新令牌无效或已过期', 'data' => []]);
+            return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
         }
     }
 

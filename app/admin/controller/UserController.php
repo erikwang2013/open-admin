@@ -82,7 +82,7 @@ class UserController extends BaseController
 
         $exists = AdminUser::where('username', $request->input('username'))->exists();
         if ($exists) {
-            return $this->fail('用户名已存在', 422);
+            return $this->fail(trans('messages.username_exists'), 422);
         }
 
         $user = new AdminUser();
@@ -97,7 +97,7 @@ class UserController extends BaseController
 
         $data = $user->toArray();
         unset($data['password'], $data['id_card']);
-        return $this->success($this->encodeIds($data), '创建成功');
+        return $this->success($this->encodeIds($data), trans('messages.create_success'));
     }
 
     /**
@@ -109,7 +109,7 @@ class UserController extends BaseController
         $id = $this->decodeId($hashid);
         $user = AdminUser::find($id);
         if (!$user) {
-            return $this->fail('用户不存在', 404);
+            return $this->fail(trans('messages.user_not_found'), 404);
         }
 
         $data = $user->toArray();
@@ -127,7 +127,7 @@ class UserController extends BaseController
         $id = $this->decodeId($hashid);
         $user = AdminUser::find($id);
         if (!$user) {
-            return $this->fail('用户不存在', 404);
+            return $this->fail(trans('messages.user_not_found'), 404);
         }
 
         $user->real_name = $request->input('real_name', $user->real_name);
@@ -147,7 +147,7 @@ class UserController extends BaseController
 
         $data = $user->toArray();
         unset($data['password'], $data['id_card']);
-        return $this->success($this->encodeIds($data), '更新成功');
+        return $this->success($this->encodeIds($data), trans('messages.update_success'));
     }
 
     /**
@@ -159,7 +159,7 @@ class UserController extends BaseController
         $id = $this->decodeId($hashid);
         $user = AdminUser::find($id);
         if (!$user) {
-            return $this->fail('用户不存在', 404);
+            return $this->fail(trans('messages.user_not_found'), 404);
         }
 
         $adminId = $request->adminId ?? 0;
@@ -169,7 +169,7 @@ class UserController extends BaseController
         }
 
         $user->delete();
-        return $this->success([], '删除成功');
+        return $this->success([], trans('messages.delete_success'));
     }
 
     /**
@@ -182,7 +182,7 @@ class UserController extends BaseController
         $password = $request->input('password', '');
 
         if (empty($ids) || !is_array($ids)) {
-            return $this->fail('请选择要删除的用户', 422);
+            return $this->fail(trans('messages.no_user_selection'), 422);
         }
 
         $adminId = $request->adminId ?? 0;
@@ -201,7 +201,7 @@ class UserController extends BaseController
             }
         }
         if (!empty($invalidIds)) {
-            return $this->fail('无效的ID: ' . implode(', ', $invalidIds), 422);
+            return $this->fail(trans('messages.invalid_ids') . ': ' . implode(', ', $invalidIds), 422);
         }
 
         AdminUser::whereIn('id', $decodedIds)->delete();
@@ -219,11 +219,11 @@ class UserController extends BaseController
         $status = (int) $request->input('status', 0);
 
         if (empty($ids) || !is_array($ids)) {
-            return $this->fail('请选择用户', 422);
+            return $this->fail(trans('messages.no_user_selection_status'), 422);
         }
 
         if (!in_array($status, [0, 1], true)) {
-            return $this->fail('状态值无效', 422);
+            return $this->fail(trans('messages.invalid_status'), 422);
         }
 
         $decodedIds = [];
@@ -236,12 +236,12 @@ class UserController extends BaseController
             }
         }
         if (!empty($invalidIds)) {
-            return $this->fail('无效的ID: ' . implode(', ', $invalidIds), 422);
+            return $this->fail(trans('messages.invalid_ids') . ': ' . implode(', ', $invalidIds), 422);
         }
 
         AdminUser::whereIn('id', $decodedIds)->update(['status' => $status]);
 
-        $label = $status === 1 ? '启用' : '禁用';
-        return $this->success(['count' => count($decodedIds)], "批量{$label}成功");
+        $message = $status === 1 ? trans('messages.batch_enable_success') : trans('messages.batch_disable_success');
+        return $this->success(['count' => count($decodedIds)], $message);
     }
 }

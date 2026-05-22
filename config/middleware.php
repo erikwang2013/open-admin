@@ -12,6 +12,7 @@
 
 return [
     app\middleware\Cors::class,
+    app\middleware\Locale::class,
     app\middleware\SecurityFilter::class,
     app\middleware\RateLimit::class,
 ];

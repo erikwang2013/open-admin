@@ -40,7 +40,7 @@ class CaptchaController
         } catch (Throwable $e) {
             return json([
                 'code' => 500,
-                'message' => '验证码生成失败',
+                'message' => trans('messages.captcha_generate_failed'),
                 'data' => [],
             ]);
         }
@@ -58,14 +58,14 @@ class CaptchaController
         $clicks = $request->input('clicks', []);
 
         if (empty($key) || empty($clicks)) {
-            return json(['code' => 422, 'message' => '缺少验证参数', 'data' => []]);
+            return json(['code' => 422, 'message' => trans('messages.captcha_missing'), 'data' => []]);
         }
 
         $valid = captcha_verify($key, 'click', $clicks);
 
         return json([
             'code' => $valid ? 0 : 422,
-            'message' => $valid ? '验证通过' : '验证失败，请重试',
+            'message' => $valid ? trans('messages.captcha_verify_pass') : trans('messages.captcha_verify_fail'),
             'data' => ['valid' => $valid],
         ]);
     }

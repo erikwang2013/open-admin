@@ -66,7 +66,7 @@ LUA;
         if (empty($result[0])) {
             return json([
                 'code'    => 429,
-                'message' => '请求过于频繁，请稍后再试',
+                'message' => trans('messages.rate_limited'),
                 'data'    => [],
             ])->withStatus(429)->withHeaders([
                 'X-RateLimit-Limit'     => (string) $limit,
