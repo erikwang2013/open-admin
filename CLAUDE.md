@@ -73,7 +73,7 @@ open-admin/
 │   ├── common/                 # 公共定义（含 Apidoc Definitions）
 │   ├── middleware/             # 中间件（8 个）
 │   │   ├── Cors.php            # 跨域（全局）
-│   │   ├── SecurityFilter.php  # 攻击拦截（全局：XSS/SQL注入/路径遍历/命令注入/CSRF）
+│   │   └── (已迁移至 erikwang2013/security-php 包)  # 31种攻击检测
 │   │   ├── RateLimit.php       # Redis 限流（全局，Lua 原子化）
 │   │   ├── ApiVersion.php      # API 版本校验
 │   │   ├── AdminAuth.php       # JWT 认证 + 黑名单
@@ -138,15 +138,15 @@ open-admin/
 ## 中间件执行链
 
 ```
-全局:  Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → {路由中间件}
-/admin: Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
-/api:   Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → ApiVersion → Controller
-/health: Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → Controller
+全局:  Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → {路由中间件}
+/admin: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
+/api:   Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → ApiVersion → Controller
+/health: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller
 ```
 
 ## 安全增强
 
-- **HTTP 方法限制**：SecurityFilter 仅允许 GET/POST/PUT/DELETE/OPTIONS/HEAD，非标准方法返回 405
+- **攻击检测**：erikwang2013/security-php 包（31 种检测器：XSS/SQL注入/命令注入/路径遍历/SSRF/XXE/JNDI/反序列化/JWT攻击/CSRF/敏感数据泄漏等 + HTTP方法校验/请求体大小限制/Content-Type校验 + IP攻击升级黑名单）
 - **CSP 头**：Content-Security-Policy + X-Permitted-Cross-Domain-Policies 注入所有响应
 - **账号锁定**：连续 5 次登录失败，账号锁定 15 分钟
 - **并发会话限制**：同一用户最多 3 个有效 Token，超出时最旧 Token 加入黑名单
