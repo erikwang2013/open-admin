@@ -10,216 +10,86 @@ namespace app\middleware;
 use Webman\MiddlewareInterface;
 use Webman\Http\Response;
 use Webman\Http\Request;
-use support\Redis;
+use Erikwang2013\Security\SecurityGuard;
 
 /**
- * Web/API 安全攻击检测拦截中间件
+ * 安全攻击检测拦截中间件
  *
- * 检测并拦截: XSS、SQL注入、路径遍历、命令注入、CSRF
- * 攻击升级: 同 IP 5次/60秒触发攻击检测 → 临时黑名单 15 分钟
- * 输入校验: Content-Type 验证、请求体大小限制
+ * 基于 erikwang2013/security-php 提供 31 种攻击类型检测:
+ * XSS / SQL注入 / 命令注入 / 路径遍历 / 恶意文件上传 / SSRF / XXE /
+ * 响应头注入 / 反序列化 / LDAP注入 / 邮件头注入 / SSTI / NoSQL注入 /
+ * 开放重定向 / JWT攻击 / Host头攻击 / 请求走私 / GraphQL注入 /
+ * XPATH注入 / JNDI注入 / SSI注入 / CSV注入 / 敏感数据泄露 /
+ * 原型污染 / WebSocket劫持 / CORS绕过 / DNS重绑定 /
+ * HTTP方法校验(405) / 请求体大小限制(413) / Content-Type校验(415) / CSRF
+ *
+ * + IP白名单 / 攻击升级黑名单(5次/60s→封禁15分钟) / 日志轮转去重
+ *
  * 全局执行，在 Cors 之后、RateLimit 之前
  */
 class SecurityFilter implements MiddlewareInterface
 {
-    private const BLOCK_CODE = 403;
-    private const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10MB
-    private const ESCALATE_LIMIT = 5;   // 60秒内触发次数
-    private const ESCALATE_WINDOW = 60;
-    private const BAN_DURATION = 900;   // 黑名单 15 分钟
-
-    private const PATTERNS = [
-        'XSS' => [
-            '/<\s*\/?\s*s\s*c\s*r\s*i\s*p\s*t\b/i',
-            '/\bon\w+\s*=\s*[\"\']?\s*(?:javascript|vbscript):/i',
-            '/(?:javascript|vbscript)\s*:\s*(?:[^\s]*\s*)?(?:eval|alert|prompt|confirm|document\.cookie|location\s*=)/i',
-            '/data\s*:\s*text\s*\/\s*html\s*(?:;base64)?\s*,/i',
-            '/\{\{.*?\}\}/',
-        ],
-        'SQL注入' => [
-            '/\bUNION\s+(?:ALL\s+)?SELECT\b/i',
-            '/(?:[\"\']\s*OR\s+[\"\']?\s*\d+\s*=\s*\d+|[\"\']\s*OR\s+[\"\']?1[\"\']?\s*=\s*[\"\']?1)/i',
-            '/\b(?:DROP|ALTER|TRUNCATE)\s+(?:TABLE|DATABASE|INDEX|VIEW)\b/i',
-            '/\b(?:xp_cmdshell|sp_executesql|sp_addsrvrolemember)\b/i',
-            '/\b(?:INFORMATION_SCHEMA|sys\.(?:tables|columns|databases)|pg_class|sqlite_master|mysql\.(?:user|db))\b/i',
-            '/(?:[\"\'])\s*(?:--|#)\s*[\"\']?\s*(?:OR|AND|SELECT|INSERT|UPDATE|DELETE|DROP)/i',
-        ],
-        '路径遍历' => [
-            '/\.\.[\/\\\\]{2,}/',
-            '/\/(?:etc\/(?:passwd|shadow|hosts)|proc\/self|boot\.ini|win\.ini|WEB-INF|\.env|\.git\/)/i',
-            '/%00/',
-        ],
-        '命令注入' => [
-            '/[;|&]\s*(?:ls|cat|rm|wget|curl|nc|bash|sh|cmd|powershell|python|perl)\b/i',
-            '/`[^`]*\b(?:cat|ls|id|whoami|pwd|rm|wget|curl)\b[^`]*`/',
-            '/\$\(\s*(?:cat|ls|id|whoami|rm|wget|curl)\b/i',
-            '/(?:wget|curl)\s+.*(?:\b-o\b|\b-O\b|pipe|bash|python).*\bhttps?:\/\//i',
-        ],
-        '恶意文件上传' => [
-            '/\.(?:php\d?|phtml|phar|cgi|pl|py|jsp|asp)x?\.(?:png|jpg|gif|pdf)/i',
-            '/\.php\s*$/m',
-        ],
-    ];
+    private static bool $initialized = false;
 
     public function process(Request $request, callable $handler): Response
     {
-        // 0. HTTP 方法限制 — 仅允许标准方法
-        $method = $request->method();
-        if (!in_array($method, ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], true)) {
-            return response('<h1>405 Method Not Allowed</h1>', 405, ['Allow' => 'GET,POST,PUT,DELETE,OPTIONS']);
-        }
+        self::lazyInit();
 
-        $ip = $request->getRealIp();
+        // 收集所有输入数据
+        $data = array_merge(
+            $request->cookie() ?? [],
+            $request->get() ?? [],
+            $request->post() ?? [],
+            // 传入关键 header 供检测器扫描
+            [
+                '_headers.Referer'        => $request->header('Referer', ''),
+                '_headers.User-Agent'     => $request->header('User-Agent', ''),
+                '_headers.Cookie'         => $request->header('Cookie', ''),
+                '_headers.X-Forwarded-For'=> $request->header('X-Forwarded-For', ''),
+                '_headers.Origin'         => $request->header('Origin', ''),
+                '_headers.Host'           => $request->header('Host', ''),
+            ]
+        );
 
-        // 1. IP 黑名单检查（攻击升级后的临时封禁）
-        if ($this->isBanned($ip)) {
-            return response('<h1>403 Forbidden</h1>', self::BLOCK_CODE);
-        }
-
-        // 2. 请求体大小限制
-        $length = (int) $request->header('Content-Length', '0');
-        if ($length > self::MAX_BODY_SIZE) {
-            return response('<h1>413 Payload Too Large</h1>', 413);
-        }
-
-        // 3. Content-Type 校验（写操作必须声明类型）
-        $method = $request->method();
-        if (in_array($method, ['POST', 'PUT'], true)) {
-            $ct = $request->header('Content-Type', '');
-            // 文件上传跳过
-            if ($request->file('file')) {
-                // OK
-            } elseif ($ct === '' || (!str_contains($ct, 'application/json') && !str_contains($ct, 'application/x-www-form-urlencoded'))) {
-                return response('<h1>415 Unsupported Media Type</h1>', 415);
+        // 文件上传数据
+        foreach ($request->file() ?? [] as $key => $file) {
+            if (is_array($file) && isset($file['tmp_name'], $file['name'])) {
+                $data[$key] = [
+                    'name'     => $file['name'],
+                    'tmp_name' => $file['tmp_name'],
+                ];
             }
         }
 
-        // 4. 输入扫描
-        $inputs = $this->collectInputs($request);
-        foreach ($inputs as $source => $values) {
-            if (!is_array($values) && !is_string($values)) continue;
-            if (is_string($values)) $values = [$values];
+        $threats = SecurityGuard::guard($data, [
+            'ip'     => $request->getRealIp() ?? '0.0.0.0',
+            'method' => $request->method(),
+            'uri'    => $request->path(),
+        ]);
 
-            foreach ($values as $key => $value) {
-                if (!is_string($value) || empty($value)) continue;
-                $blocked = $this->scan($value);
-                if ($blocked !== null) {
-                    $this->logBlock($request, $blocked, (string) $key, $source, substr($value, 0, 200));
-                    // 攻击升级：计入 Redis，超阈值封禁
-                    $this->escalate($ip);
-                    return response('<h1>403 Forbidden</h1>', self::BLOCK_CODE);
-                }
-            }
-        }
-
-        // 5. CSRF 检查
-        if ($this->checkCsrf($request)) {
-            return response('<h1>403 Forbidden</h1>', self::BLOCK_CODE);
+        if (!empty($threats) && SecurityGuard::shouldBlock($threats)) {
+            return new Response(
+                SecurityGuard::blockStatusCode($threats),
+                ['Content-Type' => 'text/plain; charset=utf-8'],
+                SecurityGuard::blockMessage()
+            );
         }
 
         return $handler($request);
     }
 
-    /**
-     * 检查 IP 是否在临时黑名单中
-     */
-    private function isBanned(string $ip): bool
+    private static function lazyInit(): void
     {
-        try {
-            return (bool) Redis::get("security_ban:{$ip}");
-        } catch (\Throwable) {
-            return false;
+        if (self::$initialized) {
+            return;
         }
-    }
 
-    /**
-     * 攻击升级：记录次数，超阈值封禁
-     */
-    private function escalate(string $ip): void
-    {
-        try {
-            $key = "security_escalate:{$ip}";
-            $count = Redis::incr($key);
-            if ($count === 1) {
-                Redis::expire($key, self::ESCALATE_WINDOW);
-            }
-            if ($count >= self::ESCALATE_LIMIT) {
-                Redis::setex("security_ban:{$ip}", self::BAN_DURATION, '1');
-                Redis::del($key);
-                $this->logBan($ip, $count);
-            }
-        } catch (\Throwable) {}
-    }
-
-    private function logBan(string $ip, int $count): void
-    {
-        @file_put_contents(
-            runtime_path() . '/logs/security.log',
-            date('Y-m-d H:i:s') . " [SECURITY] IP banned 15min | IP: {$ip} | Triggers: {$count}\n",
-            FILE_APPEND | LOCK_EX
-        );
-    }
-
-    private function collectInputs(Request $request): array
-    {
-        return [
-            'path'  => $request->path(),
-            'query' => $request->queryString(),
-            'body'  => $request->all(),
-            'headers.Referer'   => $request->header('Referer', ''),
-            'headers.User-Agent' => $request->header('User-Agent', ''),
-            'headers.Cookie'    => $request->header('Cookie', ''),
-            'headers.X-Forwarded-For' => $request->header('X-Forwarded-For', ''),
-        ];
-    }
-
-    private function scan(string $value): ?string
-    {
-        foreach (self::PATTERNS as $category => $patterns) {
-            foreach ($patterns as $pattern) {
-                if (@preg_match($pattern, $value) === 1) {
-                    return $category;
-                }
-            }
+        $configPath = config_path() . '/security.php';
+        if (is_file($configPath)) {
+            SecurityGuard::init(require $configPath);
         }
-        return null;
-    }
+        // 否则 SecurityGuard::guard() 会自动使用包内默认配置
 
-    private function checkCsrf(Request $request): bool
-    {
-        if (!in_array($request->method(), ['POST', 'PUT', 'DELETE'], true)) {
-            return false;
-        }
-        $host = $request->host(true);
-        $origin = $request->header('Origin', '');
-        if ($origin === '' && $request->header('Referer', '') === '') {
-            return false;
-        }
-        if ($origin !== '') {
-            $originHost = parse_url($origin, PHP_URL_HOST);
-            $hostOnly = ltrim(parse_url('http://' . $host, PHP_URL_HOST) ?: $host, 'www.');
-            if ($originHost && $originHost !== $hostOnly && !str_contains($originHost, '.' . $hostOnly)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private function logBlock(Request $request, string $category, string $field, string $source, string $payload): void
-    {
-        $logData = sprintf(
-            "[SECURITY] %s attack blocked | IP: %s | Path: %s | Field: %s | Source: %s | Payload: %s",
-            $category,
-            $request->getRealIp(),
-            $request->path(),
-            "{$source}.{$field}",
-            $source,
-            $payload
-        );
-        @file_put_contents(
-            runtime_path() . '/logs/security.log',
-            date('Y-m-d H:i:s') . ' ' . $logData . "\n",
-            FILE_APPEND | LOCK_EX
-        );
+        self::$initialized = true;
     }
 }
