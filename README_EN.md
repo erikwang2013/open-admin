@@ -8,7 +8,7 @@ A full-stack admin dashboard built with webman v2 + Flutter.
 
 | Domain | Feature | Notes |
 |--------|---------|-------|
-| 🔐 Auth | Login/Register/Refresh/Logout | Click captcha + JWT + blacklist |
+| 🔐 Auth | Login/Refresh/Logout | Click captcha + JWT + blacklist |
 | | Account lockout | 5 failures → 15 min lock |
 | | Concurrent session limit | Max 3 active tokens per user |
 | 📊 Dashboard | Real-time stats/trends/distribution/logs | Redis cached 5 min |
@@ -77,7 +77,7 @@ open-admin/
 │   ├── api/
 │   │   └── v1/controller/          # API v1 (version via API-Version header)
 │   │       ├── CaptchaController.php
-│   │       └── AuthController.php
+│   │       └── AuthController.php    # Login/Refresh
 │   ├── middleware/             # Middleware
 │   │   ├── Cors.php            # CORS
 │   │   ├── SecurityFilter.php  # Attack detection (HTTP method restriction/XSS/SQLi/path traversal/cmd injection/CSRF)
@@ -130,24 +130,30 @@ Key environment variables:
 
 **Always change all keys to random strings in production.**
 
-### 3. Initialize Database
+### 3. One-Click Install
 
-Run the SQL migration files in order:
-
-```bash
-# Create tables
-mysql -u root -p < database/migrations/2026_05_16_000000_init_tables.sql
-# Seed permissions
-mysql -u root -p < database/migrations/2026_05_20_000001_seed_permissions.sql
-```
-
-### 4. Start Server
+Start the server, then open the install wizard in your browser to set up the database and create an admin account:
 
 ```bash
 php start.php start
 ```
 
-Default: `http://0.0.0.0:8787`.
+Default: `http://0.0.0.0:8787` (change port in `config/server.php`).
+
+Open **`http://localhost:8787/install`** and follow the wizard:
+
+| Step | Description |
+|------|-------------|
+| ① Database | Host, port, database name, username, password |
+| ② Admin Account | Admin username and password (default: admin / admin888) |
+
+Click "Start Install" — tables are created, permissions seeded, admin account created, and `.env` is updated automatically.
+
+> After installation, `runtime/install.lock` is created to prevent re-installation. Delete this file to re-install.
+
+### 4. Login
+
+Visit `http://localhost:8787` and log in with the admin credentials set during installation.
 
 ### 5. Start Frontend (Optional)
 
@@ -174,9 +180,10 @@ cp .env.docker .env
 # 2. Start all services
 docker-compose up -d
 
-# 3. Initialize database (run inside the app container)
-docker-compose exec app mysql -h mysql -u root -p < database/migrations/2026_05_16_000000_init_tables.sql
-docker-compose exec app mysql -h mysql -u root -p < database/migrations/2026_05_20_000001_seed_permissions.sql
+# 3. Open the install wizard in your browser
+# http://localhost:8787/install  (fill in DB and admin info)
+# Or run SQL migration manually (inside the app container):
+# docker-compose exec app mysql -h mysql -u root -p < database/migrations/open_admin.sql
 
 # 4. Access
 # http://localhost:8787  (webman)
@@ -246,7 +253,6 @@ API-Version: v1
 
 Redis sliding-window algorithm, default 60 req/min/IP/route. Stricter limits for auth:
 - Login: 10 req/min
-- Register: 5 req/min
 
 Responses include `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` headers. 429 responses include `Retry-After`.
 
@@ -292,7 +298,7 @@ The OperationLog middleware auto-detects the client platform and records it in t
 
 ### Authentication
 
-Login and registration require **click captcha** verification:
+Login requires **click captcha** verification:
 
 1. Client requests `POST /api/captcha/generate` to get a captcha image (base64 PNG) and target word list
 2. User clicks the corresponding word positions on the image in order
@@ -342,11 +348,11 @@ Authorization: Bearer <token>
 |-----|------|------|
 | `GET` | `/health` | Health check (DB/Redis/ES status) |
 | `GET` | `/api/docs` | OpenAPI 3.0 specification |
-| `GET` | `/apidoc` | hg/apidoc interactive docs (Service/Admin grouping, password: admin888) |
+| `GET` | `/apidoc` | hg/apidoc interactive docs (Service/Admin grouping) |
+| `GET` | `/install` | System install wizard (setup DB + create admin) |
 | `POST` | `/api/captcha/generate` | Generate click captcha |
 | `POST` | `/api/captcha/verify` | Verify click positions |
 | `POST` | `/api/auth/login` | Login (requires captcha) |
-| `POST` | `/api/auth/register` | Register (requires captcha) |
 | `POST` | `/api/auth/refresh` | Refresh token |
 | `GET` | `/metrics` | Prometheus metrics |
 

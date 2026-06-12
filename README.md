@@ -8,7 +8,7 @@
 
 | 业务域 | 功能 | 说明 |
 |--------|------|------|
-| 🔐 认证 | 登录/注册/刷新令牌/登出 | 点击验证码 + JWT + 黑名单 |
+| 🔐 认证 | 登录/刷新令牌/登出 | 点击验证码 + JWT + 黑名单 |
 | | 账号锁定 | 5 次失败锁定 15 分钟 |
 | | 并发会话限制 | 同一用户最多 3 个有效 Token |
 | 📊 仪表盘 | 实时统计/趋势图/分布图/最近操作 | Redis 缓存 5 分钟 |
@@ -70,7 +70,7 @@ open-admin/
 │   ├── api/
 │   │   └── v1/controller/          # API v1 控制器（版本由请求头 API-Version 控制）
 │   │       ├── CaptchaController.php # 点击验证码
-│   │       └── AuthController.php    # 登录/注册/刷新令牌
+│   │       └── AuthController.php    # 登录/刷新令牌
 │   ├── common/                 # 公共工具类
 │   │   ├── HashidsService.php  # ID 编解码
 │   │   ├── SnowflakeService.php# Snowflake ID 生成
@@ -138,24 +138,30 @@ cp .env.example .env
 
 **生产环境务必修改所有密钥为随机字符串。**
 
-### 3. 初始化数据库
+### 3. 一键安装
 
-按顺序执行 `database/migrations/` 下的 SQL 文件：
-
-```bash
-# 建表
-mysql -u root -p < database/migrations/2026_05_16_000000_init_tables.sql
-# 播种权限数据
-mysql -u root -p < database/migrations/2026_05_20_000001_seed_permissions.sql
-```
-
-### 4. 启动服务
+启动服务后，浏览器访问安装向导完成数据库初始化和管理员创建：
 
 ```bash
 php start.php start
 ```
 
-默认监听 `http://0.0.0.0:8787`。
+默认监听 `http://0.0.0.0:8787`（端口可在 `config/server.php` 修改）。
+
+浏览器打开 **`http://localhost:8787/install`**，按向导填入：
+
+| 步骤 | 内容 |
+|------|------|
+| ① 数据库配置 | 主机地址、端口、数据库名、用户名、密码 |
+| ② 管理员设置 | 管理员用户名、密码（默认 admin / admin888） |
+
+点击「开始安装」后自动完成建表、播种权限数据、创建管理员账号，并写入 `.env` 数据库配置。
+
+> 安装完成后生成 `runtime/install.lock` 锁定文件。需重新安装时删除此文件即可。
+
+### 4. 登录
+
+访问 `http://localhost:8787`，使用安装时设置的管理员账号密码登录。
 
 ### 5. 启动前端（可选）
 
@@ -182,9 +188,10 @@ cp .env.docker .env
 # 2. 启动所有服务
 docker-compose up -d
 
-# 3. 初始化数据库（进入 app 容器执行）
-docker-compose exec app mysql -h mysql -u root -p < database/migrations/2026_05_16_000000_init_tables.sql
-docker-compose exec app mysql -h mysql -u root -p < database/migrations/2026_05_20_000001_seed_permissions.sql
+# 3. 浏览器访问安装向导完成初始化
+# http://localhost:8787/install  (填入数据库和管理员信息)
+# 或手动执行 SQL 迁移（进入 app 容器）:
+# docker-compose exec app mysql -h mysql -u root -p < database/migrations/open_admin.sql
 
 # 4. 访问
 # http://localhost:8787  (webman)
@@ -255,7 +262,6 @@ API-Version: v1
 
 基于 Redis 滑动窗口算法，默认 60 次/分钟/IP/路由。敏感接口更严格：
 - 登录：10 次/分钟
-- 注册：5 次/分钟
 
 响应头包含 `X-RateLimit-Limit`、`X-RateLimit-Remaining`、`X-RateLimit-Reset`。超限返回 429 并附带 `Retry-After`。
 
@@ -301,7 +307,7 @@ OperationLog 中间件自动识别客户端平台，写入操作日志 `source` 
 
 ### 认证
 
-登录与注册需要先通过**点击验证码**校验：
+登录需要先通过**点击验证码**校验：
 
 1. 客户端请求 `POST /api/captcha/generate` 获取验证码图片（base64 PNG）和文字目标列表
 2. 用户按顺序点击图中对应文字位置，收集点击坐标 `[{x, y}, ...]`
@@ -351,11 +357,11 @@ Authorization: Bearer <token>
 |-----|------|------|
 | `GET` | `/health` | 健康检查（DB/Redis/ES 状态） |
 | `GET` | `/api/docs` | OpenAPI 3.0 规范文档 |
-| `GET` | `/apidoc` | hg/apidoc 交互式接口文档（Service/Admin 分组，密码: admin888） |
+| `GET` | `/apidoc` | hg/apidoc 交互式接口文档（Service/Admin 分组） |
+| `GET` | `/install` | 系统安装向导（首次部署建表 + 创建管理员） |
 | `POST` | `/api/captcha/generate` | 生成点击验证码 |
 | `POST` | `/api/captcha/verify` | 校验点击验证码 |
 | `POST` | `/api/auth/login` | 登录（需 captcha） |
-| `POST` | `/api/auth/register` | 注册（需 captcha） |
 | `POST` | `/api/auth/refresh` | 刷新令牌 |
 | `GET` | `/metrics` | Prometheus 监控指标 |
 
