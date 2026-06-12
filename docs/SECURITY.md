@@ -9,12 +9,12 @@
 整个中间件链按以下顺序执行（见 `config/middleware.php`）：
 
 ```
-请求 → Cors → Locale(Accept-Language) → SecurityFilter → RateLimit → [路由组中间件: AdminAuth → AdminPermission → OperationLog] → Controller
+请求 → Cors → Locale(Accept-Language) → SecurityMiddleware (erikwang2013/security-php, 31种检测器) → RateLimit → [路由组中间件: AdminAuth → AdminPermission → OperationLog] → Controller
 ```
 
 | 层 | 中间件/机制 | 防护目标 |
 |----|--------|---------|
-| 1 | SecurityFilter | XSS / SQL 注入 / 路径遍历 / 命令注入 / CSRF 攻击拦截 |
+| 1 | SecurityMiddleware (erikwang2013/security-php) | 31 种攻击检测 + HTTP 方法校验 + 请求体大小限制 + Content-Type 校验 + CSRF + IP 攻击升级黑名单 |
 | 2 | Cors | 跨域安全 + 响应安全头注入 |
 | 3 | RateLimit | Redis 滑动窗口限流，防暴力破解 |
 | 4 | AdminAuth | JWT 认证 + 黑名单登出 |
@@ -28,141 +28,35 @@
 
 ## 2. 攻击检测引擎
 
-### 2.0 HTTP 方法限制
+## 2. 攻击检测引擎 (erikwang2013/security-php)
 
-SecurityFilter 在所有攻击检测之前首先校验 HTTP 方法，仅允许以下标准方法：
+攻击检测已从自研 SecurityMiddleware (erikwang2013/security-php) 迁移至 `erikwang2013/security-php` v1.1+ 专用安全包，提供 **31 种检测器**，覆盖 5 大攻击类别。
 
-```
-GET, POST, PUT, DELETE, OPTIONS, HEAD
-```
+### 2.1 检测器分类
 
-非标准方法（如 TRACE、CONNECT、PATCH、自定义方法等）直接返回 **405 Method Not Allowed**，响应体为空 HTML，不进入后续攻击检测或业务逻辑。
+**注入攻击 (11种):** XSS、SQL注入、命令注入、NoSQL注入、LDAP注入、XPath注入、JNDI/Log4Shell、SSI服务端包含、GraphQL注入、SSTI模板注入
 
-这是纵深防御的第一道防线，有效阻止：
-- TRACE 跨站追踪攻击（XST）
-- CONNECT 隧道代理滥用
-- 非标准 WebDAV 方法探测
-- 自动化扫描器的 HTTP 方法枚举
+**协议与请求攻击 (9种):** SSRF、XXE、HTTP响应头注入、Host头攻击、Request Smuggling、Open Redirect、CORS绕过、WebSocket劫持、DNS Rebinding
 
-### 2.1 XSS 跨站脚本
+**HTTP协议层校验 (6种):** HTTP方法校验(405)、请求体大小限制(413)、Content-Type校验(415)、CSRF Origin检查、IP攻击升级黑名单、敏感数据泄露检测
 
-所有正则来自 `SecurityFilter::PATTERNS['XSS']`，大小写不敏感匹配。
+**数据与序列化攻击 (5种):** PHP反序列化、CSV公式注入、邮件头注入、JWT攻击（结构化分析）、JS Prototype Pollution
 
-| 检测模式 | 正则 | 防御的攻击 |
-|----------|------|-----------|
-| 脚本标签 | `<\s*\/?\s*s\s*c\s*r\s*i\s*p\s*t\b` | `<script>`, `<script >`, `< script>` 等带空格变体 |
-| 事件属性 | `\bon\w+\s*=\s*[\"\']?\s*(?:javascript\|vbscript):` | `onclick="javascript:..."` 等内联事件 |
-| JS 伪协议 | `(?:javascript\|vbscript)\s*:\s*(?:[^\s]*\s*)?(?:eval\|alert\|prompt\|confirm\|document\.cookie\|location\s*=)` | `javascript:eval(...)`, `javascript:alert(1)` 等 |
-| Data URI XSS | `data\s*:\s*text\s*\/\s*html\s*(?:;base64)?\s*,` | `data:text/html,<script>`, `data:text/html;base64,...` 等 |
-| 模板注入 | `\{\{.*?\}\}` | `{{constructor}}`, `{{7*7}}` 等服务端/Angular/Vue 模板注入 |
+**文件与路径攻击 (2种):** 路径遍历、恶意文件上传
 
-### 2.2 SQL 注入
+### 2.2 处理模式
 
-| 检测模式 | 正则 | 防御的攻击 |
-|----------|------|-----------|
-| UNION 联合查询 | `\bUNION\s+(?:ALL\s+)?SELECT\b` | `UNION SELECT`, `UNION ALL SELECT` 脱裤 |
-| OR 恒真注入 | `(?:[\"\']\s*OR\s+[\"\']?\s*\d+\s*=\s*\d+\|[\"\']\s*OR\s+[\"\']?1[\"\']?\s*=\s*[\"\']?1)` | `' OR 1=1--`, `" OR '1'='1'` |
-| 表结构破坏 | `\b(?:DROP\|ALTER\|TRUNCATE)\s+(?:TABLE\|DATABASE\|INDEX\|VIEW)\b` | `DROP TABLE users`, `TRUNCATE TABLE logs` |
-| 存储过程调用 | `\b(?:xp_cmdshell\|sp_executesql\|sp_addsrvrolemember)\b` | MSSQL 扩展存储过程命令执行 |
-| 元数据探测 | `\b(?:INFORMATION_SCHEMA\|sys\.(?:tables\|columns\|databases)\|pg_class\|sqlite_master\|mysql\.(?:user\|db))\b` | MySQL/PG/SQLite/MSSQL 数据库结构探测 |
-| 注释绕过 | `(?:[\"\'])\s*(?:--\|#)\s*[\"\']?\s*(?:OR\|AND\|SELECT\|INSERT\|UPDATE\|DELETE\|DROP)` | `'-- OR SELECT`, `'# AND UPDATE` 注释绕过 |
+每个检测器独立支持两种模式：
+- `block` — 检测到攻击即拦截，返回配置的状态码
+- `log` — 仅记录日志不拦截（`header_injection`、`ssti`、`nosql_injection` 默认 log 模式防误报）
 
-### 2.3 路径遍历
+### 2.3 IP 攻击升级黑名单
 
-| 检测模式 | 正则 | 防御的攻击 |
-|----------|------|-----------|
-| 目录回溯 | `\.\.[\/\\\\]{2,}` | `../`, `..\`, `....//` 多级目录回溯 |
-| 敏感文件探测 | `\/(?:etc\/(?:passwd\|shadow\|hosts)\|proc\/self\|boot\.ini\|win\.ini\|WEB-INF\|\.env\|\.git\/)` | `/etc/passwd`, `/proc/self/environ`, `.env`, `.git/HEAD` 等 |
-| 空字节截断 | `%00` | `../../../etc/passwd%00.jpg` 绕过扩展名校验 |
+同一 IP 在 60 秒内触发 5 次攻击检测 → 自动封禁 15 分钟。存储后端可选 Redis（分布式）、File（单机JSON）或 Cache（高并发独立文件），当前配置为 Redis 存储。
 
-### 2.4 命令注入
+### 2.4 安全日志
 
-| 检测模式 | 正则 | 防御的攻击 |
-|----------|------|-----------|
-| 管道/分号命令 | `[;\|&]\s*(?:ls\|cat\|rm\|wget\|curl\|nc\|bash\|sh\|cmd\|powershell\|python\|perl)\b` | `;cat /etc/passwd`, `\|bash` |
-| 反引号替换 | `` `[^`]*\b(?:cat\|ls\|id\|whoami\|pwd\|rm\|wget\|curl)\b[^`]*` `` | `` `cat /etc/passwd` `` |
-| $() 替换 | `\$\(\s*(?:cat\|ls\|id\|whoami\|rm\|wget\|curl)\b` | `$(whoami)`, `$(cat flag)` |
-| 远程下载管道 | `(?:wget\|curl)\s+.*(?:\b-o\b\|\b-O\b\|pipe\|bash\|python).*\bhttps?:\/\/` | `wget URL -O - \| bash`, `curl URL \| python` |
-
-### 2.5 CSRF 跨站请求伪造
-
-校验逻辑在 `SecurityFilter::checkCsrf()` 中实现：
-
-```php
-// 仅 POST/PUT/DELETE 触发校验
-// Origin 头和 Referer 均为空 → 放行（非浏览器客户端）
-// Origin 非空 → 解析 Origin 域名与 Host 比对
-```
-
-比对规则：
-- 移除 Host 的 `www.` 前缀后与 Origin 的域名精确比较
-- 若 Host 是 Origin 的父域名（如 `Origin: app.example.com`, `Host: example.com` — 触发 `str_contains($originHost, '.' . $hostOnly)`），放行
-- 既不精确匹配也不是子域名 → 返回 403，判定为 CSRF 攻击
-
-注意：非浏览器客户端（如 curl 不带 Origin/Referer）会直接放行，CSRF 保护仅对浏览器环境有效。
-
-### 2.6 恶意文件上传
-
-| 检测模式 | 正则 | 防御的攻击 |
-|----------|------|-----------|
-| 双扩展名伪装 | `\.(?:php\d?\|phtml\|phar\|cgi\|pl\|py\|jsp\|asp)x?\.(?:png\|jpg\|gif\|pdf)` | `shell.php.png`, `shell.phar.jpg` 绕过白名单 |
-| PHP 扩展名 | `\.php\s*$/m` | 请求参数中直接传递 `.php` 路径 |
-
----
-
-## 3. 攻击升级与 IP 黑名单
-
-SecurityFilter 内置攻击升级机制，防止同一 IP 持续扫描攻击。
-
-### 升级流程
-
-```
-第 1 次扫描命中 → Redis INCR security_escalate:{ip} = 1, TTL=60s
-第 2 次扫描命中 → INCR → 2
-...
-第 5 次扫描命中 → INCR → 5
-    → 触发封禁: SETEX security_ban:{ip} 900 1
-    → 清除计数器 DEL security_escalate:{ip}
-    → 写入安全日志: [SECURITY] IP banned 15min
-```
-
-### 封禁期间行为
-
-每个请求进入 SecurityFilter 时首先检查 `isBanned()`：
-
-```php
-if (Redis::get("security_ban:{$ip}")) {
-    return response('<h1>403 Forbidden</h1>', 403);
-}
-```
-
-被封 IP 在 15 分钟内所有请求（包括合法请求）直接返回 403，完全跳过后续业务逻辑。
-
-### 配置常量
-
-| 常量 | 值 | 含义 |
-|------|-----|------|
-| ESCALATE_LIMIT | 5 | 60 秒窗口内触发次数阈值 |
-| ESCALATE_WINDOW | 60 | 计数器窗口（秒） |
-| BAN_DURATION | 900 | 黑名单持续时间（秒），即 15 分钟 |
-
-### 安全日志
-
-文件位置：`runtime/logs/security.log`
-
-日志格式示例：
-```
-2026-05-20 14:32:11 [SECURITY] XSS attack blocked | IP: 192.168.1.100 | Path: /admin/user | Field: body.username | Source: body | Payload: <script>alert(1)</script>
-2026-05-20 14:32:15 [SECURITY] IP banned 15min | IP: 192.168.1.100 | Triggers: 5
-```
-
-### 请求体大小限制
-
-`Content-Length > 10MB` 直接返回 413 Payload Too Large，防 DoS 超大请求体攻击。
-
-### Content-Type 校验
-
-POST/PUT 请求**必须**声明 `Content-Type` 为 `application/json` 或 `application/x-www-form-urlencoded`，否则返回 415 Unsupported Media Type。文件上传请求（带 file 字段）跳过此检查。
+文件位置：`runtime/logs/security.log`（自动轮转，10MB/文件）
 
 ---
 
@@ -556,7 +450,7 @@ Policy: https://erik.xyz/security-policy
 | 配置项 | 作用 |
 |--------|------|
 | `server_tokens off` | 隐藏 Nginx 版本号 |
-| `client_max_body_size 10m` | 限制请求体大小，与 SecurityFilter 协同 |
+| `client_max_body_size 10m` | 限制请求体大小，与 SecurityMiddleware (erikwang2013/security-php) 协同 |
 | `limit_req_zone` | Nginx 层面的请求频率限制 |
 | `limit_conn_zone` | 并发连接数限制 |
 | `add_header` 安全头 | 在 Nginx 层面追加 X-XSS-Protection 等安全头 |
@@ -574,29 +468,28 @@ Policy: https://erik.xyz/security-policy
 
 | 威胁类型 | 攻击向量 | 防御层次 |
 |----------|---------|---------|
-| HTTP 方法滥用 | TRACE/TRACK XST 攻击、CONNECT 隧道代理、WebDAV 方法探测 | SecurityFilter 405 方法白名单 (GET/POST/PUT/DELETE/OPTIONS/HEAD) |
+| HTTP 方法滥用 | TRACE/TRACK XST 攻击、CONNECT 隧道代理、WebDAV 方法探测 | SecurityMiddleware http_method 检测器 405 方法白名单 |
 | 定向暴力破解 | 针对特定用户反复尝试密码 | 账号锁定 (5次失败锁定15分钟) + RateLimit (登录 10/min) + Captcha |
 | 暴力破解 | 分布式 IP 反复尝试用户名/密码 | RateLimit (登录 10/min) + Captcha |
-| XSS 跨站脚本 | `<script>`, onerror, javascript: | SecurityFilter (5 种模式) + X-XSS-Protection 响应头 + CSP |
-| SQL 注入 | UNION SELECT, OR 1=1, 注释绕过 | SecurityFilter (6 种模式) + Eloquent ORM 参数化查询 |
-| CSRF 跨站请求伪造 | 恶意网站代发请求 | SecurityFilter Origin/Referer 校验 |
-| 路径遍历 | `../../etc/passwd` | SecurityFilter 路径遍历模式 + UploadController 扩展名白名单 |
-| 命令注入 | `;ls`, `` `whoami` ``, `$(cat ...)` | SecurityFilter (4 种模式) |
+| XSS 跨站脚本 | `<script>`, onerror, javascript: | SecurityMiddleware (erikwang2013/security-php) (5 种模式) + X-XSS-Protection 响应头 + CSP |
+| SQL 注入 | UNION SELECT, OR 1=1, 注释绕过 | SecurityMiddleware (erikwang2013/security-php) (6 种模式) + Eloquent ORM 参数化查询 |
+| CSRF 跨站请求伪造 | 恶意网站代发请求 | SecurityMiddleware (erikwang2013/security-php) Origin/Referer 校验 |
+| 路径遍历 | `../../etc/passwd` | SecurityMiddleware (erikwang2013/security-php) 路径遍历模式 + UploadController 扩展名白名单 |
+| 命令注入 | `;ls`, `` `whoami` ``, `$(cat ...)` | SecurityMiddleware (erikwang2013/security-php) (4 种模式) |
 | 会话劫持 | 窃取 JWT Token | JWT 短期有效 (2h) + 黑名单登出 + 敏感操作二次密码确认 |
 | ID 枚举 | 遍历数字 ID 猜测数据量 | Hashids 混淆为随机字符串 |
 | 数据泄露 | DB 拖库 / 中间人 / 日志泄露 | 三层加密/脱敏 + OperationLog 敏感字段过滤 |
 | DoS 攻击 | 超大请求体 / 高频请求 | 请求体 10MB 限制 + RateLimit 60/min + IP 黑名单 |
 | 权限提升 | 低权限用户访问管理接口 | RBAC method.path 粒度鉴权 |
-| 文件上传攻击 | shell.php.png 双扩展名 | SecurityFilter 恶意文件检测 |
+| 文件上传攻击 | shell.php.png 双扩展名 | SecurityMiddleware (erikwang2013/security-php) 恶意文件检测 |
 
 ### 12.2 已知局限
 
 | 局限 | 影响范围 | 缓解措施 |
 |------|---------|---------|
 | CSRF 保护仅对浏览器有效 | 非浏览器客户端（curl, Postman, 移动 App）可跳过 Origin/Referer 检查 | 非浏览器客户端天然不受 CSRF 攻击；依赖 JWT 认证替代 Cookie |
-| Redis 不可用时限流和黑名单降级为 fail-open | 攻击者可绕过限流和高频拦截 | 监控 Redis 可用性告警；JWT 短期有效期作为兜底 |
-| 无独立 WAF 引擎 | SecurityFilter 使用 `@preg_match` 正则匹配，非专用 WAF 规则引擎 | 生产环境建议前置 Nginx ModSecurity 或 Cloudflare WAF |
+| Redis 不可用时限流和黑名单降级为 fail-open | 攻击者可绕过限流和高频拦截 | 监控 Redis 可用性告警；IP 黑名单支持 file/redis/cache 三后端可降级 |
+| 无独立 WAF 引擎 | 基于正则匹配的检测，非专用 WAF 规则引擎 | 生产环境建议前置 Nginx ModSecurity 或 Cloudflare WAF |
 | JWT 无状态无法主动失效 | Token 未过期前无法从服务端主动吊销（除黑名单外） | 黑名单 + 短期 2h TTL 降低风险窗口 |
-| IP 黑名单仅内存存储 | Redis 重启后黑名单丢失 | Ban 时长仅 15 分钟，影响有限 |
 | 管理员端点无特殊限流 | 管理员接口与普通接口共用 60/min 默认限制 | 管理员操作频率天然低，暂无需区分 |
-| `@preg_match` 抑制错误 | 畸形正则输入时静默失效 | `preg_last_error()` 可加监控，当前未实现 |
+| PCRE 回溯限制 | 包内置 1,000,000 回溯上限+finally恢复，极端复杂输入仍有性能风险 | 请求体大小限制 (10MB) 兜底 |
