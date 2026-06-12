@@ -11,8 +11,10 @@
  */
 
 return [
-    app\middleware\Cors::class,
-    app\middleware\Locale::class,
-    \Erikwang2013\Security\Middleware\Webman\SecurityMiddleware::class,
-    app\middleware\RateLimit::class,
+    '@' => [
+        app\middleware\Cors::class,
+        app\middleware\Locale::class,
+        app\middleware\SecurityFilter::class,  // 基于 erikwang2013/security-php
+        app\middleware\RateLimit::class,
+    ],
 ];
