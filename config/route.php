@@ -123,5 +123,19 @@ Route::group('/api', function () {
     app\middleware\ApiVersion::class,
 ]);
 
+// CORS 预检兜底 — OPTIONS 不匹配已注册路由，fallback 不走中间件链，
+// 故在此直接注入 CORS 响应头
+Route::fallback(function (\support\Request $request) {
+    if ($request->method() === 'OPTIONS') {
+        return response('', 204, [
+            'Access-Control-Allow-Origin'      => '*',
+            'Access-Control-Allow-Methods'     => 'GET,POST,PUT,DELETE,OPTIONS',
+            'Access-Control-Allow-Headers'     => 'Authorization,Content-Type,API-Version',
+            'Access-Control-Max-Age'           => '86400',
+        ]);
+    }
+    return response('<h1>404 Not Found</h1>', 404);
+});
+
 // 关闭默认路由
 Route::disableDefaultRoute();

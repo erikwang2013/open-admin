@@ -35,17 +35,16 @@ class CaptchaController
         $difficulty = $request->input('difficulty', 'medium');
 
         try {
-            $result = captcha_create('click', ['difficulty' => $difficulty]);
+            $result = captcha_create('random');
 
             return json([
                 'code' => 0,
                 'message' => 'success',
                 'data' => [
-                    'key' => $result['key'],
-                    'image' => base64_encode($result['image']), // base64 PNG
-                    'extra' => [
-                        'targets' => $result['extra']['targets'],
-                    ],
+                    'key'   => $result['key'],
+                    'type'  => $result['type'],
+                    'image' => $result['image'], // POSTER 返回 data URI，经 json_encode 后为 base64
+                    'extra' => $result['extra'] ?? new \stdClass(),
                 ],
             ]);
         } catch (Throwable $e) {
