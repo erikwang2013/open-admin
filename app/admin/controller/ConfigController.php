@@ -11,11 +11,14 @@ use app\model\SystemConfig;
 use support\Request;
 use support\Response;
 
+/**
+ * @Apidoc\Title("系统配置")
+ */
 class ConfigController extends BaseController
 {
     /**
      * @Apidoc\Title("配置列表")
-     * @Apidoc\Group("config")
+     * @Apidoc\Group("系统配置")
      * @Apidoc\Url("/admin/config")
      * @Apidoc\Desc("分页获取系统配置列表，支持按分组筛选")
      * @Apidoc\Param("page", type="int", require=false, desc="页码", default="1")
@@ -53,7 +56,7 @@ class ConfigController extends BaseController
 
     /**
      * @Apidoc\Title("创建配置")
-     * @Apidoc\Group("config")
+     * @Apidoc\Group("系统配置")
      * @Apidoc\Method("POST")
      * @Apidoc\Url("/admin/config")
      * @Apidoc\Desc("创建新的系统配置项")
@@ -96,7 +99,7 @@ class ConfigController extends BaseController
 
     /**
      * @Apidoc\Title("更新配置")
-     * @Apidoc\Group("config")
+     * @Apidoc\Group("系统配置")
      * @Apidoc\Method("PUT")
      * @Apidoc\Url("/admin/config/{id}")
      * @Apidoc\Desc("更新指定配置项")
@@ -130,7 +133,7 @@ class ConfigController extends BaseController
 
     /**
      * @Apidoc\Title("删除配置")
-     * @Apidoc\Group("config")
+     * @Apidoc\Group("系统配置")
      * @Apidoc\Method("DELETE")
      * @Apidoc\Url("/admin/config/{id}")
      * @Apidoc\Desc("删除指定配置项，需密码二次确认")

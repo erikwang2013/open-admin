@@ -10,6 +10,9 @@ namespace app\admin\controller;
 use support\Request;
 use support\Response;
 
+/**
+ * @Apidoc\Title("文件上传")
+ */
 class UploadController extends BaseController
 {
     private array $allowExts = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'xlsx', 'docx'];
@@ -17,7 +20,7 @@ class UploadController extends BaseController
 
     /**
      * @Apidoc\Title("文件上传")
-     * @Apidoc\Group("upload")
+     * @Apidoc\Group("文件上传")
      * @Apidoc\Method("POST")
      * @Apidoc\Url("/admin/upload")
      * @Apidoc\Desc("上传文件，支持jpg/png/gif/pdf/xlsx/docx")

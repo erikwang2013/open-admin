@@ -11,11 +11,14 @@ use app\model\AdminPermission;
 use support\Request;
 use support\Response;
 
+/**
+ * @Apidoc\Title("权限管理")
+ */
 class PermissionController extends BaseController
 {
     /**
      * @Apidoc\Title("权限树")
-     * @Apidoc\Group("permission")
+     * @Apidoc\Group("权限管理")
      * @Apidoc\Method("GET")
      * @Apidoc\Url("/admin/permission")
      * @Apidoc\Desc("获取完整权限树结构，按排序排列")
@@ -33,7 +36,7 @@ class PermissionController extends BaseController
 
     /**
      * @Apidoc\Title("创建权限")
-     * @Apidoc\Group("permission")
+     * @Apidoc\Group("权限管理")
      * @Apidoc\Method("POST")
      * @Apidoc\Url("/admin/permission")
      * @Apidoc\Desc("创建菜单/按钮/API权限节点")
@@ -70,7 +73,7 @@ class PermissionController extends BaseController
 
     /**
      * @Apidoc\Title("更新权限")
-     * @Apidoc\Group("permission")
+     * @Apidoc\Group("权限管理")
      * @Apidoc\Method("PUT")
      * @Apidoc\Url("/admin/permission/{id}")
      * @Apidoc\Desc("更新权限节点属性")
@@ -94,7 +97,7 @@ class PermissionController extends BaseController
 
     /**
      * @Apidoc\Title("删除权限")
-     * @Apidoc\Group("permission")
+     * @Apidoc\Group("权限管理")
      * @Apidoc\Method("DELETE")
      * @Apidoc\Url("/admin/permission/{id}")
      * @Apidoc\Desc("级联删除子权限，需密码二次确认")

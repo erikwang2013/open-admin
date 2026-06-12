@@ -11,11 +11,17 @@ use support\Request;
 use support\Response;
 use Throwable;
 
+/**
+ * @Apidoc\Title("验证码")
+ */
+/**
+ * @Apidoc\Title("验证码")
+ */
 class CaptchaController
 {
     /**
      * @Apidoc\Title("生成验证码")
-     * @Apidoc\Group("captcha")
+     * @Apidoc\Group("验证码")
      * @Apidoc\Method("POST")
      * @Apidoc\Url("/api/captcha/generate")
      * @Apidoc\Desc("生成点击验证码，返回base64图片和点击目标")
@@ -53,7 +59,7 @@ class CaptchaController
 
     /**
      * @Apidoc\Title("校验验证码")
-     * @Apidoc\Group("captcha")
+     * @Apidoc\Group("验证码")
      * @Apidoc\Method("POST")
      * @Apidoc\Url("/api/captcha/verify")
      * @Apidoc\Desc("校验点击验证码是否有效")

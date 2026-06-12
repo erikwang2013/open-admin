@@ -11,11 +11,14 @@ use app\model\OperationLog;
 use support\Request;
 use support\Response;
 
+/**
+ * @Apidoc\Title("操作日志")
+ */
 class LogController extends BaseController
 {
     /**
      * @Apidoc\Title("操作日志")
-     * @Apidoc\Group("log")
+     * @Apidoc\Group("操作日志")
      * @Apidoc\Url("/admin/log")
      * @Apidoc\Desc("分页获取操作日志，支持多条件筛选")
      * @Apidoc\Param("page", type="int", require=false, desc="页码", default="1")

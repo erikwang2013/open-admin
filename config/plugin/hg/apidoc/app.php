@@ -32,7 +32,7 @@ return [
             'enable' => false,
         ],
         'auth'               => [
-            'enable'     => true,
+            'enable'     => false,  // 关闭认证：getConfig()要求token导致前端无法初始化
             'password'   => "admin888",
             'secret_key' => "open-admin-apidoc",
             'expire'     => 24 * 60 * 60

@@ -14,6 +14,9 @@ use support\Redis;
 use Erikwang2013\Jwt\JWT;
 use Erikwang2013\Jwt\JWTFactory;
 
+/**
+ * @Apidoc\Title("个人中心")
+ */
 class ProfileController extends BaseController
 {
     private static ?JWT $jwt = null;
@@ -29,7 +32,7 @@ class ProfileController extends BaseController
 
     /**
      * @Apidoc\Title("更新个人信息")
-     * @Apidoc\Group("profile")
+     * @Apidoc\Group("个人中心")
      * @Apidoc\Method("PUT")
      * @Apidoc\Url("/admin/profile")
      * @Apidoc\Desc("更新当前登录管理员的个人信息")
@@ -66,7 +69,7 @@ class ProfileController extends BaseController
 
     /**
      * @Apidoc\Title("修改密码")
-     * @Apidoc\Group("profile")
+     * @Apidoc\Group("个人中心")
      * @Apidoc\Method("PUT")
      * @Apidoc\Url("/admin/profile/password")
      * @Apidoc\Desc("修改当前登录管理员的密码")
@@ -104,7 +107,7 @@ class ProfileController extends BaseController
 
     /**
      * @Apidoc\Title("登出")
-     * @Apidoc\Group("profile")
+     * @Apidoc\Group("个人中心")
      * @Apidoc\Method("POST")
      * @Apidoc\Url("/admin/profile/logout")
      * @Apidoc\Desc("当前管理员登出，Token加入黑名单")

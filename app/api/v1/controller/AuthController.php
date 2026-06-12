@@ -18,6 +18,9 @@ use Erikwang2013\Jwt\JWT;
 use Erikwang2013\Jwt\JWTFactory;
 use Throwable;
 
+/**
+ * @Apidoc\Title("认证")
+ */
 class AuthController
 {
     private static ?JWT $jwt = null;
@@ -33,7 +36,7 @@ class AuthController
 
     /**
      * @Apidoc\Title("登录")
-     * @Apidoc\Group("auth")
+     * @Apidoc\Group("认证")
      * @Apidoc\Method("POST")
      * @Apidoc\Url("/api/auth/login")
      * @Apidoc\Desc("通过用户名密码和点击验证码登录")
@@ -130,81 +133,8 @@ class AuthController
     }
 
     /**
-     * @Apidoc\Title("注册")
-     * @Apidoc\Group("auth")
-     * @Apidoc\Method("POST")
-     * @Apidoc\Url("/api/auth/register")
-     * @Apidoc\Desc("注册新用户")
-     * @Apidoc\Param("username", type="string", require=true, desc="用户名")
-     * @Apidoc\Param("password", type="string", require=true, desc="密码")
-     * @Apidoc\Param("real_name", type="string", require=true, desc="真实姓名")
-     * @Apidoc\Param("captcha_key", type="string", require=true, desc="验证码key")
-     * @Apidoc\Param("clicks", type="array", require=true, desc="点击坐标数组")
-     * @Apidoc\Returned("access_token", type="string", desc="访问令牌")
-     * @Apidoc\Returned("refresh_token", type="string", desc="刷新令牌")
-     * @Apidoc\Returned("expires_in", type="int", desc="过期时间(秒)")
-     */
-    public function register(Request $request): Response
-    {
-        $validator = validator($request->all(), [
-            'username'    => 'required|string|min:3|max:50',
-            'password'    => 'required|string|min:6|max:32',
-            'real_name'   => 'required|string|max:50',
-            'captcha_key' => 'required|string',
-            'clicks'      => 'required|array|min:2',
-        ]);
-
-        if ($validator->fails()) {
-            return json(['code' => 422, 'message' => $validator->errors()->first(), 'data' => []]);
-        }
-
-        if (!captcha_verify($request->input('captcha_key'), 'click', $request->input('clicks'))) {
-            return json(['code' => 422, 'message' => trans('messages.captcha_error'), 'data' => []]);
-        }
-
-        $username = $request->input('username');
-        if (AdminUser::where('username', $username)->exists()) {
-            return json(['code' => 422, 'message' => trans('messages.username_exists'), 'data' => []]);
-        }
-
-        $user = new AdminUser();
-        $user->id = SnowflakeService::generate();
-        $user->username = $username;
-        $user->password = password_hash($request->input('password'), PASSWORD_BCRYPT);
-        $user->real_name = $request->input('real_name');
-        $user->phone = $request->input('phone', '');
-        $user->email = $request->input('email', '');
-        $user->status = 1;
-        $user->save();
-
-        $jwt = self::getJWT();
-        $tokenExpire = (int)(config('plugin.erikwang2013.jwt.jwt.default_expire') ?: 7200);
-        $token = $jwt->encode(['sub' => $user->id, 'username' => $user->username]);
-        $refreshToken = $jwt->encode(['sub' => $user->id, 'token_type' => 'refresh'],
-            (int)(config('plugin.erikwang2013.jwt.jwt.refresh_expire') ?: 1209600)
-        );
-
-        $this->trackSession($user->id, $token, $tokenExpire);
-
-        return json([
-            'code'    => 0,
-            'message' => trans('messages.register_success'),
-            'data'    => [
-                'access_token'  => $token,
-                'refresh_token' => $refreshToken,
-                'expires_in'    => (int)(config('plugin.erikwang2013.jwt.jwt.default_expire') ?: 7200),
-                'user'          => [
-                    'id'        => Container::get('hashids')->encode($user->id),
-                    'username'  => $user->username,
-                    'real_name' => $user->real_name,
-                ],
-            ],
-        ]);
-    }
-
-    /**
      * @Apidoc\Title("刷新令牌")
-     * @Apidoc\Group("auth")
+     * @Apidoc\Group("认证")
      * @Apidoc\Method("POST")
      * @Apidoc\Url("/api/auth/refresh")
      * @Apidoc\Desc("使用refresh_token刷新access_token")

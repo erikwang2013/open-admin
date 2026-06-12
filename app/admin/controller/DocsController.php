@@ -12,13 +12,20 @@ use support\Response;
 
 /**
  * @Apidoc\Title("OpenAPI 规范文档")
- * @Apidoc\Group("ops")
+ * @Apidoc\Group("运维管理")
  * @Apidoc\Method("GET")
  * @Apidoc\Url("/api/docs")
  * @Apidoc\Desc("返回 OpenAPI 3.0 JSON 格式的完整 API 规范文档")
  */
 class DocsController
 {
+    /**
+     * @Apidoc\Title("OpenAPI 规范文档")
+     * @Apidoc\Group("运维管理")
+     * @Apidoc\Method("GET")
+     * @Apidoc\Url("/api/docs")
+     * @Apidoc\Desc("返回 OpenAPI 3.0 JSON 格式的完整 API 规范文档")
+     */
     public function index(Request $request): Response
     {
         return json($this->buildSpec());
@@ -26,7 +33,7 @@ class DocsController
 
     private function buildSpec(): array
     {
-        $baseUrl = rtrim((string) config('app.url', 'http://localhost:8787'), '/');
+        $baseUrl = rtrim((string) config('app.url', 'http://localhost:8791'), '/');
 
         return [
             'openapi' => '3.0.3',
@@ -116,9 +123,8 @@ class DocsController
 
                 '/api/captcha/generate' => $this->path('生成点击验证码', 'POST', ['API-Version 头必须'], 'object', ['difficulty' => 'string: easy|medium|hard']),
                 '/api/captcha/verify'   => $this->path('校验点击验证码', 'POST', ['API-Version 头必须']),
-                '/api/auth/login'       => $this->path('登录', 'POST', ['API-Version 头必须'], 'object', ['username' => 'string', 'password' => 'string', 'captcha_key' => 'string', 'clicks' => 'array']),
-                '/api/auth/register'    => $this->path('注册', 'POST', ['API-Version 头必须'], 'object', ['username' => 'string', 'password' => 'string', 'real_name' => 'string', 'captcha_key' => 'string', 'clicks' => 'array']),
-                '/api/auth/refresh'     => $this->path('刷新令牌', 'POST', ['API-Version 头必须'], 'object', ['refresh_token' => 'string']),
+                '/api/auth/login'   => $this->path('登录', 'POST', ['API-Version 头必须'], 'object', ['username' => 'string', 'password' => 'string', 'captcha_key' => 'string', 'clicks' => 'array']),
+                '/api/auth/refresh' => $this->path('刷新令牌', 'POST', ['API-Version 头必须'], 'object', ['refresh_token' => 'string']),
 
                 '/admin/dashboard' => $this->path('仪表盘数据', 'GET', ['JWT 认证']),
 
@@ -152,7 +158,7 @@ class DocsController
         ];
     }
 
-    private function path(string $summary, string $method, array $notes = [], ?string $responseRef = null, ?array $params = null): array
+    private function path(string $summary, string $method, ?array $notes = null, ?string $responseRef = null, ?array $params = null): array
     {
         $methods = explode('|', strtoupper($method));
         $path = [];
@@ -160,7 +166,7 @@ class DocsController
         foreach ($methods as $m) {
             $op = [
                 'summary' => $summary,
-                'description' => implode(' | ', $notes),
+                'description' => implode(' | ', $notes ?? []),
                 'responses' => ['200' => ['description' => '成功']],
             ];
 

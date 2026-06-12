@@ -20,11 +20,14 @@ use app\model\AdminRole;
 use app\model\SystemConfig;
 use support\Request;
 
+/**
+ * @Apidoc\Title("数据导出")
+ */
 class ExportController extends BaseController
 {
     /**
      * @Apidoc\Title("导出Excel")
-     * @Apidoc\Group("export")
+     * @Apidoc\Group("数据导出")
      * @Apidoc\Method("POST")
      * @Apidoc\Url("/admin/export/excel")
      * @Apidoc\Desc("导出数据为Excel文件，支持多表多字段")
@@ -121,7 +124,7 @@ class ExportController extends BaseController
 
     /**
      * @Apidoc\Title("导出PDF")
-     * @Apidoc\Group("export")
+     * @Apidoc\Group("数据导出")
      * @Apidoc\Method("POST")
      * @Apidoc\Url("/admin/export/pdf")
      * @Apidoc\Desc("导出数据为PDF文件")

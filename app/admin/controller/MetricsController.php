@@ -16,13 +16,20 @@ use Throwable;
 
 /**
  * @Apidoc\Title("Prometheus 指标")
- * @Apidoc\Group("ops")
+ * @Apidoc\Group("运维管理")
  * @Apidoc\Method("GET")
  * @Apidoc\Url("/metrics")
  * @Apidoc\Desc("Prometheus 格式监控指标，含活跃用户/数据库状态/Redis状态")
  */
 class MetricsController
 {
+    /**
+     * @Apidoc\Title("Prometheus 指标")
+     * @Apidoc\Group("运维管理")
+     * @Apidoc\Method("GET")
+     * @Apidoc\Url("/metrics")
+     * @Apidoc\Desc("Prometheus 格式监控指标，含活跃用户/数据库状态/Redis状态")
+     */
     public function index(Request $request): Response
     {
         $metrics = [];

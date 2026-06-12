@@ -10,11 +10,14 @@ namespace app\admin\controller;
 use app\model\AdminRole;
 use support\Request;
 
+/**
+ * @Apidoc\Title("角色管理")
+ */
 class RoleController extends BaseController
 {
     /**
      * @Apidoc\Title("角色列表")
-     * @Apidoc\Group("role")
+     * @Apidoc\Group("角色管理")
      * @Apidoc\Url("/admin/role")
      * @Apidoc\Desc("分页获取角色列表")
      * @Apidoc\Param("page", type="int", require=false, desc="页码", default="1")
@@ -45,7 +48,7 @@ class RoleController extends BaseController
 
     /**
      * @Apidoc\Title("创建角色")
-     * @Apidoc\Group("role")
+     * @Apidoc\Group("角色管理")
      * @Apidoc\Method("POST")
      * @Apidoc\Url("/admin/role")
      * @Apidoc\Desc("创建新角色并同步权限")
@@ -84,7 +87,7 @@ class RoleController extends BaseController
 
     /**
      * @Apidoc\Title("更新角色")
-     * @Apidoc\Group("role")
+     * @Apidoc\Group("角色管理")
      * @Apidoc\Method("PUT")
      * @Apidoc\Url("/admin/role/{id}")
      * @Apidoc\Desc("更新指定角色信息并同步权限")
@@ -116,7 +119,7 @@ class RoleController extends BaseController
 
     /**
      * @Apidoc\Title("删除角色")
-     * @Apidoc\Group("role")
+     * @Apidoc\Group("角色管理")
      * @Apidoc\Method("DELETE")
      * @Apidoc\Url("/admin/role/{id}")
      * @Apidoc\Desc("删除指定角色，需密码二次确认")

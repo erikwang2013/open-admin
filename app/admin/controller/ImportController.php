@@ -12,11 +12,14 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 use support\Request;
 use support\Response;
 
+/**
+ * @Apidoc\Title("数据导入")
+ */
 class ImportController extends BaseController
 {
     /**
      * @Apidoc\Title("导入用户")
-     * @Apidoc\Group("import")
+     * @Apidoc\Group("数据导入")
      * @Apidoc\Method("POST")
      * @Apidoc\Url("/admin/import/users")
      * @Apidoc\Desc("通过Excel文件批量导入用户")

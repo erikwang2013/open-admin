@@ -13,11 +13,14 @@ use support\Db;
 use support\Redis;
 use Throwable;
 
+/**
+ * @Apidoc\Title("健康检查")
+ */
 class HealthController
 {
     /**
      * @Apidoc\Title("健康检查")
-     * @Apidoc\Group("ops")
+     * @Apidoc\Group("运维管理")
      * @Apidoc\Url("/health")
      * @Apidoc\Desc("系统健康检查，返回各组件状态")
      * @Apidoc\Returned("app", type="string", desc="应用名称")

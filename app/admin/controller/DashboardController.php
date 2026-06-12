@@ -14,11 +14,14 @@ use support\Redis;
 use support\Request;
 use support\Response;
 
+/**
+ * @Apidoc\Title("仪表盘")
+ */
 class DashboardController extends BaseController
 {
     /**
      * @Apidoc\Title("仪表盘数据")
-     * @Apidoc\Group("dashboard")
+     * @Apidoc\Group("仪表盘")
      * @Apidoc\Url("/admin/dashboard")
      * @Apidoc\Desc("聚合统计/趋势/分布/最近操作，Redis缓存5分钟")
      * @Apidoc\Returned("stats", type="array", desc="统计卡片数据")
