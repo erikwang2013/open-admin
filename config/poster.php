@@ -18,7 +18,7 @@ return [
         // JPEG 输出质量 0-100
         'quality' => (int)(getenv('POSTER_IMAGE_QUALITY') ?: 90),
         // 默认字体路径，null=使用包自带字体
-        'font' => null,
+        'font' =>  dirname(__DIR__) . '/src/fonts/Alibaba-PuHuiTi-Regular.ttf',
     ],
 
     // ── 验证码模块 ──
@@ -52,7 +52,7 @@ return [
     'poster' => [
         'default_width'  => 750,
         'default_height' => 1334,
-        'font'           => null,
+        'font'           =>  dirname(__DIR__) . '/src/fonts/Alibaba-PuHuiTi-Regular.ttf',
         'jpeg_quality'   => 90,
         'png_compression' => 6,
     ],
