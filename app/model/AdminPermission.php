@@ -11,7 +11,7 @@ use support\Model;
 
 class AdminPermission extends Model
 {
-    protected $table = 'erik_admin_permission';
+    protected $table = 'admin_permission';
     protected $primaryKey = 'id';
     public $incrementing = false;
     protected $keyType = 'int';

@@ -9,15 +9,14 @@ namespace app\model;
 
 use Erikwang2013\Encryptable\Encryptable;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Laravel\Scout\Searchable;
 use support\Model;
 
 class AdminUser extends Model
 {
     use SoftDeletes;
-    use Searchable;
+    
 
-    protected $table = 'erik_admin_user';
+    protected $table = 'admin_user';
     protected $primaryKey = 'id';
     public $incrementing = false;
     protected $keyType = 'int';
@@ -41,7 +40,7 @@ class AdminUser extends Model
 
     public function roles()
     {
-        return $this->belongsToMany(AdminRole::class, 'erik_admin_user_role', 'user_id', 'role_id');
+        return $this->belongsToMany(AdminRole::class, 'admin_user_role', 'user_id', 'role_id');
     }
 
     public function toSearchableArray(): array

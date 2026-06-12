@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "37c8fa1e10c1d4f4988acb039b67738e",
+    "content-hash": "b5aaba9138268b04b9322bf1a6e77008",
     "packages": [
         {
             "name": "barryvdh/laravel-dompdf",
@@ -1043,16 +1043,16 @@
         },
         {
             "name": "erikwang2013/poster-php",
-            "version": "v1.0.6",
+            "version": "v1.0.7",
             "source": {
                 "type": "git",
                 "url": "https://github.com/erikwang2013/poster-php.git",
-                "reference": "42d828f94aacef3f0eb32c7654f6ce904d420ef5"
+                "reference": "925fc474ef710880a4590b61de1804e1c2c801fd"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/erikwang2013/poster-php/zipball/42d828f94aacef3f0eb32c7654f6ce904d420ef5",
-                "reference": "42d828f94aacef3f0eb32c7654f6ce904d420ef5",
+                "url": "https://api.github.com/repos/erikwang2013/poster-php/zipball/925fc474ef710880a4590b61de1804e1c2c801fd",
+                "reference": "925fc474ef710880a4590b61de1804e1c2c801fd",
                 "shasum": ""
             },
             "require": {
@@ -1114,9 +1114,9 @@
             ],
             "support": {
                 "issues": "https://github.com/erikwang2013/poster-php/issues",
-                "source": "https://github.com/erikwang2013/poster-php/tree/v1.0.6"
+                "source": "https://github.com/erikwang2013/poster-php/tree/v1.0.7"
             },
-            "time": "2026-06-12T13:13:19+00:00"
+            "time": "2026-06-12T14:53:51+00:00"
         },
         {
             "name": "erikwang2013/season",
@@ -7335,6 +7335,44 @@
                 "wiki": "http://www.workerman.net/doc/webman"
             },
             "time": "2026-03-29T08:32:39+00:00"
+        },
+        {
+            "name": "webman/database",
+            "version": "v2.1.10",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/webman-php/database.git",
+                "reference": "90abfaae7e9fde5f9a4265ae47396bc5c9ecc61c"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/webman-php/database/zipball/90abfaae7e9fde5f9a4265ae47396bc5c9ecc61c",
+                "reference": "90abfaae7e9fde5f9a4265ae47396bc5c9ecc61c",
+                "shasum": ""
+            },
+            "require": {
+                "illuminate/database": "^10.0 || ^11.0 || ^12.0 || ^13.0",
+                "illuminate/http": "^10.0 || ^11.0 || ^12.0 || ^13.0",
+                "laravel/serializable-closure": "^1.0 || ^2.0",
+                "workerman/webman-framework": "^2.1 || dev-master"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "support\\": "src/support",
+                    "Webman\\Database\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "Webman database",
+            "support": {
+                "issues": "https://github.com/webman-php/database/issues",
+                "source": "https://github.com/webman-php/database/tree/v2.1.10"
+            },
+            "time": "2026-03-19T07:31:04+00:00"
         },
         {
             "name": "webman/validation",
