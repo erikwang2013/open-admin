@@ -15,15 +15,16 @@ class CaptchaService {
     return CaptchaData.fromJson(resp.data['data']);
   }
 
-  Future<bool> verify(CaptchaData captcha, dynamic answer) async {
-    final data = <String, dynamic>{'key': captcha.key};
-    if (answer is List) {
-      data['clicks'] = answer.map((c) => {'x': c.dx.round(), 'y': c.dy.round()}).toList();
-    } else {
-      data['clicks'] = [{'x': (answer as num).round(), 'y': 0}];
-    }
-    final resp = await _dio.post('/api/captcha/verify', data: data);
-    return resp.data['data']?['valid'] == true;
+  Future<bool> verify(CaptchaData data, dynamic answer) async {
+    final body = <String, dynamic>{
+      'key': data.key,
+      'type': data.type.name,
+      'clicks': answer is List
+          ? answer.map((c) => {'x': c.dx.round(), 'y': c.dy.round()}).toList()
+          : [{'x': (answer as num).round(), 'y': 0}],
+    };
+    final resp = await _dio.post('/api/captcha/verify', data: body);
+    return resp.data['code'] == 0;
   }
 }
 
@@ -33,49 +34,29 @@ class CaptchaData {
   final Uint8List imageBytes;
   final Map<String, dynamic> extra;
 
-  CaptchaData({required this.key, required this.type, required this.imageBytes, required this.extra});
+  CaptchaData._({required this.key, required this.type, required this.imageBytes, required this.extra});
 
-  static Uint8List _decodeImage(String raw) {
-    // API 返回 "data:image/png;base64,XXXX"
-    final inner = raw.replaceFirst(RegExp(r'^data:image/\w+;base64,'), '');
-    return base64Decode(inner);
-  }
+  static Uint8List _img(String raw) =>
+      base64Decode(raw.replaceFirst(RegExp(r'^data:image/\w+;base64,'), ''));
 
   factory CaptchaData.fromJson(Map<String, dynamic> json) {
-    final typeStr = json['type'] as String? ?? 'click';
-    CaptchaType type;
-    switch (typeStr) {
-      case 'rotate': type = CaptchaType.rotate;
-      case 'slider': type = CaptchaType.slider;
-      default: type = CaptchaType.click;
-    }
-    return CaptchaData(
-      key: json['key'],
-      type: type,
-      imageBytes: _decodeImage(json['image']),
-      extra: json['extra'] is Map ? json['extra'] : {},
+    final t = json['type'] as String? ?? 'click';
+    return CaptchaData._(
+      key: json['key'] as String,
+      type: t == 'rotate' ? CaptchaType.rotate : t == 'slider' ? CaptchaType.slider : CaptchaType.click,
+      imageBytes: _img(json['image'] as String),
+      extra: (json['extra'] is Map<String, dynamic>) ? json['extra'] : <String, dynamic>{},
     );
   }
 
-  // --- click ---
-  List<CaptchaTarget> get targets =>
-      (extra['targets'] as List?)?.map((t) => CaptchaTarget.fromJson(t)).toList() ?? [];
+  List<Map<String, dynamic>> get targets {
+    final v = extra['targets'];
+    return (v is List) ? v.cast<Map<String, dynamic>>() : [];
+  }
 
-  // --- slider ---
   int get sliderX => (extra['x'] as num?)?.toInt() ?? 0;
-  int get sliderW => (extra['puzzle_w'] as num?)?.toInt() ?? 50;
-  int get sliderH => (extra['puzzle_h'] as num?)?.toInt() ?? 50;
   Uint8List? get puzzleBytes {
     final p = extra['puzzle'];
-    if (p is String) return _decodeImage(p);
-    return null;
+    return p is String ? _img(p) : null;
   }
-}
-
-class CaptchaTarget {
-  final int order, x, y;
-  final String text;
-  CaptchaTarget({required this.order, required this.text, required this.x, required this.y});
-  factory CaptchaTarget.fromJson(Map<String, dynamic> json) =>
-      CaptchaTarget(order: json['order'], text: json['text'] ?? '', x: json['x'], y: json['y']);
 }

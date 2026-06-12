@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "11c0d66fda987c7dc1a92f44b71d6215",
+    "content-hash": "37c8fa1e10c1d4f4988acb039b67738e",
     "packages": [
         {
             "name": "barryvdh/laravel-dompdf",
@@ -688,6 +688,73 @@
             "time": "2026-01-02T16:01:13+00:00"
         },
         {
+            "name": "egulias/email-validator",
+            "version": "4.0.4",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/egulias/EmailValidator.git",
+                "reference": "d42c8731f0624ad6bdc8d3e5e9a4524f68801cfa"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/egulias/EmailValidator/zipball/d42c8731f0624ad6bdc8d3e5e9a4524f68801cfa",
+                "reference": "d42c8731f0624ad6bdc8d3e5e9a4524f68801cfa",
+                "shasum": ""
+            },
+            "require": {
+                "doctrine/lexer": "^2.0 || ^3.0",
+                "php": ">=8.1",
+                "symfony/polyfill-intl-idn": "^1.26"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.2",
+                "vimeo/psalm": "^5.12"
+            },
+            "suggest": {
+                "ext-intl": "PHP Internationalization Libraries are required to use the SpoofChecking validation"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "4.0.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Egulias\\EmailValidator\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Eduardo Gulias Davis"
+                }
+            ],
+            "description": "A library for validating emails against several RFCs",
+            "homepage": "https://github.com/egulias/EmailValidator",
+            "keywords": [
+                "email",
+                "emailvalidation",
+                "emailvalidator",
+                "validation",
+                "validator"
+            ],
+            "support": {
+                "issues": "https://github.com/egulias/EmailValidator/issues",
+                "source": "https://github.com/egulias/EmailValidator/tree/4.0.4"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/egulias",
+                    "type": "github"
+                }
+            ],
+            "time": "2025-03-06T22:45:56+00:00"
+        },
+        {
             "name": "erikwang2013/encryptable",
             "version": "v2.0.1",
             "source": {
@@ -976,16 +1043,16 @@
         },
         {
             "name": "erikwang2013/poster-php",
-            "version": "v1.0.1",
+            "version": "v1.0.6",
             "source": {
                 "type": "git",
                 "url": "https://github.com/erikwang2013/poster-php.git",
-                "reference": "91fe98fee782f22a467e190d56dd698df66fae8d"
+                "reference": "42d828f94aacef3f0eb32c7654f6ce904d420ef5"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/erikwang2013/poster-php/zipball/91fe98fee782f22a467e190d56dd698df66fae8d",
-                "reference": "91fe98fee782f22a467e190d56dd698df66fae8d",
+                "url": "https://api.github.com/repos/erikwang2013/poster-php/zipball/42d828f94aacef3f0eb32c7654f6ce904d420ef5",
+                "reference": "42d828f94aacef3f0eb32c7654f6ce904d420ef5",
                 "shasum": ""
             },
             "require": {
@@ -1047,9 +1114,9 @@
             ],
             "support": {
                 "issues": "https://github.com/erikwang2013/poster-php/issues",
-                "source": "https://github.com/erikwang2013/poster-php/tree/v1.0.1"
+                "source": "https://github.com/erikwang2013/poster-php/tree/v1.0.6"
             },
-            "time": "2026-05-17T08:50:24+00:00"
+            "time": "2026-06-12T13:13:19+00:00"
         },
         {
             "name": "erikwang2013/season",
@@ -3024,6 +3091,118 @@
                 "source": "https://github.com/laravel/framework"
             },
             "time": "2026-01-20T15:25:35+00:00"
+        },
+        {
+            "name": "illuminate/translation",
+            "version": "v11.51.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/illuminate/translation.git",
+                "reference": "de64584470b1d4bfc30f2c291585b873ce844ecf"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/illuminate/translation/zipball/de64584470b1d4bfc30f2c291585b873ce844ecf",
+                "reference": "de64584470b1d4bfc30f2c291585b873ce844ecf",
+                "shasum": ""
+            },
+            "require": {
+                "illuminate/collections": "^11.0",
+                "illuminate/contracts": "^11.0",
+                "illuminate/filesystem": "^11.0",
+                "illuminate/macroable": "^11.0",
+                "illuminate/support": "^11.0",
+                "php": "^8.2"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "11.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Illuminate\\Translation\\": ""
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Taylor Otwell",
+                    "email": "taylor@laravel.com"
+                }
+            ],
+            "description": "The Illuminate Translation package.",
+            "homepage": "https://laravel.com",
+            "support": {
+                "issues": "https://github.com/laravel/framework/issues",
+                "source": "https://github.com/laravel/framework"
+            },
+            "time": "2025-02-14T15:47:05+00:00"
+        },
+        {
+            "name": "illuminate/validation",
+            "version": "v11.51.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/illuminate/validation.git",
+                "reference": "076ebfb5fb60ab862588220688bdce3103287466"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/illuminate/validation/zipball/076ebfb5fb60ab862588220688bdce3103287466",
+                "reference": "076ebfb5fb60ab862588220688bdce3103287466",
+                "shasum": ""
+            },
+            "require": {
+                "brick/math": "^0.9.3|^0.10.2|^0.11|^0.12|^0.13|^0.14",
+                "egulias/email-validator": "^3.2.5|^4.0",
+                "ext-filter": "*",
+                "ext-mbstring": "*",
+                "illuminate/collections": "^11.0",
+                "illuminate/container": "^11.0",
+                "illuminate/contracts": "^11.0",
+                "illuminate/macroable": "^11.0",
+                "illuminate/support": "^11.0",
+                "illuminate/translation": "^11.0",
+                "php": "^8.2",
+                "symfony/http-foundation": "^7.0",
+                "symfony/mime": "^7.0"
+            },
+            "suggest": {
+                "illuminate/database": "Required to use the database presence verifier (^11.0)."
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "11.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Illuminate\\Validation\\": ""
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Taylor Otwell",
+                    "email": "taylor@laravel.com"
+                }
+            ],
+            "description": "The Illuminate Validation package.",
+            "homepage": "https://laravel.com",
+            "support": {
+                "issues": "https://github.com/laravel/framework/issues",
+                "source": "https://github.com/laravel/framework"
+            },
+            "time": "2025-09-02T23:55:36+00:00"
         },
         {
             "name": "illuminate/view",
@@ -7102,6 +7281,101 @@
                 }
             ],
             "time": "2026-04-26T05:33:54+00:00"
+        },
+        {
+            "name": "webman/console",
+            "version": "v2.2.3",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/webman-php/console.git",
+                "reference": "df5fffe07efd61d99dacacde9dd41a899ae923c4"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/webman-php/console/zipball/df5fffe07efd61d99dacacde9dd41a899ae923c4",
+                "reference": "df5fffe07efd61d99dacacde9dd41a899ae923c4",
+                "shasum": ""
+            },
+            "require": {
+                "doctrine/inflector": "^2.0",
+                "php": ">=8.1",
+                "symfony/console": "^6.1 || ^7.0"
+            },
+            "require-dev": {
+                "workerman/webman": "^2.1"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Webman\\Console\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "walkor",
+                    "email": "walkor@workerman.net",
+                    "homepage": "http://www.workerman.net",
+                    "role": "Developer"
+                }
+            ],
+            "description": "Webman console",
+            "homepage": "http://www.workerman.net",
+            "keywords": [
+                "webman console"
+            ],
+            "support": {
+                "email": "walkor@workerman.net",
+                "forum": "http://www.workerman.net/questions",
+                "issues": "https://github.com/webman-php/console/issues",
+                "source": "https://github.com/webman-php/console",
+                "wiki": "http://www.workerman.net/doc/webman"
+            },
+            "time": "2026-03-29T08:32:39+00:00"
+        },
+        {
+            "name": "webman/validation",
+            "version": "v2.2.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/webman-php/validation.git",
+                "reference": "d5117162aed293955fc55ee02a01d9300b226aaa"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/webman-php/validation/zipball/d5117162aed293955fc55ee02a01d9300b226aaa",
+                "reference": "d5117162aed293955fc55ee02a01d9300b226aaa",
+                "shasum": ""
+            },
+            "require": {
+                "illuminate/translation": "*",
+                "illuminate/validation": "*",
+                "webman/console": ">=2.1.7",
+                "workerman/webman-framework": "^2.1 || dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "*"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Webman\\Validation\\": "src",
+                    "support\\validation\\": "src/support/validation"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "Webman plugin webman/validation",
+            "support": {
+                "issues": "https://github.com/webman-php/validation/issues",
+                "source": "https://github.com/webman-php/validation/tree/v2.2.1"
+            },
+            "time": "2026-02-26T03:10:51+00:00"
         },
         {
             "name": "workerman/coroutine",

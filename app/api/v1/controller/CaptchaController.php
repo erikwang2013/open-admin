@@ -68,14 +68,20 @@ class CaptchaController
      */
     public function verify(Request $request): Response
     {
-        $key = $request->input('key', '');
+        $key   = $request->input('key', '');
+        $type  = $request->input('type', 'click');
         $clicks = $request->input('clicks', []);
 
         if (empty($key) || empty($clicks)) {
             return json(['code' => 422, 'message' => trans('messages.captcha_missing'), 'data' => []]);
         }
 
-        $valid = captcha_verify($key, 'click', $clicks);
+        $valid = captcha_verify($key, $type, $clicks);
+
+        // 验证成功标记 key，登录接口不再重复校验
+        if ($valid) {
+            try { \support\Redis::setex("captcha_verified:{$key}", 300, '1'); } catch (\Throwable) {}
+        }
 
         return json([
             'code' => $valid ? 0 : 422,

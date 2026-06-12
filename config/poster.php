@@ -31,6 +31,16 @@ return [
         'max_attempts' => (int)(getenv('POSTER_CAPTCHA_MAX_ATTEMPTS') ?: 3),
         // 默认难度: easy=2个点 | medium=3个点 | hard=4个点
         'default_difficulty' => getenv('POSTER_CAPTCHA_DIFFICULTY') ?: 'medium',
+
+         // null = 使用程序化生成
+        // Background image directory; null = procedural generation
+        'background_dir' =>base_path() .'/public/img',
+
+        // 程序化背景风格 / Procedural background styles
+        // Available: 'minimal', 'vibrant', 'natural'
+        'background_styles' => ['minimal', 'vibrant', 'natural'],
+
+
         // 验证误差容忍
         'tolerance' => [
             'click'  => 18,   // 点击验证像素半径

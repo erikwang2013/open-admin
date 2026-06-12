@@ -50,24 +50,33 @@ class AuthController
      */
     public function login(Request $request): Response
     {
-        $validator = validator($request->all(), [
-            'username'    => 'required|string|min:3|max:50',
-            'password'    => 'required|string|min:6|max:32',
-            'captcha_key' => 'required|string',
-            'clicks'      => 'required|array|min:2',
-        ]);
+        $username = trim((string) $request->input('username', ''));
+        $password = (string) $request->input('password', '');
+        $captchaKey = (string) $request->input('captcha_key', '');
 
-        if ($validator->fails()) {
-            return json(['code' => 422, 'message' => $validator->errors()->first(), 'data' => []]);
+        if ($username === '' || strlen($username) < 3 || strlen($username) > 50) {
+            return json(['code' => 422, 'message' => '用户名格式不正确', 'data' => []]);
+        }
+        if (strlen($password) < 6 || strlen($password) > 32) {
+            return json(['code' => 422, 'message' => '密码长度必须为6-32位', 'data' => []]);
+        }
+        if ($captchaKey === '') {
+            return json(['code' => 422, 'message' => '验证码参数缺失', 'data' => []]);
+        }
+        if ($captchaKey === '') {
+            return json(['code' => 422, 'message' => '验证码参数缺失', 'data' => []]);
         }
 
-        // 验证点击验证码
-        if (!captcha_verify($request->input('captcha_key'), 'click', $request->input('clicks'))) {
-            return json(['code' => 422, 'message' => trans('messages.captcha_error'), 'data' => []]);
-        }
+        // 检查验证码是否已通过 /api/captcha/verify 校验
+        try {
+            $verified = Redis::get("captcha_verified:{$captchaKey}");
+            if (!$verified) {
+                return json(['code' => 422, 'message' => '请先完成验证码校验', 'data' => []]);
+            }
+            Redis::del("captcha_verified:{$captchaKey}");
+        } catch (\Throwable) {}
 
         // 校验用户凭证
-        $username = $request->input('username');
         $user = AdminUser::where('username', $username)->first();
 
         // 账号锁定检查（5次失败/15分钟）
