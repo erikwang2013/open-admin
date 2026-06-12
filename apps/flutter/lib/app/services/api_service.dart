@@ -5,13 +5,14 @@
 import 'package:dio/dio.dart';
 import 'package:get/get.dart' hide Response;
 import 'auth_service.dart';
+import '../config/app_config.dart';
 
 class ApiService {
   static final ApiService _instance = ApiService._();
   factory ApiService() => _instance;
 
   late final Dio dio;
-  static const String baseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:8787');
+  static String get baseUrl => AppConfig.baseUrl;
 
   ApiService._() {
     dio = Dio(BaseOptions(
