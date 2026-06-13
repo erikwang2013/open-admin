@@ -18,4 +18,5 @@
 
 return [
     support\bootstrap\Session::class,
+    \Erikwang2013\Poster\Adapters\Webman\CaptchaPlugin::class,
 ];

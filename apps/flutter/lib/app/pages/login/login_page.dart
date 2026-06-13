@@ -6,8 +6,8 @@ import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/captcha_service.dart';
 
-const _kSrcW = 400.0, _kSrcH = 250.0;
-const _kAspect = _kSrcW / _kSrcH; // 8:5
+const _kSrcW = 300.0, _kSrcH = 200.0;
+const _kAspect = _kSrcW / _kSrcH; // 3:2
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
