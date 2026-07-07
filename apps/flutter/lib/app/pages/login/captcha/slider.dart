@@ -24,7 +24,6 @@ class SliderCaptchaState extends State<SliderCaptcha> {
       const SizedBox(height: 8),
       AspectRatio(aspectRatio: _sw / _sh, child: LayoutBuilder(builder: (_, box) {
         final w = box.maxWidth, h = box.maxHeight;
-        // 缺口和拼图片使用完全相同的尺寸计算
         final pw = w * d.puzzleW / _sw;
         final ph = h * d.puzzleH / _sh;
         return ClipRRect(borderRadius: BorderRadius.circular(8), child: Stack(children: [
@@ -37,7 +36,44 @@ class SliderCaptchaState extends State<SliderCaptcha> {
             ),
         ]));
       })),
-      Slider(value: val, min: 0, max: _sw, onChanged: (v) => setState(() => val = v)),
+      const SizedBox(height: 10),
+      // 自定义拖拽轨道，避免与 SingleChildScrollView 的手势冲突
+      LayoutBuilder(builder: (_, tb) {
+        final trackW = tb.maxWidth;
+        const thumbSize = 40.0;
+        final track = trackW - thumbSize;
+        final frac = track > 0 ? val / _sw : 0.0;
+        final thumbX = frac * track;
+        return GestureDetector(
+          onHorizontalDragStart: (d) {
+            final box = context.findRenderObject() as RenderBox?;
+            if (box == null) return;
+            final dx = (box.globalToLocal(d.globalPosition).dx - thumbSize / 2).clamp(0.0, track);
+            setState(() => val = dx / track * _sw);
+          },
+          onHorizontalDragUpdate: (d) {
+            final box = context.findRenderObject() as RenderBox?;
+            if (box == null) return;
+            final dx = (box.globalToLocal(d.globalPosition).dx - thumbSize / 2).clamp(0.0, track);
+            setState(() => val = dx / track * _sw);
+          },
+          child: Container(
+            height: 40,
+            decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(20)),
+            child: Stack(children: [
+              Positioned(
+                left: thumbX,
+                top: 2,
+                child: Container(
+                  width: 36, height: 36,
+                  decoration: const BoxDecoration(color: Color(0xFF1677FF), shape: BoxShape.circle),
+                  child: const Icon(Icons.arrow_forward, color: Colors.white, size: 20),
+                ),
+              ),
+            ]),
+          ),
+        );
+      }),
     ]);
   }
 }

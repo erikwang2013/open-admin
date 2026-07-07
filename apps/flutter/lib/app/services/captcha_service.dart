@@ -19,10 +19,13 @@ class CaptchaService {
     final body = <String, dynamic>{
       'key': data.key,
       'type': data.type.name,
-      'clicks': answer is List
-          ? answer.map((c) => {'x': c.dx.round(), 'y': c.dy.round()}).toList()
-          : [{'x': (answer as num).round(), 'y': 0}],
     };
+    // click → array of {x,y}; slider/rotate → plain number
+    if (answer is List) {
+      body['clicks'] = answer.map((c) => {'x': c.dx.round(), 'y': c.dy.round()}).toList();
+    } else {
+      body['clicks'] = (answer as num).round();
+    }
     final resp = await _dio.post('/api/captcha/verify', data: body);
     return resp.data['code'] == 0;
   }

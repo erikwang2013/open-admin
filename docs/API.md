@@ -82,7 +82,7 @@ GET /api/docs
 - **限流**: 全局默认 (60次/分钟)
 - **响应**: OpenAPI 3.0.3 JSON 规范，包含所有端点定义、参数和 Schema
 
-### 3.3 生成点击验证码
+### 3.3 生成验证码
 
 ```
 POST /api/captcha/generate
@@ -103,19 +103,56 @@ POST /api/captcha/generate
 |------|------|------|------|
 | difficulty | string | 否 | `easy` / `medium` / `hard`，默认 `medium` |
 
-**响应示例**:
+**响应示例** — 点击型 (`type: "click"`):
 ```json
 {
   "code": 0,
   "message": "success",
   "data": {
     "key": "abc123def456",
-    "image": "iVBORw0KGgoAAAANSUhEUgAA...",
+    "type": "click",
+    "image": "data:image/png;base64,iVBORw0KGgo...",
     "extra": {
       "targets": [
-        { "order": 1, "text": "请点击 A" },
-        { "order": 2, "text": "请点击 B" }
+        { "order": 1, "text": "A", "x": 120, "y": 85 },
+        { "order": 2, "text": "B", "x": 310, "y": 42 }
       ]
+    }
+  }
+}
+```
+
+**响应示例** — 滑块型 (`type: "slider"`):
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "key": "def456abc789",
+    "type": "slider",
+    "image": "data:image/png;base64,iVBORw0KGgo...",
+    "extra": {
+      "x": 120,
+      "y": 60,
+      "puzzle_w": 50,
+      "puzzle_h": 50,
+      "puzzle": "data:image/png;base64,iVBORw0KGgo..."
+    }
+  }
+}
+```
+
+**响应示例** — 旋转型 (`type: "rotate"`):
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "key": "ghi789abc012",
+    "type": "rotate",
+    "image": "data:image/png;base64,iVBORw0KGgo...",
+    "extra": {
+      "angle": 45
     }
   }
 }
@@ -124,11 +161,21 @@ POST /api/captcha/generate
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | key | string | 验证码标识，校验时回传 |
-| image | string | base64 编码的 PNG 图片 |
-| extra.targets[].order | int | 点击顺序 |
-| extra.targets[].text | string | 点击目标提示文字 |
+| type | string | 验证码类型：`click` / `slider` / `rotate` |
+| image | string | base64 data URI 图片 |
+| extra | object | 类型相关附加数据（见下方） |
 
-### 3.4 校验点击验证码
+**`extra` 按类型说明**:
+
+| type | extra 字段 | 类型 | 说明 |
+|------|-----------|------|------|
+| click | targets | array | 点击目标，含 `order`(顺序) `text`(提示文字) `x` `y`(坐标) |
+| slider | x, y | int | 缺口左上角坐标 (基于 300×200 画布) |
+| slider | puzzle_w, puzzle_h | int | 拼图片宽高 |
+| slider | puzzle | string | 拼图片 base64 data URI |
+| rotate | angle | int | 正确旋转角度 (0-359)，需旋转 `360-angle` 使图片回正 |
+
+### 3.4 校验验证码
 
 ```
 POST /api/captcha/verify
@@ -138,10 +185,11 @@ POST /api/captcha/verify
 - **请求头**: `API-Version: v1`（必须）
 - **限流**: 全局默认 (60次/分钟)
 
-**请求体**:
+**请求体** — 点击型 (`type: "click"`):
 ```json
 {
   "key": "abc123def456",
+  "type": "click",
   "clicks": [
     { "x": 120, "y": 85 },
     { "x": 310, "y": 42 }
@@ -149,10 +197,37 @@ POST /api/captcha/verify
 }
 ```
 
+**请求体** — 滑块型 (`type: "slider"`):
+```json
+{
+  "key": "def456abc789",
+  "type": "slider",
+  "clicks": 120
+}
+```
+
+**请求体** — 旋转型 (`type: "rotate"`):
+```json
+{
+  "key": "ghi789abc012",
+  "type": "rotate",
+  "clicks": 315
+}
+```
+
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | key | string | 是 | 验证码 key，由 generate 返回 |
-| clicks | array{object} | 是 | 点击坐标数组，每个元素含 `x`（int）和 `y`（int） |
+| type | string | 是 | 验证码类型，必须与 generate 返回的 `type` 一致 |
+| clicks | 变体 | 是 | 答案数据，格式随 type 变化（见下方） |
+
+**`clicks` 按类型说明**:
+
+| type | clicks 类型 | 说明 | 误差容限 |
+|------|------------|------|---------|
+| click | `[{x:int, y:int}]` | 点击坐标数组，按 order 顺序 | 18px 半径 |
+| slider | `int` | 滑块 X 轴偏移量 | ±4px |
+| rotate | `int` | 旋转角度 (0-359) | ±5° |
 
 **响应示例**:
 ```json
@@ -163,6 +238,7 @@ POST /api/captcha/verify
 }
 ```
 
+验证通过后，后端将 `captcha_verified:{key}` 写入 Redis（TTL 300s），登录接口据此放行。
 验证失败时 `code` 为 422，`message` 为 `"验证失败，请重试"`，`data.valid` 为 `false`。
 
 ### 3.5 登录
@@ -179,21 +255,34 @@ POST /api/auth/login
 ```json
 {
   "username": "admin",
-  "password": "123456",
-  "captcha_key": "abc123def456",
-  "clicks": [
-    { "x": 120, "y": 85 },
-    { "x": 310, "y": 42 }
-  ]
+  "password": "djGYscnyS5V6mW6KyDFjB8vGwjBBnB3Odpyxu8LY...",
+  "captcha_key": "abc123def456"
 }
 ```
 
 | 字段 | 类型 | 必填 | 验证规则 | 说明 |
 |------|------|------|---------|------|
 | username | string | 是 | min:3, max:50 | 用户名 |
-| password | string | 是 | min:6, max:32 | 密码 |
-| captcha_key | string | 是 | | 验证码 key |
-| clicks | array{object} | 是 | min:2 | 点击坐标数组 |
+| password | string | 是 | min:6, max:32 (明文) | AES-256-CBC-HMAC 加密后 Base64 编码（兼容明文） |
+| captcha_key | string | 是 | | 验证码 key（需先通过 `/api/captcha/verify` 校验） |
+
+### 密码加密协议
+
+使用 **RSA-2048 非对称加密**，公钥存放于前端代码（可安全暴露），私钥仅服务端持有。
+
+```
+加密流程 (客户端):
+  RSA 公钥 (PEM) → PKCS1v1.5 加密 → Base64 编码 → 传输
+
+解密流程 (服务端，逐级回退):
+  1. RSA 私钥解密 → 成功且为合法 UTF-8 → 使用解密结果
+  2. AES-256-CBC-HMAC 解密 → 成功 → 使用解密结果（旧客户端兼容）
+  3. 明文回退 → 直接使用原始输入
+```
+
+公钥内置在前端应用中，无需通过网络传输。私钥仅存储在 `.env` 的 `RSA_PRIVATE_KEY` 中，不可泄露。
+
+> AES 对称加密为旧版兼容方案，待所有客户端迁移至 RSA 后将移除。
 
 **响应示例**:
 ```json
@@ -224,7 +313,7 @@ POST /api/auth/login
 
 **可能的错误**:
 - 422: 参数验证失败（缺少必填字段、格式不符）
-- 422: 验证码错误，请重试
+- 422: 请先完成验证码校验（captcha_key 未通过 `/api/captcha/verify`）
 - 401: 用户名或密码错误
 - 403: 账号已被禁用
 - 429: 账号已被锁定，请15分钟后再试（连续5次登录失败触发）
@@ -243,23 +332,18 @@ POST /api/auth/register
 ```json
 {
   "username": "newuser",
-  "password": "123456",
+  "password": "djGYscnyS5V6mW6KyDFjB8vGwjBBnB3Odpyxu8LY...",
   "real_name": "新用户",
-  "captcha_key": "abc123def456",
-  "clicks": [
-    { "x": 120, "y": 85 },
-    { "x": 310, "y": 42 }
-  ]
+  "captcha_key": "abc123def456"
 }
 ```
 
 | 字段 | 类型 | 必填 | 验证规则 | 说明 |
 |------|------|------|---------|------|
 | username | string | 是 | min:3, max:50 | 用户名（唯一） |
-| password | string | 是 | min:6, max:32 | 密码（bcrypt 哈希存储） |
+| password | string | 是 | min:6, max:32 (明文) | AES-256-CBC-HMAC 加密后 Base64 编码 |
 | real_name | string | 是 | max:50 | 真实姓名 |
-| captcha_key | string | 是 | | 验证码 key |
-| clicks | array{object} | 是 | min:2 | 点击坐标数组 |
+| captcha_key | string | 是 | | 验证码 key（需先通过 `/api/captcha/verify` 校验） |
 
 **响应示例**:
 ```json
@@ -1583,25 +1667,42 @@ POST /admin/upload
 1. 客户端请求 POST /api/captcha/generate
    (请求头: API-Version: v1)
     ↓
-   服务端返回: key + base64 图片 + 点击目标提示
+   服务端返回: key + type(click|slider|rotate) + base64 图片 + extra(类型相关数据)
    
-2. 用户点击图片目标位置，前/客户端收集点击坐标
+2. 用户交互完成验证码操作（点击/拖拽/旋转），客户端收集答案
    
-3. 客户端请求 POST /api/auth/login
+3. 客户端请求 POST /api/captcha/verify
    (请求头: API-Version: v1, Content-Type: application/json)
-   请求体: { username, password, captcha_key, clicks: [{x,y}, ...] }
+   请求体: { key, type, clicks }
+   - type=click:  clicks = [{x, y}, ...]        // 坐标数组
+   - type=slider: clicks = 120                   // X 偏移量
+   - type=rotate: clicks = 315                   // 旋转角度
+    ↓
+   服务端:
+   a. 从存储读取 captcha:key 数据（TTL 300s）
+   b. 按 type 校验答案（click: 欧氏距离 ≤18px / slider: ±4px / rotate: ±5°）
+   c. 校验通过 → 写入 Redis `captcha_verified:{key}` = 1 (TTL 300s)
+   d. 校验失败 → 返回 422，计数 +1，超过 3 次 key 作废
+    ↓
+   服务端返回: { valid: true/false }
+
+4. 客户端请求 POST /api/auth/login
+   (请求头: API-Version: v1, Content-Type: application/json)
+   请求体: { username, password(加密), captcha_key }
     ↓
    服务端:
    a. 参数校验 → 422
-   b. 校验验证码 → 422
-   c. 校验用户凭证 → 401
-   d. 检查账号状态 → 403
-   e. 签发 JWT (access + refresh) → 200
-   f. 更新 last_login_at / last_login_ip
+   b. 检查 captcha_verified:{key} 是否存在 → 422
+   c. 删除 captcha_verified:{key}（一次性使用）
+   d. 解密密码: EncryptionService::decrypt(password) → 明文
+   e. 校验用户凭证 (password_verify) → 401
+   f. 检查账号状态 → 403/429
+   g. 签发 JWT (access + refresh) → 200
+   h. 更新 last_login_at / last_login_ip
     ↓
    客户端保存: access_token, refresh_token, expires_in
 
-4. 后续请求携带 JWT
+5. 后续请求携带 JWT
    请求头: Authorization: Bearer <access_token>
     ↓
    AdminAuth 中间件:
@@ -1619,7 +1720,7 @@ POST /admin/upload
     ↓
    Response + X-RateLimit-* 头
 
-5. Access Token 过期前刷新
+6. Access Token 过期前刷新
    客户端请求 POST /api/auth/refresh
    请求体: { refresh_token: "..." }
     ↓
@@ -1627,7 +1728,7 @@ POST /admin/upload
     ↓
    客户端更新本地令牌
 
-6. 登出
+7. 登出
    客户端请求 POST /admin/profile/logout
    请求头: Authorization: Bearer <access_token>
     ↓
@@ -1645,6 +1746,7 @@ POST /admin/upload
 ### 安全管理
 
 - 密码以 `PASSWORD_BCRYPT` 哈希存储
+- 密码传输层使用 AES-256-CBC-HMAC 加密（客户端加密 → 服务端解密），兼容明文回退
 - 敏感字段（phone, email, id_card）使用 `erikwang2013/encryptable` 在数据库层透明加解密
 - API 层 ID 使用 `erikwang2013/hashids` 加密传输，避免暴露原始 snowflake ID 序列
 - SecurityFilter 全局扫描 XSS、SQL 注入、路径遍历、命令注入，同 IP 5次/60秒临时黑名单 15 分钟

@@ -24,11 +24,12 @@ class CaptchaController
      * @Apidoc\Group("验证码")
      * @Apidoc\Method("POST")
      * @Apidoc\Url("/api/captcha/generate")
-     * @Apidoc\Desc("生成点击验证码，返回base64图片和点击目标")
+     * @Apidoc\Desc("随机生成 click/slider/rotate 三种验证码之一")
      * @Apidoc\Param("difficulty", type="string", require=false, desc="难度等级", default="medium")
      * @Apidoc\Returned("key", type="string", desc="验证码key")
-     * @Apidoc\Returned("image", type="string", desc="base64图片")
-     * @Apidoc\Returned("extra", type="object", desc="额外信息(含targets)")
+     * @Apidoc\Returned("type", type="string", desc="验证码类型: click|slider|rotate")
+     * @Apidoc\Returned("image", type="string", desc="base64 data URI 图片")
+     * @Apidoc\Returned("extra", type="object", desc="类型相关附加数据 targets(xy坐标)/x y puzzle_w puzzle_h puzzle(滑块)/angle(旋转)")
      */
     public function generate(Request $request): Response
     {
@@ -61,9 +62,10 @@ class CaptchaController
      * @Apidoc\Group("验证码")
      * @Apidoc\Method("POST")
      * @Apidoc\Url("/api/captcha/verify")
-     * @Apidoc\Desc("校验点击验证码是否有效")
+     * @Apidoc\Desc("校验验证码答案。clicks 格式: click=[{x,y}], slider=int, rotate=int")
      * @Apidoc\Param("key", type="string", require=true, desc="验证码key")
-     * @Apidoc\Param("clicks", type="array", require=true, desc="点击坐标数组[{x,y},...]")
+     * @Apidoc\Param("type", type="string", require=true, desc="验证码类型: click|slider|rotate")
+     * @Apidoc\Param("clicks", type="mixed", require=true, desc="click=[{x,y}], slider=偏移量, rotate=角度")
      * @Apidoc\Returned("valid", type="bool", desc="是否校验通过")
      */
     public function verify(Request $request): Response

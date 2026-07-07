@@ -50,7 +50,7 @@ class _AdminLayoutState extends State<AdminLayout> {
   void _checkAuth() async {
     final loggedIn = await AuthService.isLoggedIn();
     if (!loggedIn && mounted) {
-      Navigator.of(context).pushReplacementNamed('/login');
+      Get.offAllNamed('/login');
     }
   }
 
@@ -254,7 +254,7 @@ class _AdminLayoutState extends State<AdminLayout> {
                   onPressed: () async {
                     Navigator.pop(ctx);
                     await AuthService.clearToken();
-                    Navigator.of(context).pushReplacementNamed('/login');
+                    Get.offAllNamed('/login');
                   },
                   child: const Text('确定退出', style: TextStyle(color: Colors.red)),
                 ),

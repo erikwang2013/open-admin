@@ -202,7 +202,7 @@ CREATE TABLE `erik_system_config` (
 -- 默认管理员账号 admin / admin888
 -- -------------------------------------------
 INSERT INTO `erik_admin_user` (`id`, `username`, `password`, `real_name`, `status`, `created_at`, `updated_at`) VALUES
-('21000000000000100', '__ADMIN_USER__', '__ADMIN_PASS__', '__ADMIN_NAME__', 1, NOW(), NOW());
+('21000000000000100', 'erik', '$2y$10$OMKpk/QJFvFg.785anhTR.n038Gmwf.yx9sOPcbS/AgIt3ChKXswG', 'erik', 1, NOW(), NOW());
 
 INSERT INTO `erik_admin_user_role` (`user_id`, `role_id`) VALUES
 ('21000000000000100', '10000000000000001');

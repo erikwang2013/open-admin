@@ -1,9 +1,11 @@
 // Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:get/get.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/captcha_service.dart';
+import '../../services/encryption_service.dart';
 import 'captcha/click.dart';
 import 'captcha/slider.dart';
 import 'captcha/rotate.dart';
@@ -54,11 +56,15 @@ class _LoginPageState extends State<LoginPage> {
         if (mounted) { setState(() => _error = '验证码校验失败'); _reload(); _loading = false; }
         return;
       }
-      final resp = await _dio.post('/api/auth/login', data: {'username': u, 'password': p, 'captcha_key': _data!.key});
+      final resp = await _dio.post('/api/auth/login', data: {
+        'username': u,
+        'password': EncryptionService.encrypt(p),
+        'captcha_key': _data!.key
+      });
       if (resp.data['code'] == 0) {
         final d = resp.data['data'];
         await AuthService.saveLogin(token: d['access_token'], refreshToken: d['refresh_token'], username: d['user']['username']);
-        if (mounted) Navigator.of(context).pushReplacementNamed('/dashboard');
+        if (mounted) Get.offAllNamed('/dashboard');
       } else {
         if (mounted) { setState(() => _error = resp.data['message'] ?? '登录失败'); _reload(); }
       }

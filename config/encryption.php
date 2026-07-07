@@ -19,4 +19,8 @@ return [
 
     // 初始化向量（IV），CBC 模式需要 16 字节。留空则使用内置默认值
     'iv' => getenv('ENCRYPTION_IV') ?: '',
+
+    // RSA 非对称加密私钥（Base64 编码的 PEM）
+    // 仅用于服务端解密登录密码，公钥存放在前端代码中（可安全暴露）
+    'rsa_private_key' => getenv('RSA_PRIVATE_KEY') ?: '',
 ];

@@ -21,12 +21,12 @@ class RotateCaptchaState extends State<RotateCaptcha> {
       const Text('旋转图片使标记回到正上方', style: TextStyle(fontSize: 13)),
       const SizedBox(height: 10),
       AspectRatio(aspectRatio: 300 / 200, child: LayoutBuilder(builder: (_, box) {
-        final cs = box.maxHeight * 0.6;
+        final cs = box.maxHeight * 0.65;
         return Stack(children: [
           Positioned.fill(child: Container(color: Colors.grey.shade200)),
           Center(child: ClipOval(child: SizedBox(width: cs, height: cs, child:
             Transform.rotate(angle: val * pi / 180, child:
-              Image.memory(d.imageBytes, width: box.maxWidth, height: box.maxHeight, fit: BoxFit.contain),
+              Image.memory(d.imageBytes, width: cs, height: cs, fit: BoxFit.contain),
             ),
           ))),
           const Positioned(top: 4, left: 0, right: 0, child: Icon(Icons.arrow_drop_up, size: 32, color: Colors.red)),
