@@ -55,6 +55,9 @@ class CaptchaData {
   }
 
   int get sliderX => (extra['x'] as num?)?.toInt() ?? 0;
+  int get puzzleW => (extra['puzzle_w'] as num?)?.toInt() ?? 50;
+  int get sliderY => (extra['y'] as num?)?.toInt() ?? 60;
+  int get puzzleH => (extra['puzzle_h'] as num?)?.toInt() ?? 50;
   Uint8List? get puzzleBytes {
     final p = extra['puzzle'];
     return p is String ? _img(p) : null;

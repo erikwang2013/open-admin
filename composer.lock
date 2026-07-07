@@ -1043,16 +1043,16 @@
         },
         {
             "name": "erikwang2013/poster-php",
-            "version": "v1.0.7",
+            "version": "v1.0.8",
             "source": {
                 "type": "git",
                 "url": "https://github.com/erikwang2013/poster-php.git",
-                "reference": "925fc474ef710880a4590b61de1804e1c2c801fd"
+                "reference": "3b3718c2994b2f26b6872ce0d20efd69fe80d39f"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/erikwang2013/poster-php/zipball/925fc474ef710880a4590b61de1804e1c2c801fd",
-                "reference": "925fc474ef710880a4590b61de1804e1c2c801fd",
+                "url": "https://api.github.com/repos/erikwang2013/poster-php/zipball/3b3718c2994b2f26b6872ce0d20efd69fe80d39f",
+                "reference": "3b3718c2994b2f26b6872ce0d20efd69fe80d39f",
                 "shasum": ""
             },
             "require": {
@@ -1114,9 +1114,9 @@
             ],
             "support": {
                 "issues": "https://github.com/erikwang2013/poster-php/issues",
-                "source": "https://github.com/erikwang2013/poster-php/tree/v1.0.7"
+                "source": "https://github.com/erikwang2013/poster-php/tree/v1.0.8"
             },
-            "time": "2026-06-12T14:53:51+00:00"
+            "time": "2026-06-13T01:53:20+00:00"
         },
         {
             "name": "erikwang2013/season",
@@ -1953,16 +1953,16 @@
         },
         {
             "name": "guzzlehttp/uri-template",
-            "version": "v1.0.6",
+            "version": "v1.0.7",
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/uri-template.git",
-                "reference": "eef7f87bab6f204eba3c39224d8075c70c637946"
+                "reference": "7fe811c23a9e3cd712b4389eaeb50b5456d8c529"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/uri-template/zipball/eef7f87bab6f204eba3c39224d8075c70c637946",
-                "reference": "eef7f87bab6f204eba3c39224d8075c70c637946",
+                "url": "https://api.github.com/repos/guzzle/uri-template/zipball/7fe811c23a9e3cd712b4389eaeb50b5456d8c529",
+                "reference": "7fe811c23a9e3cd712b4389eaeb50b5456d8c529",
                 "shasum": ""
             },
             "require": {
@@ -2019,7 +2019,7 @@
             ],
             "support": {
                 "issues": "https://github.com/guzzle/uri-template/issues",
-                "source": "https://github.com/guzzle/uri-template/tree/v1.0.6"
+                "source": "https://github.com/guzzle/uri-template/tree/v1.0.7"
             },
             "funding": [
                 {
@@ -2035,7 +2035,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-05-23T22:00:21+00:00"
+            "time": "2026-06-12T21:33:43+00:00"
         },
         {
             "name": "hashids/hashids",
