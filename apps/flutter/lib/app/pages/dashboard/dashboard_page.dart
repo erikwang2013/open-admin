@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'dashboard_controller.dart';
+import '../../i18n/translations.dart';
 
 class DashboardPage extends GetView<DashboardController> {
   const DashboardPage({super.key});
@@ -25,6 +26,7 @@ class DashboardPage extends GetView<DashboardController> {
                 Text('仪表盘',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
                 const Spacer(),
+                IconButton(icon: const Icon(Icons.refresh), tooltip: '刷新', onPressed: () => controller.loadData()),
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.download),
                   tooltip: '导出',

@@ -26,13 +26,18 @@ class AdminPermission
         $path = $request->path();
         $method = $request->method();
 
+        // 使用路由模式路径（如 /admin/role/{id}），去除动态参数后构建权限键
+        $routePath = $request->route ? $request->route->getPath() : $path;
+        $routePath = preg_replace('/\{[^}]+\}/', '', $routePath);
+        $routePath = trim(preg_replace('#/+#', '/', $routePath), '/');
+
         $permissions = $this->getUserPermissions($adminId);
 
         if (in_array('*', $permissions)) {
             return $next($request);
         }
 
-        $requiredPermission = strtolower($method) . '.' . trim($path, '/');
+        $requiredPermission = strtolower($method) . '.' . $routePath;
 
         if (!in_array($requiredPermission, $permissions)) {
             return json(['code' => 403, 'message' => '无权限访问', 'data' => []]);

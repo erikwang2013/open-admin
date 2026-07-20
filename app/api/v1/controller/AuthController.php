@@ -56,9 +56,6 @@ class AuthController
         if ($username === '' || strlen($username) < 3 || strlen($username) > 50) {
             return json(['code' => 422, 'message' => '用户名格式不正确', 'data' => []]);
         }
-        if (strlen($password) < 6 || strlen($password) > 32) {
-            return json(['code' => 422, 'message' => '密码长度必须为6-32位', 'data' => []]);
-        }
         if ($captchaKey === '') {
             return json(['code' => 422, 'message' => '验证码参数缺失', 'data' => []]);
         }
@@ -88,9 +85,9 @@ class AuthController
 
         // 密码解密：RSA 非对称 > AES 对称 > 明文，逐级回退保证兼容
         $rawPassword = (string) $request->input('password', '');
-        $password = $this->decryptPassword($rawPassword);
+        $password = EncryptionService::decryptTransmission($rawPassword);
 
-        if ($password === '' || !$user || !password_verify($password, $user->password)) {
+        if ($password === '' || strlen($password) < 6 || strlen($password) > 32 || !$user || !password_verify($password, $user->password)) {
             // 登录失败：计数 + 锁定
             try {
                 $failKey = "login_fail:{$username}";
@@ -200,39 +197,6 @@ class AuthController
         } catch (Throwable $e) {
             return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
         }
-    }
-
-    /**
-     * 密码解密：RSA 非对称 → AES 对称 → 明文，逐级回退。
-     * 前端使用 RSA 公钥加密，私钥仅服务端持有，确保前端无密钥泄露风险。
-     */
-    private function decryptPassword(string $raw): string
-    {
-        // 1. RSA 非对称解密（前端新版本）
-        $rsaKey = config('encryption.rsa_private_key', '');
-        if ($rsaKey !== '') {
-            try {
-                $privateKey = base64_decode($rsaKey, true);
-                $ciphertext = base64_decode($raw, true);
-                if ($privateKey && $ciphertext && openssl_private_decrypt(
-                    $ciphertext,
-                    $decrypted,
-                    $privateKey,
-                    OPENSSL_PKCS1_PADDING
-                ) && $decrypted !== '' && mb_check_encoding($decrypted, 'UTF-8')) {
-                    return $decrypted;
-                }
-            } catch (\Throwable) {}
-        }
-
-        // 2. AES 对称解密（旧版客户端兼容）→ 待旧版迁移后移除
-        try {
-            $result = EncryptionService::decrypt($raw);
-            if ($result !== '') return $result;
-        } catch (\Throwable) {}
-
-        // 3. 明文回退
-        return $raw;
     }
 
     /**

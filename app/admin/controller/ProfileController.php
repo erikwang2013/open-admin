@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace app\admin\controller;
 
+use app\common\EncryptionService;
 use app\model\AdminUser;
 use support\Request;
 use support\Response;
@@ -31,6 +32,27 @@ class ProfileController extends BaseController
     }
 
     /**
+     * @Apidoc\Title("获取个人信息")
+     * @Apidoc\Group("个人中心")
+     * @Apidoc\Method("GET")
+     * @Apidoc\Url("/admin/profile")
+     * @Apidoc\Desc("获取当前登录管理员的个人信息")
+     */
+    public function show(Request $request): Response
+    {
+        $adminId = $request->adminId ?? 0;
+        $user    = AdminUser::find($adminId);
+        if (!$user) {
+            return $this->fail(trans('messages.user_not_found'), 404);
+        }
+
+        $data = $user->toArray();
+        unset($data['password'], $data['id_card']);
+
+        return $this->success($this->encodeIds($data));
+    }
+
+    /**
      * @Apidoc\Title("更新个人信息")
      * @Apidoc\Group("个人中心")
      * @Apidoc\Method("PUT")
@@ -48,14 +70,14 @@ class ProfileController extends BaseController
             return $this->fail(trans('messages.user_not_found'), 404);
         }
 
-        if ($request->has('real_name')) {
+        if ($request->input('real_name') !== null) {
             $user->real_name = $request->input('real_name');
         }
-        if ($request->has('phone')) {
-            $user->phone = $request->input('phone', '');
+        if ($request->input('phone') !== null) {
+            $user->phone = EncryptionService::decryptTransmission($request->input('phone', ''));
         }
-        if ($request->has('email')) {
-            $user->email = $request->input('email', '');
+        if ($request->input('email') !== null) {
+            $user->email = EncryptionService::decryptTransmission($request->input('email', ''));
         }
 
         $user->save();
@@ -84,10 +106,10 @@ class ProfileController extends BaseController
             return $this->fail(trans('messages.user_not_found'), 404);
         }
 
-        $oldPassword = $request->input('old_password', '');
-        $newPassword = $request->input('new_password', '');
+        $oldPassword = EncryptionService::decryptTransmission($request->input('old_password', ''));
+        $newPassword = EncryptionService::decryptTransmission($request->input('new_password', ''));
 
-        if (empty($oldPassword) || empty($newPassword)) {
+        if ($oldPassword === '' || $newPassword === '') {
             return $this->fail(trans('messages.password_required'), 422);
         }
 

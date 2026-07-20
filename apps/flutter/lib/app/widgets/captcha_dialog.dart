@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import '../services/api_service.dart';
 import '../services/captcha_service.dart';
+import '../i18n/translations.dart';
 import '../pages/login/captcha/click.dart';
 import '../pages/login/captcha/slider.dart';
 import '../pages/login/captcha/rotate.dart';
@@ -55,7 +56,7 @@ class _CaptchaDialogState extends State<CaptchaDialog> {
     try {
       _data = await widget.svc.generate();
       if (mounted) setState(() => _error = null);
-    } catch (_) { if (mounted) setState(() => _error = '验证码加载失败'); }
+    } catch (_) { if (mounted) setState(() => _error = t('captcha_load_fail')); }
   }
 
   Future<void> _confirm() async {
@@ -73,10 +74,10 @@ class _CaptchaDialogState extends State<CaptchaDialog> {
       if (ok) {
         if (mounted) Navigator.pop(context, _data!.key);
       } else {
-        if (mounted) { setState(() => _error = '验证码校验失败'); _reload(); }
+        if (mounted) { setState(() => _error = t('captcha_verify_fail')); _reload(); }
       }
     } catch (_) {
-      if (mounted) { setState(() => _error = '网络错误'); _reload(); }
+      if (mounted) { setState(() => _error = t('captcha_network_error')); _reload(); }
     } finally {
       if (mounted) setState(() => _verifying = false);
     }
@@ -93,24 +94,24 @@ class _CaptchaDialogState extends State<CaptchaDialog> {
 
   @override
   Widget build(BuildContext c) => AlertDialog(
-    title: const Row(children: [Icon(Icons.security), SizedBox(width: 8), Text('安全验证')]),
+    title: Row(children: [const Icon(Icons.security), const SizedBox(width: 8), Text(t('captcha_title'))]),
     content: SizedBox(
       width: 360,
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         _captchaUI(),
         const SizedBox(height: 8),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          TextButton.icon(onPressed: _reload, icon: const Icon(Icons.refresh, size: 16), label: const Text('换一张')),
+          TextButton.icon(onPressed: _reload, icon: const Icon(Icons.refresh, size: 16), label: Text(t('captcha_refresh'))),
           if (_error != null)
             Flexible(child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12), textAlign: TextAlign.right)),
         ]),
       ]),
     ),
     actions: [
-      TextButton(onPressed: _verifying ? null : () => Navigator.pop(context), child: const Text('取消')),
+      TextButton(onPressed: _verifying ? null : () => Navigator.pop(context), child: Text(t('cancel'))),
       FilledButton(
         onPressed: _verifying ? null : _confirm,
-        child: _verifying ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('确认'),
+        child: _verifying ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(t('captcha_confirm')),
       ),
     ],
   );

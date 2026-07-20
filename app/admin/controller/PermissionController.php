@@ -10,6 +10,7 @@ namespace app\admin\controller;
 use app\model\AdminPermission;
 use support\Request;
 use support\Response;
+use Webman\Validation\Validator;
 
 /**
  * @Apidoc\Title("权限管理")
@@ -47,7 +48,7 @@ class PermissionController extends BaseController
      */
     public function store(Request $request): Response
     {
-        $validator = validator($request->all(), [
+        $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:50',
             'slug' => 'required|string|max:100',
             'type' => 'required|in:1,2,3',
@@ -78,9 +79,9 @@ class PermissionController extends BaseController
      * @Apidoc\Url("/admin/permission/{id}")
      * @Apidoc\Desc("更新权限节点属性")
      */
-    public function update(Request $request, string $hashid): Response
+    public function update(Request $request, string $id): Response
     {
-        $id = $this->decodeId($hashid);
+        $id = $this->decodeId($id);
         $perm = AdminPermission::find($id);
         if (!$perm) {
             return $this->fail('权限不存在', 404);
@@ -103,9 +104,9 @@ class PermissionController extends BaseController
      * @Apidoc\Desc("级联删除子权限，需密码二次确认")
      * @Apidoc\Param("password", type="string", require=true, desc="当前用户密码")
      */
-    public function destroy(Request $request, string $hashid): Response
+    public function destroy(Request $request, string $id): Response
     {
-        $id = $this->decodeId($hashid);
+        $id = $this->decodeId($id);
         $perm = AdminPermission::find($id);
         if (!$perm) {
             return $this->fail('权限不存在', 404);

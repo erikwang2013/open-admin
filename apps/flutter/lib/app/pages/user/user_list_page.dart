@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'user_controller.dart';
 import 'user_form_page.dart';
+import '../../i18n/translations.dart';
 
 class UserListPage extends GetView<UserController> {
   const UserListPage({super.key});
@@ -25,6 +26,7 @@ class UserListPage extends GetView<UserController> {
           children: [
             const Text('用户管理', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const Spacer(),
+            IconButton(icon: const Icon(Icons.refresh), tooltip: '刷新', onPressed: () => ctrl.loadUsers(reset: true)),
             ElevatedButton.icon(
               onPressed: () => Get.to(() => const UserFormPage())?.then((_) => ctrl.loadUsers(reset: true)),
               icon: const Icon(Icons.add),
@@ -79,7 +81,9 @@ class UserListPage extends GetView<UserController> {
             if (ctrl.users.isEmpty) return const Center(child: Text('暂无数据'));
 
             return SingleChildScrollView(
-              child: DataTable(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
                 columns: [
                   DataColumn(label: Checkbox(value: ctrl.selectedIds.length == ctrl.users.length && ctrl.users.isNotEmpty, onChanged: (_) => ctrl.toggleSelectAll())),
                   const DataColumn(label: Text('用户名')),
@@ -111,7 +115,8 @@ class UserListPage extends GetView<UserController> {
                   );
                 }).toList(),
               ),
-            );
+            ),
+          );
           }),
         ),
         // Pagination

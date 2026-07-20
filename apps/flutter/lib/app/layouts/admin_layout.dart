@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 import '../services/auth_service.dart';
+import '../i18n/translations.dart';
+import '../i18n/locale_service.dart';
 import '../pages/user/user_list_page.dart';
 import '../pages/role/role_list_page.dart';
 import '../pages/config/config_page.dart';
@@ -144,12 +146,23 @@ class _AdminLayoutState extends State<AdminLayout> {
 
   Widget _buildSidebar() {
     final width = _sidebarCollapsed ? sidebarCollapsedWidth : sidebarWidth;
+    final cs = Theme.of(context).colorScheme;
+    final items = [
+      (_sidebarCollapsed ? null : t('nav_dashboard'), Icons.dashboard),
+      (_sidebarCollapsed ? null : t('nav_users'), Icons.people),
+      (_sidebarCollapsed ? null : t('nav_roles'), Icons.security),
+      (_sidebarCollapsed ? null : t('nav_config'), Icons.settings),
+      (_sidebarCollapsed ? null : t('nav_logs'), Icons.description),
+    ];
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       width: width,
-      child: NavigationDrawer(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: _onNavChanged,
+      decoration: BoxDecoration(
+        color: cs.surface,
+        border: Border(right: BorderSide(color: cs.outlineVariant)),
+      ),
+      child: Column(
         children: [
           Container(
             height: headerHeight,
@@ -161,44 +174,91 @@ class _AdminLayoutState extends State<AdminLayout> {
                     children: [
                       Icon(Icons.admin_panel_settings, size: 24),
                       SizedBox(width: 8),
-                      Text('管理后台',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text('管理后台', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     ],
                   ),
           ),
-          const Divider(),
-          ..._buildNavItems(),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              children: List.generate(items.length, (i) {
+                final (label, icon) = items[i];
+                final selected = _selectedIndex == i;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  child: Material(
+                    color: selected ? cs.primaryContainer : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => _onNavChanged(i),
+                      child: Container(
+                        height: 44,
+                        padding: EdgeInsets.only(left: _sidebarCollapsed ? 16 : 12),
+                        decoration: BoxDecoration(
+                          border: selected
+                              ? Border(left: BorderSide(color: cs.primary, width: 3))
+                              : null,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(icon,
+                              size: 20,
+                              color: selected ? cs.primary : cs.onSurfaceVariant,
+                            ),
+                            if (!_sidebarCollapsed) ...[
+                              const SizedBox(width: 12),
+                              Text(label ?? '',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                                  color: selected ? cs.primary : cs.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
         ],
       ),
     );
   }
 
+  // Phone drawer still uses NavigationDrawer
   List<NavigationDrawerDestination> _buildNavItems() {
-    return const [
+    return [
       NavigationDrawerDestination(
-        icon: Icon(Icons.dashboard, size: 20),
-        label: Text('仪表盘'),
-        selectedIcon: Icon(Icons.dashboard, size: 20),
+        icon: const Icon(Icons.dashboard, size: 20),
+        label: Text(t('nav_dashboard')),
+        selectedIcon: const Icon(Icons.dashboard, size: 20),
       ),
       NavigationDrawerDestination(
-        icon: Icon(Icons.people, size: 20),
-        label: Text('用户管理'),
-        selectedIcon: Icon(Icons.people, size: 20),
+        icon: const Icon(Icons.people, size: 20),
+        label: Text(t('nav_users')),
+        selectedIcon: const Icon(Icons.people, size: 20),
       ),
       NavigationDrawerDestination(
-        icon: Icon(Icons.security, size: 20),
-        label: Text('角色权限'),
-        selectedIcon: Icon(Icons.security, size: 20),
+        icon: const Icon(Icons.security, size: 20),
+        label: Text(t('nav_roles')),
+        selectedIcon: const Icon(Icons.security, size: 20),
       ),
       NavigationDrawerDestination(
-        icon: Icon(Icons.settings, size: 20),
-        label: Text('系统配置'),
-        selectedIcon: Icon(Icons.settings, size: 20),
+        icon: const Icon(Icons.settings, size: 20),
+        label: Text(t('nav_config')),
+        selectedIcon: const Icon(Icons.settings, size: 20),
       ),
       NavigationDrawerDestination(
-        icon: Icon(Icons.description, size: 20),
-        label: Text('操作日志'),
-        selectedIcon: Icon(Icons.description, size: 20),
+        icon: const Icon(Icons.description, size: 20),
+        label: Text(t('nav_logs')),
+        selectedIcon: const Icon(Icons.description, size: 20),
       ),
     ];
   }
@@ -221,6 +281,11 @@ class _AdminLayoutState extends State<AdminLayout> {
             onPressed: () => setState(() => _sidebarCollapsed = !_sidebarCollapsed),
           ),
           const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.translate, size: 20),
+            tooltip: '语言 / Language',
+            onPressed: () => Get.find<LocaleService>().toggle(),
+          ),
           _buildUserMenu(),
         ],
       ),

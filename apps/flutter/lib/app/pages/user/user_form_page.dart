@@ -5,6 +5,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../services/api_service.dart';
+import '../../i18n/translations.dart';
+import '../../services/encryption_service.dart';
 
 class UserFormPage extends StatefulWidget {
   final Map<String, dynamic>? userData;
@@ -45,14 +47,14 @@ class _UserFormPageState extends State<UserFormPage> {
     final data = {
       'real_name': _realNameCtrl.text.trim(),
       'status': _status,
-      'phone': _phoneCtrl.text.trim(),
-      'email': _emailCtrl.text.trim(),
+      'phone': EncryptionService.encrypt(_phoneCtrl.text.trim()),
+      'email': EncryptionService.encrypt(_emailCtrl.text.trim()),
     };
     if (!isEdit) {
       data['username'] = _usernameCtrl.text.trim();
-      data['password'] = _passwordCtrl.text;
+      data['password'] = EncryptionService.encrypt(_passwordCtrl.text);
     } else if (_passwordCtrl.text.isNotEmpty) {
-      data['password'] = _passwordCtrl.text;
+      data['password'] = EncryptionService.encrypt(_passwordCtrl.text);
     }
 
     try {

@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/encryption_service.dart';
+import '../../i18n/translations.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -30,8 +32,14 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _loadProfile() async {
     setState(() => _loading = true);
     try {
-      // Leave real_name field empty for user to fill; show username as label
-      // User can update real_name via this form
+      final resp = await _api.get('/admin/profile');
+      final data = resp['data'] as Map<String, dynamic>?;
+      if (data != null) {
+        _realNameCtrl.text = data['real_name']?.toString() ?? '';
+        _phoneCtrl.text = data['phone']?.toString() ?? '';
+        _emailCtrl.text = data['email']?.toString() ?? '';
+      }
+    } catch (_) {
     } finally {
       setState(() => _loading = false);
     }
@@ -41,8 +49,8 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       await _api.put('/admin/profile', data: {
         'real_name': _realNameCtrl.text.trim(),
-        'phone': _phoneCtrl.text.trim(),
-        'email': _emailCtrl.text.trim(),
+        'phone': EncryptionService.encrypt(_phoneCtrl.text.trim()),
+        'email': EncryptionService.encrypt(_emailCtrl.text.trim()),
       });
       Get.snackbar('成功', '个人信息更新成功');
     } catch (e) {
@@ -79,8 +87,8 @@ class _ProfilePageState extends State<ProfilePage> {
 
     try {
       await _api.put('/admin/profile/password', data: {
-        'old_password': oldPwdCtrl.text,
-        'new_password': newPwdCtrl.text,
+        'old_password': EncryptionService.encrypt(oldPwdCtrl.text),
+        'new_password': EncryptionService.encrypt(newPwdCtrl.text),
       });
       Get.snackbar('成功', '密码修改成功');
     } catch (e) {
@@ -108,9 +116,11 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
-    return Center(child: SizedBox(width: 500, child: ListView(padding: const EdgeInsets.all(24), children: [
+    return Scaffold(
+      appBar: AppBar(title: const Text('个人中心')),
+      body: Center(child: SizedBox(width: 500, child: ListView(padding: const EdgeInsets.all(24), children: [
       const Text('个人中心', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
       const SizedBox(height: 24),
       TextField(controller: _realNameCtrl, decoration: const InputDecoration(labelText: '姓名')),
@@ -126,6 +136,7 @@ class _ProfilePageState extends State<ProfilePage> {
       const Divider(),
       ListTile(leading: const Icon(Icons.lock), title: const Text('修改密码'), trailing: const Icon(Icons.chevron_right), onTap: _changePassword),
       ListTile(leading: const Icon(Icons.logout, color: Colors.red), title: const Text('退出登录', style: TextStyle(color: Colors.red)), onTap: _logout),
-    ])));
+    ]))),
+    );
   }
 }

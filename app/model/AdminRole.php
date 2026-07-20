@@ -19,6 +19,11 @@ class AdminRole extends Model
     protected $fillable = ['name', 'slug', 'description', 'status'];
     protected $casts = ['status' => 'integer'];
 
+    protected function serializeDate(\DateTimeInterface $date): string
+    {
+        return $date->format('Y-m-d H:i:s');
+    }
+
     public function permissions()
     {
         return $this->belongsToMany(AdminPermission::class, 'admin_role_permission', 'role_id', 'permission_id');

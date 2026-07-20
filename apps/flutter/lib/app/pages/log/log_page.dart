@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../services/api_service.dart';
+import '../../i18n/translations.dart';
 
 class LogController extends GetxController {
   final api = ApiService();
@@ -51,6 +52,7 @@ class LogPage extends GetView<LogController> {
       const Text('操作日志', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
       const SizedBox(height: 12),
       Row(children: [
+        IconButton(icon: const Icon(Icons.refresh), tooltip: '刷新', onPressed: () => ctrl.loadLogs()),
         SizedBox(width: 150, child: TextField(decoration: const InputDecoration(hintText: '操作筛选', isDense: true), onSubmitted: (v) { ctrl.actionFilter.value = v; ctrl.loadLogs(reset: true); })),
         const SizedBox(width: 12),
         SizedBox(width: 200, child: TextField(decoration: const InputDecoration(hintText: '路径筛选', isDense: true), onSubmitted: (v) { ctrl.pathFilter.value = v; ctrl.loadLogs(reset: true); })),

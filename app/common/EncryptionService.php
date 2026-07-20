@@ -16,6 +16,41 @@ use Erikwang2013\Encryption\EncryptionManagerFactory;
  */
 class EncryptionService
 {
+    /**
+     * 传输层解密：RSA 非对称 → AES 对称 → 明文，逐级回退。
+     * 前端使用 RSA-2048 公钥加密后 Base64 传输。
+     */
+    public static function decryptTransmission(string $raw): string
+    {
+        if ($raw === '') return '';
+
+        // 1. RSA 非对称解密
+        $rsaKey = config('encryption.rsa_private_key', '');
+        if ($rsaKey !== '') {
+            try {
+                $privateKey = base64_decode($rsaKey, true);
+                $ciphertext = base64_decode($raw, true);
+                if ($privateKey && $ciphertext && openssl_private_decrypt(
+                    $ciphertext,
+                    $decrypted,
+                    $privateKey,
+                    OPENSSL_PKCS1_PADDING
+                ) && $decrypted !== '' && mb_check_encoding($decrypted, 'UTF-8')) {
+                    return $decrypted;
+                }
+            } catch (\Throwable) {}
+        }
+
+        // 2. AES 对称解密（旧版兼容）
+        try {
+            $result = self::decrypt($raw);
+            if ($result !== '') return $result;
+        } catch (\Throwable) {}
+
+        // 3. 明文回退
+        return $raw;
+    }
+
     private static ?EncryptionManager $instance = null;
 
     private static function getInstance(): EncryptionManager

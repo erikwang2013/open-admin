@@ -5,6 +5,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../services/api_service.dart';
+import '../../services/encryption_service.dart';
+import '../../i18n/translations.dart';
 
 class ConfigController extends GetxController {
   final api = ApiService();
@@ -41,7 +43,7 @@ class ConfigController extends GetxController {
 
   Future<void> remove(String id, String pwd) async {
     try {
-      await api.delete('/admin/config/$id', data: {'password': pwd});
+      await api.delete('/admin/config/$id', data: {'password': EncryptionService.encrypt(pwd)});
       await loadConfigs();
       Get.snackbar('成功', '删除成功');
     } catch (e) { Get.snackbar('错误', '删除失败: $e'); }
@@ -62,6 +64,7 @@ class ConfigPage extends GetView<ConfigController> {
       Row(children: [
         const Text('系统配置', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         const Spacer(),
+        IconButton(icon: const Icon(Icons.refresh), tooltip: '刷新', onPressed: () => ctrl.loadConfigs()),
         ElevatedButton.icon(onPressed: () => _showDialog(context, ctrl), icon: const Icon(Icons.add), label: const Text('新增配置')),
       ]),
       const SizedBox(height: 12),

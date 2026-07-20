@@ -10,6 +10,7 @@ namespace app\admin\controller;
 use app\model\SystemConfig;
 use support\Request;
 use support\Response;
+use Webman\Validation\Validator;
 
 /**
  * @Apidoc\Title("系统配置")
@@ -68,7 +69,7 @@ class ConfigController extends BaseController
      */
     public function store(Request $request): Response
     {
-        $validator = validator($request->all(), [
+        $validator = Validator::make($request->all(), [
             'group' => 'required|string|max:100',
             'key'   => 'required|string|max:100',
             'value' => 'required|string',
@@ -108,21 +109,21 @@ class ConfigController extends BaseController
      * @Apidoc\Param("type", type="string", require=false, desc="值类型")
      * @Apidoc\Param("description", type="string", require=false, desc="配置说明")
      */
-    public function update(Request $request, string $hashid): Response
+    public function update(Request $request, string $id): Response
     {
-        $id     = $this->decodeId($hashid);
+        $id     = $this->decodeId($id);
         $config = SystemConfig::find($id);
         if (!$config) {
             return $this->fail(trans('messages.config_not_found'), 404);
         }
 
-        if ($request->has('value')) {
+        if ($request->input('value') !== null) {
             $config->value = $request->input('value');
         }
-        if ($request->has('type')) {
+        if ($request->input('type') !== null) {
             $config->type = $request->input('type');
         }
-        if ($request->has('description')) {
+        if ($request->input('description') !== null) {
             $config->description = $request->input('description');
         }
 
@@ -140,9 +141,9 @@ class ConfigController extends BaseController
      * @Apidoc\Param("id", type="string", require=true, desc="配置hashid")
      * @Apidoc\Param("password", type="string", require=true, desc="当前管理员密码")
      */
-    public function destroy(Request $request, string $hashid): Response
+    public function destroy(Request $request, string $id): Response
     {
-        $id     = $this->decodeId($hashid);
+        $id     = $this->decodeId($id);
         $config = SystemConfig::find($id);
         if (!$config) {
             return $this->fail(trans('messages.config_not_found'), 404);

@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'role_controller.dart';
+import '../../i18n/translations.dart';
 
 class RoleListPage extends GetView<RoleController> {
   const RoleListPage({super.key});
@@ -22,11 +23,28 @@ class RoleListPage extends GetView<RoleController> {
         Row(children: [
           const Text('角色管理', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const Spacer(),
+          IconButton(icon: const Icon(Icons.refresh), tooltip: '刷新', onPressed: () => ctrl.loadRoles()),
           ElevatedButton.icon(
             onPressed: () => _showRoleDialog(context, ctrl),
             icon: const Icon(Icons.add),
             label: const Text('新增角色'),
           ),
+        ]),
+        const SizedBox(height: 12),
+        Row(children: [
+          SizedBox(
+            width: 250,
+            child: TextField(
+              decoration: const InputDecoration(hintText: '搜索角色名称/标识', prefixIcon: Icon(Icons.search), isDense: true),
+              onSubmitted: (v) => ctrl.search(v),
+            ),
+          ),
+          const SizedBox(width: 12),
+          ChoiceChip(label: const Text('全部'), selected: ctrl.statusFilter.value == null, onSelected: (_) => ctrl.filterByStatus(null)),
+          const SizedBox(width: 4),
+          ChoiceChip(label: const Text('启用'), selected: ctrl.statusFilter.value == 1, onSelected: (_) => ctrl.filterByStatus(1)),
+          const SizedBox(width: 4),
+          ChoiceChip(label: const Text('禁用'), selected: ctrl.statusFilter.value == 0, onSelected: (_) => ctrl.filterByStatus(0)),
         ]),
         const SizedBox(height: 12),
         Expanded(child: Obx(() {

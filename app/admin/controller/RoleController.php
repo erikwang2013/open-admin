@@ -9,6 +9,8 @@ namespace app\admin\controller;
 
 use app\model\AdminRole;
 use support\Request;
+use support\Response;
+use Webman\Validation\Validator;
 
 /**
  * @Apidoc\Title("角色管理")
@@ -29,8 +31,21 @@ class RoleController extends BaseController
     {
         $page = (int) $request->input('page', 1);
         $limit = (int) $request->input('limit', 15);
+        $keyword = trim((string) $request->input('keyword', ''));
+        $status = $request->input('status');
 
         $query = AdminRole::withCount('users');
+
+        if ($keyword !== '') {
+            $query->where(function ($q) use ($keyword) {
+                $q->where('name', 'like', "%{$keyword}%")
+                  ->orWhere('slug', 'like', "%{$keyword}%");
+            });
+        }
+        if ($status !== null && $status !== '') {
+            $query->where('status', (int) $status);
+        }
+
         $total = $query->count();
         $list = $query->offset(($page - 1) * $limit)
                       ->limit($limit)
@@ -60,7 +75,7 @@ class RoleController extends BaseController
      */
     public function store(Request $request): Response
     {
-        $validator = validator($request->all(), [
+        $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:50',
             'slug' => 'required|string|max:50',
         ]);
@@ -77,9 +92,10 @@ class RoleController extends BaseController
         $role->status = (int) $request->input('status', 1);
         $role->save();
 
-        // 同步权限
-        if ($request->has('permission_ids')) {
-            $role->permissions()->sync($request->input('permission_ids', []));
+        // 同步权限（hashid → int）
+        if ($request->input('permission_ids') !== null) {
+            $ids = array_map(fn($hid) => $this->decodeId((string) $hid), $request->input('permission_ids', []));
+            $role->permissions()->sync($ids);
         }
 
         return $this->success($this->encodeIds($role->toArray()), '创建成功');
@@ -97,9 +113,9 @@ class RoleController extends BaseController
      * @Apidoc\Param("status", type="int", require=false, desc="状态")
      * @Apidoc\Param("permission_ids", type="array", require=false, desc="权限ID数组")
      */
-    public function update(Request $request, string $hashid): Response
+    public function update(Request $request, string $id): Response
     {
-        $id = $this->decodeId($hashid);
+        $id = $this->decodeId($id);
         $role = AdminRole::find($id);
         if (!$role) {
             return $this->fail('角色不存在', 404);
@@ -110,8 +126,9 @@ class RoleController extends BaseController
         $role->status = (int) $request->input('status', $role->status);
         $role->save();
 
-        if ($request->has('permission_ids')) {
-            $role->permissions()->sync($request->input('permission_ids', []));
+        if ($request->input('permission_ids') !== null) {
+            $ids = array_map(fn($hid) => $this->decodeId((string) $hid), $request->input('permission_ids', []));
+            $role->permissions()->sync($ids);
         }
 
         return $this->success($this->encodeIds($role->toArray()), '更新成功');
@@ -126,9 +143,9 @@ class RoleController extends BaseController
      * @Apidoc\Param("id", type="string", require=true, desc="角色hashid")
      * @Apidoc\Param("password", type="string", require=true, desc="当前管理员密码")
      */
-    public function destroy(Request $request, string $hashid): Response
+    public function destroy(Request $request, string $id): Response
     {
-        $id = $this->decodeId($hashid);
+        $id = $this->decodeId($id);
         $role = AdminRole::find($id);
         if (!$role) {
             return $this->fail('角色不存在', 404);

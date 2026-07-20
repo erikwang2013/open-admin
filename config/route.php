@@ -108,6 +108,10 @@ Route::group('/admin', function () {
     app\middleware\OperationLog::class,
 ]);
 
+// 个人中心 — 查看个人信息（无需权限校验，只需认证）
+Route::get('/admin/profile', [app\admin\controller\ProfileController::class, 'show'])
+    ->middleware([app\middleware\AdminAuth::class]);
+
 // ============================================================
 // 公开接口（通过 API-Version 头路由到版本化控制器）
 // ============================================================
@@ -130,7 +134,7 @@ Route::fallback(function (\support\Request $request) {
         return response('', 204, [
             'Access-Control-Allow-Origin'      => '*',
             'Access-Control-Allow-Methods'     => 'GET,POST,PUT,DELETE,OPTIONS',
-            'Access-Control-Allow-Headers'     => 'Authorization,Content-Type,API-Version',
+            'Access-Control-Allow-Headers'     => 'Authorization,Content-Type,API-Version,Accept-Language',
             'Access-Control-Max-Age'           => '86400',
         ]);
     }

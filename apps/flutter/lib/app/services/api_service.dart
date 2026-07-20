@@ -2,10 +2,12 @@
  * Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
  */
 
+import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:get/get.dart' hide Response;
 import 'auth_service.dart';
 import '../config/app_config.dart';
+import '../i18n/locale_service.dart';
 
 class ApiService {
   static final ApiService _instance = ApiService._();
@@ -28,9 +30,14 @@ class ApiService {
     dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         final token = await AuthService.getToken();
-        if (token != null) {
+        print('ApiService.onRequest: token=${token != null ? token.substring(0, min(20, token.length)) : "null"} url=${options.uri}');
+        if (token != null && token.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $token';
         }
+        try {
+          final svc = Get.find<LocaleService>();
+          options.headers['Accept-Language'] = svc.langCode;
+        } catch (_) {}
         handler.next(options);
       },
       onError: (error, handler) async {

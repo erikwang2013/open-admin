@@ -6,6 +6,7 @@ import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/encryption_service.dart';
 import '../../widgets/captcha_dialog.dart';
+import '../../i18n/translations.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -23,7 +24,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _login() async {
     final u = _userCtrl.text.trim(), p = _passCtrl.text;
-    if (u.isEmpty || p.isEmpty) { setState(() => _error = '请输入用户名和密码'); return; }
+    if (u.isEmpty || p.isEmpty) { setState(() => _error = t('login_username_required')); return; }
 
     setState(() { _loading = true; _error = null; });
 
@@ -42,10 +43,10 @@ class _LoginPageState extends State<LoginPage> {
         await AuthService.saveLogin(token: d['access_token'], refreshToken: d['refresh_token'], username: d['user']['username']);
         if (mounted) Get.offAllNamed('/dashboard');
       } else {
-        if (mounted) setState(() => _error = resp.data['message'] ?? '登录失败');
+        if (mounted) setState(() => _error = resp.data['message'] ?? t('login_failed'));
       }
     } catch (_) {
-      if (mounted) setState(() => _error = '网络错误');
+      if (mounted) setState(() => _error = t('login_network_error'));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -63,11 +64,11 @@ class _LoginPageState extends State<LoginPage> {
         mainAxisSize: MainAxisSize.min, children: [
           const Icon(Icons.admin_panel_settings, size: 56, color: Color(0xFF1677FF)),
           const SizedBox(height: 8),
-          const Text('开放管理后台', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          Text(t('login_title'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 28),
-          TextField(controller: _userCtrl, decoration: const InputDecoration(labelText: '用户名', prefixIcon: Icon(Icons.person_outline), border: OutlineInputBorder())),
+          TextField(controller: _userCtrl, decoration: InputDecoration(labelText: t('login_username'), prefixIcon: const Icon(Icons.person_outline), border: const OutlineInputBorder())),
           const SizedBox(height: 14),
-          TextField(controller: _passCtrl, obscureText: true, decoration: const InputDecoration(labelText: '密码', prefixIcon: Icon(Icons.lock_outline), border: OutlineInputBorder())),
+          TextField(controller: _passCtrl, obscureText: true, decoration: InputDecoration(labelText: t('login_password'), prefixIcon: const Icon(Icons.lock_outline), border: const OutlineInputBorder())),
           const SizedBox(height: 20),
           if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12),
             child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(6)),
@@ -75,10 +76,10 @@ class _LoginPageState extends State<LoginPage> {
           ),
           SizedBox(width: double.infinity, height: 44, child: FilledButton(
             onPressed: _loading ? null : _login,
-            child: _loading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('登 录', style: TextStyle(fontSize: 16)),
+            child: _loading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(t('login_button'), style: const TextStyle(fontSize: 16)),
           )),
           const SizedBox(height: 16),
-          Text('Copyright (c) 2026 erik — https://erik.xyz', style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+          Text(t('login_copyright'), style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
         ],
       )),
     )),

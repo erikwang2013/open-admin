@@ -38,6 +38,11 @@ class AdminUser extends Model
         'id_card' => Encryptable::class,
     ];
 
+    protected function serializeDate(\DateTimeInterface $date): string
+    {
+        return $date->format('Y-m-d H:i:s');
+    }
+
     public function roles()
     {
         return $this->belongsToMany(AdminRole::class, 'admin_user_role', 'user_id', 'role_id');

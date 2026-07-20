@@ -11,6 +11,7 @@ use app\model\AdminUser;
 use app\common\EncryptionService;
 use support\Request;
 use support\Response;
+use Webman\Validation\Validator;
 
 /**
  * @Apidoc\Title("用户管理")
@@ -91,7 +92,17 @@ class UserController extends BaseController
      */
     public function store(Request $request): Response
     {
-        $validator = validator($request->all(), [
+        $password = EncryptionService::decryptTransmission($request->input('password', ''));
+        $phone = EncryptionService::decryptTransmission($request->input('phone', ''));
+        $email = EncryptionService::decryptTransmission($request->input('email', ''));
+
+        $data = array_merge($request->all(), [
+            'password' => $password,
+            'phone' => $phone,
+            'email' => $email,
+        ]);
+
+        $validator = Validator::make($data, [
             'username' => 'required|string|min:3|max:50',
             'password' => 'required|string|min:6|max:32',
             'real_name' => 'required|string|max:50',
@@ -110,16 +121,16 @@ class UserController extends BaseController
         $user = new AdminUser();
         $user->id = $this->generateId();
         $user->username = $request->input('username');
-        $user->password = password_hash($request->input('password'), PASSWORD_BCRYPT);
+        $user->password = password_hash($password, PASSWORD_BCRYPT);
         $user->real_name = $request->input('real_name');
         $user->status = (int) $request->input('status', 1);
-        $user->phone = $request->input('phone', '');
-        $user->email = $request->input('email', '');
+        $user->phone = $phone;
+        $user->email = $email;
         $user->save();
 
-        $data = $user->toArray();
-        unset($data['password'], $data['id_card']);
-        return $this->success($this->encodeIds($data), trans('messages.create_success'));
+        $udata = $user->toArray();
+        unset($udata['password'], $udata['id_card']);
+        return $this->success($this->encodeIds($udata), trans('messages.create_success'));
     }
 
     /**
@@ -129,9 +140,9 @@ class UserController extends BaseController
      * @Apidoc\Desc("获取指定用户的详细信息")
      * @Apidoc\Param("id", type="string", require=true, desc="用户hashid")
      */
-    public function show(Request $request, string $hashid): Response
+    public function show(Request $request, string $id): Response
     {
-        $id = $this->decodeId($hashid);
+        $id = $this->decodeId($id);
         $user = AdminUser::find($id);
         if (!$user) {
             return $this->fail(trans('messages.user_not_found'), 404);
@@ -156,9 +167,9 @@ class UserController extends BaseController
      * @Apidoc\Param("phone", type="string", require=false, desc="手机号")
      * @Apidoc\Param("email", type="string", require=false, desc="邮箱")
      */
-    public function update(Request $request, string $hashid): Response
+    public function update(Request $request, string $id): Response
     {
-        $id = $this->decodeId($hashid);
+        $id = $this->decodeId($id);
         $user = AdminUser::find($id);
         if (!$user) {
             return $this->fail(trans('messages.user_not_found'), 404);
@@ -167,14 +178,14 @@ class UserController extends BaseController
         $user->real_name = $request->input('real_name', $user->real_name);
         $user->status = (int) $request->input('status', $user->status);
 
-        if ($request->has('password') && !empty($request->input('password'))) {
-            $user->password = password_hash($request->input('password'), PASSWORD_BCRYPT);
+        if ($request->input('password') !== null && $request->input('password') !== '') {
+            $user->password = password_hash(EncryptionService::decryptTransmission($request->input('password')), PASSWORD_BCRYPT);
         }
-        if ($request->has('phone')) {
-            $user->phone = $request->input('phone', '');
+        if ($request->input('phone') !== null) {
+            $user->phone = EncryptionService::decryptTransmission($request->input('phone', ''));
         }
-        if ($request->has('email')) {
-            $user->email = $request->input('email', '');
+        if ($request->input('email') !== null) {
+            $user->email = EncryptionService::decryptTransmission($request->input('email', ''));
         }
 
         $user->save();
@@ -193,9 +204,9 @@ class UserController extends BaseController
      * @Apidoc\Param("id", type="string", require=true, desc="用户hashid")
      * @Apidoc\Param("password", type="string", require=true, desc="当前管理员密码")
      */
-    public function destroy(Request $request, string $hashid): Response
+    public function destroy(Request $request, string $id): Response
     {
-        $id = $this->decodeId($hashid);
+        $id = $this->decodeId($id);
         $user = AdminUser::find($id);
         if (!$user) {
             return $this->fail(trans('messages.user_not_found'), 404);
@@ -237,11 +248,11 @@ class UserController extends BaseController
 
         $decodedIds = [];
         $invalidIds = [];
-        foreach ($ids as $hashid) {
+        foreach ($ids as $id) {
             try {
-                $decodedIds[] = $this->decodeId($hashid);
+                $decodedIds[] = $this->decodeId($id);
             } catch (\InvalidArgumentException $e) {
-                $invalidIds[] = $hashid;
+                $invalidIds[] = $id;
             }
         }
         if (!empty($invalidIds)) {
@@ -277,11 +288,11 @@ class UserController extends BaseController
 
         $decodedIds = [];
         $invalidIds = [];
-        foreach ($ids as $hashid) {
+        foreach ($ids as $id) {
             try {
-                $decodedIds[] = $this->decodeId($hashid);
+                $decodedIds[] = $this->decodeId($id);
             } catch (\InvalidArgumentException $e) {
-                $invalidIds[] = $hashid;
+                $invalidIds[] = $id;
             }
         }
         if (!empty($invalidIds)) {

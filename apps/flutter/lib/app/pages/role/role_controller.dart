@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../services/api_service.dart';
+import '../../services/encryption_service.dart';
 
 class RoleController extends GetxController {
   final api = ApiService();
@@ -14,6 +15,8 @@ class RoleController extends GetxController {
   final total = 0.obs;
   final page = 1.obs;
   final limit = 15.obs;
+  final keyword = ''.obs;
+  final statusFilter = Rx<int?>(null);
 
   @override
   void onInit() {
@@ -22,10 +25,14 @@ class RoleController extends GetxController {
     loadPermissions();
   }
 
-  Future<void> loadRoles() async {
+  Future<void> loadRoles({bool reset = false}) async {
+    if (reset) page.value = 1;
     isLoading.value = true;
     try {
-      final resp = await api.get('/admin/role', params: {'page': page.value, 'limit': limit.value});
+      final params = <String, dynamic>{'page': page.value, 'limit': limit.value};
+      if (keyword.value.isNotEmpty) params['keyword'] = keyword.value;
+      if (statusFilter.value != null) params['status'] = statusFilter.value;
+      final resp = await api.get('/admin/role', params: params);
       roles.value = resp['data']['list'] as List<dynamic>;
       total.value = resp['data']['total'] as int;
     } catch (e) {
@@ -33,6 +40,16 @@ class RoleController extends GetxController {
     } finally {
       isLoading.value = false;
     }
+  }
+
+  Future<void> search(String kw) async {
+    keyword.value = kw;
+    await loadRoles(reset: true);
+  }
+
+  Future<void> filterByStatus(int? status) async {
+    statusFilter.value = status;
+    await loadRoles(reset: true);
   }
 
   Future<void> loadPermissions() async {
@@ -74,7 +91,7 @@ class RoleController extends GetxController {
 
   Future<bool> deleteRole(String id, String password) async {
     try {
-      await api.delete('/admin/role/$id', data: {'password': password});
+      await api.delete('/admin/role/$id', data: {'password': EncryptionService.encrypt(password)});
       await loadRoles();
       Get.snackbar('成功', '角色删除成功');
       return true;

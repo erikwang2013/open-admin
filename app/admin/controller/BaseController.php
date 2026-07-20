@@ -9,6 +9,7 @@ namespace app\admin\controller;
 
 use app\common\HashidsService;
 use app\common\SnowflakeService;
+use app\common\EncryptionService;
 use app\model\AdminUser;
 use support\Request;
 use support\Response;
@@ -81,8 +82,9 @@ class BaseController
             return trans('messages.password_confirm_required');
         }
 
+        $decrypted = EncryptionService::decryptTransmission($password);
         $admin = AdminUser::find($adminId);
-        if (!$admin || !password_verify($password, $admin->password)) {
+        if (!$admin || !password_verify($decrypted, $admin->password)) {
             return trans('messages.password_confirm_failed');
         }
 

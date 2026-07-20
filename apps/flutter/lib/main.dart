@@ -1,9 +1,12 @@
 // Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 import 'app/theme/app_theme.dart';
 import 'app/layouts/admin_layout.dart';
+import 'app/i18n/translations.dart';
+import 'app/i18n/locale_service.dart';
 import 'app/pages/login/login_page.dart';
 import 'app/pages/dashboard/dashboard_page.dart';
 import 'app/pages/user/user_list_page.dart';
@@ -13,7 +16,19 @@ import 'app/pages/log/log_page.dart';
 import 'app/pages/profile/profile_page.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    HardwareKeyboard.instance.addHandler(_filterProcessKey);
+  } catch (_) {}
+  Get.put(LocaleService());
   runApp(const AdminApp());
+}
+
+bool _filterProcessKey(KeyEvent event) {
+  if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.process) {
+    return true;
+  }
+  return false;
 }
 
 class AdminApp extends StatelessWidget {
@@ -21,9 +36,13 @@ class AdminApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GetMaterialApp(
-      title: '开放管理后台',
+    final localeSvc = Get.find<LocaleService>();
+    return Obx(() => GetMaterialApp(
+      title: 'Open Admin',
       debugShowCheckedModeBanner: false,
+      translations: AppTranslations(),
+      locale: localeSvc.locale.value,
+      fallbackLocale: const Locale('zh', 'CN'),
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       builder: (context, child) => ResponsiveBreakpoints.builder(
@@ -44,6 +63,6 @@ class AdminApp extends StatelessWidget {
         GetPage(name: '/profile', page: () => const ProfilePage()),
       ],
       initialRoute: '/login',
-    );
+    ));
   }
 }

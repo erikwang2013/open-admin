@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../services/api_service.dart';
+import '../../services/encryption_service.dart';
 
 class UserController extends GetxController {
   final api = ApiService();
@@ -71,7 +72,7 @@ class UserController extends GetxController {
 
   Future<bool> deleteUser(String id, String password) async {
     try {
-      await api.delete('/admin/user/$id', data: {'password': password});
+      await api.delete('/admin/user/$id', data: {'password': EncryptionService.encrypt(password)});
       await loadUsers();
       return true;
     } catch (e) {
@@ -88,7 +89,7 @@ class UserController extends GetxController {
     try {
       await api.post('/admin/user/batch/destroy', data: {
         'ids': selectedIds.toList(),
-        'password': password,
+        'password': EncryptionService.encrypt(password),
       });
       selectedIds.clear();
       await loadUsers();

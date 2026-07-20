@@ -17,4 +17,9 @@ class SystemConfig extends Model
     protected $keyType = 'int';
 
     protected $fillable = ['group', 'key', 'value', 'type', 'description'];
+
+    protected function serializeDate(\DateTimeInterface $date): string
+    {
+        return $date->format('Y-m-d H:i:s');
+    }
 }
