@@ -56,7 +56,7 @@ class _CaptchaDialogState extends State<CaptchaDialog> {
     try {
       _data = await widget.svc.generate();
       if (mounted) setState(() => _error = null);
-    } catch (_) { if (mounted) setState(() => _error = t('captcha_load_fail')); }
+    } catch (e) { if (mounted) setState(() => _error = '${t('captcha_load_fail')}: $e'); }
   }
 
   Future<void> _confirm() async {

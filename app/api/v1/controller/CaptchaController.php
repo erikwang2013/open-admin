@@ -51,8 +51,8 @@ class CaptchaController
         } catch (Throwable $e) {
             return json([
                 'code' => 500,
-                'message' => trans('messages.captcha_generate_failed'),
-                'data' => [],
+                'message' => '验证码生成失败: ' . $e->getMessage(),
+                'data' => ['file' => $e->getFile(), 'line' => $e->getLine()],
             ]);
         }
     }
