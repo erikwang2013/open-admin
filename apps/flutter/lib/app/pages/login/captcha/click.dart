@@ -38,9 +38,9 @@ class ClickCaptchaState extends State<ClickCaptcha> {
           child: Stack(children: [
             Image.memory(d.imageBytes, width: box.maxWidth, height: box.maxHeight, fit: BoxFit.fill),
             for (int i = 0; i < clicks.length; i++)
-              Positioned(left: clicks[i].dx / _sw * box.maxWidth - 12, top: clicks[i].dy / _sh * box.maxHeight - 12,
-                child: Container(width: 24, height: 24, decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.redAccent),
-                  child: const Icon(Icons.close, color: Colors.white, size: 14))),
+              Positioned(left: clicks[i].dx / _sw * box.maxWidth - 14, top: clicks[i].dy / _sh * box.maxHeight - 14,
+                child: Container(width: 28, height: 28, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF1677FF)),
+                  child: Center(child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold))))),
           ]),
         )),
       )),

@@ -22,7 +22,7 @@ class CaptchaService {
     };
     // click → array of {x,y}; slider/rotate → plain number
     if (answer is List) {
-      body['clicks'] = answer.map((c) => {'x': c.dx.round(), 'y': c.dy.round()}).toList();
+      body['clicks'] = answer.map((c) => [c.dx.round(), c.dy.round()]).toList();
     } else {
       body['clicks'] = (answer as num).round();
     }
