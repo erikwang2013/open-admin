@@ -22,17 +22,17 @@ class UserListPage extends GetView<UserController> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Header
-        Row(
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
           children: [
             const Text('用户管理', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const Spacer(),
             IconButton(icon: const Icon(Icons.refresh), tooltip: '刷新', onPressed: () => ctrl.loadUsers(reset: true)),
             ElevatedButton.icon(
               onPressed: () => Get.to(() => const UserFormPage())?.then((_) => ctrl.loadUsers(reset: true)),
               icon: const Icon(Icons.add),
               label: const Text('新增用户'),
             ),
-            const SizedBox(width: 8),
             if (ctrl.selectedIds.isNotEmpty) ...[
               ElevatedButton.icon(
                 onPressed: () => _confirmBatchDelete(context, ctrl),
@@ -40,7 +40,6 @@ class UserListPage extends GetView<UserController> {
                 label: Text('删除(${ctrl.selectedIds.length})'),
                 style: ElevatedButton.styleFrom(foregroundColor: Colors.red),
               ),
-              const SizedBox(width: 8),
               PopupMenuButton<String>(
                 onSelected: (v) {
                   if (v == 'enable') ctrl.batchSetStatus(1);
@@ -56,7 +55,7 @@ class UserListPage extends GetView<UserController> {
         ),
         const SizedBox(height: 12),
         // Search + Filter
-        Row(
+        Obx(() => Row(
           children: [
             SizedBox(
               width: 250,
@@ -72,7 +71,7 @@ class UserListPage extends GetView<UserController> {
             const SizedBox(width: 4),
             ChoiceChip(label: const Text('禁用'), selected: ctrl.statusFilter.value == 0, onSelected: (_) => ctrl.filterByStatus(0)),
           ],
-        ),
+        )),
         const SizedBox(height: 12),
         // Table
         Expanded(

@@ -20,9 +20,11 @@ class RoleListPage extends GetView<RoleController> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          children: [
           const Text('角色管理', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const Spacer(),
           IconButton(icon: const Icon(Icons.refresh), tooltip: '刷新', onPressed: () => ctrl.loadRoles()),
           ElevatedButton.icon(
             onPressed: () => _showRoleDialog(context, ctrl),
@@ -31,7 +33,7 @@ class RoleListPage extends GetView<RoleController> {
           ),
         ]),
         const SizedBox(height: 12),
-        Row(children: [
+        Obx(() => Row(children: [
           SizedBox(
             width: 250,
             child: TextField(
@@ -45,7 +47,7 @@ class RoleListPage extends GetView<RoleController> {
           ChoiceChip(label: const Text('启用'), selected: ctrl.statusFilter.value == 1, onSelected: (_) => ctrl.filterByStatus(1)),
           const SizedBox(width: 4),
           ChoiceChip(label: const Text('禁用'), selected: ctrl.statusFilter.value == 0, onSelected: (_) => ctrl.filterByStatus(0)),
-        ]),
+        ])),
         const SizedBox(height: 12),
         Expanded(child: Obx(() {
           if (ctrl.isLoading.value) return const Center(child: CircularProgressIndicator());
@@ -55,6 +57,7 @@ class RoleListPage extends GetView<RoleController> {
             itemCount: ctrl.roles.length,
             itemBuilder: (_, i) {
               final r = ctrl.roles[i];
+              final isSuperAdmin = r['slug'] == 'super_admin';
               return Card(
                 child: ListTile(
                   leading: const Icon(Icons.shield, size: 36),
@@ -62,20 +65,22 @@ class RoleListPage extends GetView<RoleController> {
                   subtitle: Text('标识: ${r['slug']} | 用户数: ${r['users_count'] ?? 0} | ${r['description'] ?? ''}'),
                   trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                     Chip(label: Text(r['status'] == 1 ? '启用' : '禁用')),
-                    IconButton(icon: const Icon(Icons.edit, size: 18), onPressed: () => _showRoleDialog(context, ctrl, role: r)),
-                    IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), onPressed: () {
-                      final pwdCtrl = TextEditingController();
-                      showDialog(context: context, builder: (_) => AlertDialog(
-                        title: const Text('确认删除'), content: Column(mainAxisSize: MainAxisSize.min, children: [
-                          Text('确定要删除角色「${r['name']}」吗？'),
-                          TextField(controller: pwdCtrl, obscureText: true, decoration: const InputDecoration(labelText: '输入密码确认')),
-                        ]),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
-                          ElevatedButton(onPressed: () { ctrl.deleteRole(r['id'], pwdCtrl.text); Navigator.pop(context); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white), child: const Text('删除')),
-                        ],
-                      ));
-                    }),
+                    if (!isSuperAdmin) ...[
+                      IconButton(icon: const Icon(Icons.edit, size: 18), onPressed: () => _showRoleDialog(context, ctrl, role: r)),
+                      IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), onPressed: () {
+                        final pwdCtrl = TextEditingController();
+                        showDialog(context: context, builder: (_) => AlertDialog(
+                          title: const Text('确认删除'), content: Column(mainAxisSize: MainAxisSize.min, children: [
+                            Text('确定要删除角色「${r['name']}」吗？'),
+                            TextField(controller: pwdCtrl, obscureText: true, decoration: const InputDecoration(labelText: '输入密码确认')),
+                          ]),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+                            ElevatedButton(onPressed: () { ctrl.deleteRole(r['id'], pwdCtrl.text); Navigator.pop(context); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white), child: const Text('删除')),
+                          ],
+                        ));
+                      }),
+                    ],
                   ]),
                 ),
               );

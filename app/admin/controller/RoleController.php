@@ -120,6 +120,9 @@ class RoleController extends BaseController
         if (!$role) {
             return $this->fail('角色不存在', 404);
         }
+        if ($role->slug === 'super_admin') {
+            return $this->fail('超级管理员不可编辑', 403);
+        }
 
         $role->name = $request->input('name', $role->name);
         $role->description = $request->input('description', $role->description);
@@ -149,6 +152,9 @@ class RoleController extends BaseController
         $role = AdminRole::find($id);
         if (!$role) {
             return $this->fail('角色不存在', 404);
+        }
+        if ($role->slug === 'super_admin') {
+            return $this->fail('超级管理员不可删除', 403);
         }
 
         $adminId = $request->adminId ?? 0;

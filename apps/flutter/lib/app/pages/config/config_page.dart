@@ -61,9 +61,11 @@ class ConfigPage extends GetView<ConfigController> {
     final ctrl = controller;
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
+      Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        children: [
         const Text('系统配置', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        const Spacer(),
         IconButton(icon: const Icon(Icons.refresh), tooltip: '刷新', onPressed: () => ctrl.loadConfigs()),
         ElevatedButton.icon(onPressed: () => _showDialog(context, ctrl), icon: const Icon(Icons.add), label: const Text('新增配置')),
       ]),

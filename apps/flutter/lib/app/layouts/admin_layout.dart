@@ -25,6 +25,7 @@ class _AdminLayoutState extends State<AdminLayout> {
   late int _selectedIndex = widget.initialIndex;
   late Widget _currentChild;
   bool _sidebarCollapsed = false;
+  bool _showCollapsedContent = false;
   String? _previousBreakpoint;
   static const double sidebarWidth = 240;
   static const double sidebarCollapsedWidth = 64;
@@ -64,6 +65,14 @@ class _AdminLayoutState extends State<AdminLayout> {
       _sidebarCollapsed = _isTablet;
     }
     _previousBreakpoint = current;
+  }
+
+  void _toggleSidebar() {
+    setState(() {
+      _sidebarCollapsed = !_sidebarCollapsed;
+      // collapsing: switch to collapsed content immediately
+      if (_sidebarCollapsed) _showCollapsedContent = true;
+    });
   }
 
   void _onNavChanged(int index) {
@@ -144,82 +153,79 @@ class _AdminLayoutState extends State<AdminLayout> {
     );
   }
 
+  static const _accent = Color(0xFF4F6EF7);
+
   Widget _buildSidebar() {
     final width = _sidebarCollapsed ? sidebarCollapsedWidth : sidebarWidth;
-    final cs = Theme.of(context).colorScheme;
+    final showCollapsed = _showCollapsedContent;
     final items = [
-      (_sidebarCollapsed ? null : t('nav_dashboard'), Icons.dashboard),
-      (_sidebarCollapsed ? null : t('nav_users'), Icons.people),
-      (_sidebarCollapsed ? null : t('nav_roles'), Icons.security),
-      (_sidebarCollapsed ? null : t('nav_config'), Icons.settings),
-      (_sidebarCollapsed ? null : t('nav_logs'), Icons.description),
+      (showCollapsed ? null : t('nav_dashboard'), Icons.dashboard),
+      (showCollapsed ? null : t('nav_users'), Icons.people),
+      (showCollapsed ? null : t('nav_roles'), Icons.security),
+      (showCollapsed ? null : t('nav_config'), Icons.settings),
+      (showCollapsed ? null : t('nav_logs'), Icons.description),
     ];
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       width: width,
-      decoration: BoxDecoration(
-        color: cs.surface,
-        border: Border(right: BorderSide(color: cs.outlineVariant)),
+      clipBehavior: Clip.hardEdge,
+      onEnd: () {
+        if (!_sidebarCollapsed && _showCollapsedContent) {
+          setState(() => _showCollapsedContent = false);
+        }
+      },
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(right: BorderSide(color: Color(0xFFF0F0F5))),
       ),
       child: Column(
         children: [
           Container(
             height: headerHeight,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: EdgeInsets.symmetric(horizontal: showCollapsed ? 16.0 : 20.0),
             alignment: Alignment.centerLeft,
-            child: _sidebarCollapsed
-                ? const Icon(Icons.admin_panel_settings, size: 28)
-                : const Row(
-                    children: [
-                      Icon(Icons.admin_panel_settings, size: 24),
-                      SizedBox(width: 8),
-                      Text('管理后台', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
+            child: showCollapsed
+                ? const Icon(Icons.admin_panel_settings, size: 26, color: _accent)
+                : Row(children: [
+                    const Icon(Icons.admin_panel_settings, size: 24, color: _accent),
+                    const SizedBox(width: 10),
+                    Flexible(child: Text('开放管理后台', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1F2937)))),
+                  ]),
           ),
-          const Divider(height: 1),
+          const Divider(height: 1, color: Color(0xFFF0F0F5)),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
               children: List.generate(items.length, (i) {
                 final (label, icon) = items[i];
                 final selected = _selectedIndex == i;
                 return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.only(bottom: 2),
                   child: Material(
-                    color: selected ? cs.primaryContainer : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
+                    color: selected ? const Color(0xFFEEF2FF) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                       onTap: () => _onNavChanged(i),
                       child: Container(
-                        height: 44,
-                        padding: EdgeInsets.only(left: _sidebarCollapsed ? 16 : 12),
+                        height: 42,
+                        padding: showCollapsed
+                            ? EdgeInsets.zero
+                            : const EdgeInsets.only(left: 14),
                         decoration: BoxDecoration(
-                          border: selected
-                              ? Border(left: BorderSide(color: cs.primary, width: 3))
-                              : null,
-                          borderRadius: BorderRadius.circular(8),
+                          border: selected ? const Border(left: BorderSide(color: _accent, width: 3)) : null,
+                          borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
+                          mainAxisAlignment: showCollapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
                           children: [
-                            Icon(icon,
-                              size: 20,
-                              color: selected ? cs.primary : cs.onSurfaceVariant,
-                            ),
-                            if (!_sidebarCollapsed) ...[
-                              const SizedBox(width: 12),
-                              Text(label ?? '',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                                  color: selected ? cs.primary : cs.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
+                          Icon(icon, size: 20, color: selected ? _accent : const Color(0xFF9CA3AF)),
+                          if (!showCollapsed) ...[
+                            const SizedBox(width: 12),
+                            Flexible(child: Text(label ?? '', overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontWeight: selected ? FontWeight.w600 : FontWeight.normal, color: selected ? const Color(0xFF1F2937) : const Color(0xFF6B7280)))),
                           ],
-                        ),
+                        ]),
                       ),
                     ),
                   ),
@@ -278,7 +284,7 @@ class _AdminLayoutState extends State<AdminLayout> {
           IconButton(
             icon: Icon(_sidebarCollapsed ? Icons.menu_open : Icons.menu),
             tooltip: _sidebarCollapsed ? '展开菜单' : '收起菜单',
-            onPressed: () => setState(() => _sidebarCollapsed = !_sidebarCollapsed),
+            onPressed: _toggleSidebar,
           ),
           const Spacer(),
           IconButton(

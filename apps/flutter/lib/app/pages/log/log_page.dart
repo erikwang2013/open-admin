@@ -51,29 +51,40 @@ class LogPage extends GetView<LogController> {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('操作日志', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
       const SizedBox(height: 12),
-      Row(children: [
+      Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        children: [
         IconButton(icon: const Icon(Icons.refresh), tooltip: '刷新', onPressed: () => ctrl.loadLogs()),
         SizedBox(width: 150, child: TextField(decoration: const InputDecoration(hintText: '操作筛选', isDense: true), onSubmitted: (v) { ctrl.actionFilter.value = v; ctrl.loadLogs(reset: true); })),
-        const SizedBox(width: 12),
         SizedBox(width: 200, child: TextField(decoration: const InputDecoration(hintText: '路径筛选', isDense: true), onSubmitted: (v) { ctrl.pathFilter.value = v; ctrl.loadLogs(reset: true); })),
       ]),
       const SizedBox(height: 12),
       Expanded(child: Obx(() {
         if (ctrl.isLoading.value) return const Center(child: CircularProgressIndicator());
-        return SingleChildScrollView(child: DataTable(columns: const [
-          DataColumn(label: Text('操作者')),
-          DataColumn(label: Text('方法')),
-          DataColumn(label: Text('路径')),
-          DataColumn(label: Text('IP')),
-          DataColumn(label: Text('时间')),
-        ], rows: ctrl.logs.map((l) => DataRow(cells: [
-          DataCell(Text(l['user_name'] ?? '系统')),
-          DataCell(Chip(label: Text(l['method'] ?? ''))),
-          DataCell(Text(l['path'] ?? '')),
-          DataCell(Text(l['ip'] ?? '')),
-          DataCell(Text(l['created_at'] ?? '')),
-        ])).toList()));
+        return SingleChildScrollView(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columns: const [
+                DataColumn(label: Text('操作者')),
+                DataColumn(label: Text('方法')),
+                DataColumn(label: Text('路径')),
+                DataColumn(label: Text('IP')),
+                DataColumn(label: Text('时间')),
+              ],
+              rows: ctrl.logs.map((l) => DataRow(cells: [
+                DataCell(Text(l['user_name'] ?? '系统')),
+                DataCell(Chip(label: Text(l['method'] ?? ''))),
+                DataCell(Text(l['path'] ?? '')),
+                DataCell(Text(l['ip'] ?? '')),
+                DataCell(Text(l['created_at'] ?? '')),
+              ])).toList(),
+            ),
+          ),
+        );
       })),
+      const SizedBox(height: 8),
       Obx(() => Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         IconButton(onPressed: ctrl.prevPage, icon: const Icon(Icons.chevron_left)),
         Text('${ctrl.page.value} / ${(ctrl.total.value / ctrl.limit.value).ceil()} (${ctrl.total.value}条)'),

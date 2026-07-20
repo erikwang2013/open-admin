@@ -23,8 +23,10 @@ class DashboardPage extends GetView<DashboardController> {
           children: [
             Row(
               children: [
-                Text('仪表盘',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
+                Flexible(
+                  child: Text('仪表盘',
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                ),
                 const Spacer(),
                 IconButton(icon: const Icon(Icons.refresh), tooltip: '刷新', onPressed: () => controller.loadData()),
                 PopupMenuButton<String>(

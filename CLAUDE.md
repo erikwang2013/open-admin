@@ -144,6 +144,10 @@ open-admin/
 /health: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller
 ```
 
+> **注意**: 无需权限校验的管理端接口（如个人中心查看）放到 `/admin` 组外单独注册，仅加 `AdminAuth` 中间件。组内路由由 `AdminPermission` 校验 `method.path` 格式的权限标识。
+> 
+> **Redis 前缀**: 所有 key 自动加 `open-admin:` 前缀，通过 `.env` 的 `REDIS_PREFIX` 可自定义。
+
 ## 安全增强
 
 - **攻击检测**：erikwang2013/security-php 包（31 种检测器：XSS/SQL注入/命令注入/路径遍历/SSRF/XXE/JNDI/反序列化/JWT攻击/CSRF/敏感数据泄漏等 + HTTP方法校验/请求体大小限制/Content-Type校验 + IP攻击升级黑名单）
@@ -176,6 +180,11 @@ Redis 滑动窗口（Lua 原子化），默认 60 次/分钟/IP/路由：
 - 全局函数/类引用不加前置 `\`，使用 `use` 导入
 - 配置文件必须包含中文注释说明每个配置项的含义
 - 所有新建 `.php` 文件头必须包含版权声明
+- **Redis 通过 `support\Redis` 工具类访问**（单例连接池，自动读取 `REDIS_HOST/PORT/PASSWORD/DB` 环境变量），所有 key 自动添加前缀（默认 `open-admin:`，通过 `REDIS_PREFIX` 环境变量可配置）
+- **路由权限**: `/admin` 组内路由需 `method.path` 格式的权限（如 `get.admin/dashboard`），无需权限校验的路由放到组外仅加 `AdminAuth` 中间件
+- **CORS**: 新增请求头时需同步更新 `Cors.php` 中间件和 `route.php` fallback 的 `Access-Control-Allow-Headers`
+- **超级管理员保护**: `RoleController` 的 `update`/`destroy` 方法禁止操作 `slug == 'super_admin'` 的角色
+- webman 将 PHP Warning 转为异常，未定义的属性/变量会导致 500 错误
 
 ### 数据库
 - 表前缀: `erik_`
@@ -185,9 +194,13 @@ Redis 滑动窗口（Lua 原子化），默认 60 次/分钟/IP/路由：
 
 ### Flutter
 - Web 端布局使用 PC 管理后台风格（侧边栏 + 顶栏 + 内容区）
-- 使用 GetX 状态管理，`ApiService` 单例（Dio + JWT 拦截器）
+- 使用 GetX 状态管理，**所有 API 请求必须通过 `ApiService` 单例**（Dio + JWT 拦截器），禁止创建独立 Dio 实例或硬编码 baseUrl
 - Token 持久化使用 `shared_preferences`
 - 响应式断点: 移动端 (< 768px) 与桌面端 (>= 768px)
+- **页面头部 Row 必须使用 `Wrap`**，防止侧边栏展开时溢出；筛选 ChoiceChip 必须包在 `Obx` 内才能响应式更新
+- **DataTable 必须包裹 `SingleChildScrollView(scrollDirection: Axis.horizontal)`** 防止列溢出
+- 独立页面（如 ProfilePage）必须包含 `Scaffold`，否则 `TextField` 等 Material 组件会报 "No Material widget found"
+- 侧边栏展开/收起时用 `_showCollapsedContent` 延迟切换内容，避免动画期间 RenderFlex 溢出
 
 ### HarmonyOS
 - 使用 `@ohos.net.http` 原生 HTTP 客户端
