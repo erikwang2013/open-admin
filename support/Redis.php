@@ -15,7 +15,19 @@ use RuntimeException;
  */
 class Redis
 {
+    private const DEFAULT_PREFIX = 'open-admin:';
+
+    private static ?string $prefix = null;
     private static ?RedisClient $instance = null;
+
+    private static function getPrefix(): string
+    {
+        if (self::$prefix === null) {
+            $env = getenv('REDIS_PREFIX');
+            self::$prefix = ($env !== false && $env !== '') ? $env : self::DEFAULT_PREFIX;
+        }
+        return self::$prefix;
+    }
 
     private static function getInstance(): RedisClient
     {
@@ -48,8 +60,28 @@ class Redis
         return self::$instance;
     }
 
+    private static function prefixKey(string $key): string
+    {
+        if (str_starts_with($key, self::getPrefix())) {
+            return $key;
+        }
+        return self::getPrefix() . $key;
+    }
+
     public static function __callStatic(string $name, array $arguments): mixed
     {
+        if ($name === 'eval') {
+            // eval(script, keyCount, key1, key2, ..., arg1, arg2, ...)
+            // keys start at index 2, count = $arguments[1]
+            $keyCount = (int)($arguments[1] ?? 0);
+            for ($i = 0; $i < $keyCount; $i++) {
+                $idx = 2 + $i;
+                $arguments[$idx] = self::prefixKey((string)$arguments[$idx]);
+            }
+        } elseif (!empty($arguments) && is_string($arguments[0])) {
+            $arguments[0] = self::prefixKey($arguments[0]);
+        }
+
         return self::getInstance()->{$name}(...$arguments);
     }
 }
