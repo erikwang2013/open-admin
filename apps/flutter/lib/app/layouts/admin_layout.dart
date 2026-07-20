@@ -1,4 +1,6 @@
 // Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:responsive_framework/responsive_framework.dart';
@@ -11,6 +13,7 @@ import '../pages/config/config_page.dart';
 import '../pages/log/log_page.dart';
 import '../pages/dashboard/dashboard_page.dart';
 import '../pages/profile/profile_page.dart';
+import '../theme/app_theme.dart';
 
 class AdminLayout extends StatefulWidget {
   final Widget child;
@@ -119,11 +122,14 @@ class _AdminLayoutState extends State<AdminLayout> {
           ],
         ),
       ),
-      body: Container(
-        color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        padding: const EdgeInsets.all(16),
-        child: _currentChild,
-      ),
+      body: Column(children: [
+        Expanded(child: Container(
+          color: Theme.of(context).colorScheme.surfaceContainerLowest,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: _currentChild,
+        )),
+        _buildCopyright(),
+      ]),
     );
   }
 
@@ -141,10 +147,11 @@ class _AdminLayoutState extends State<AdminLayout> {
                 Expanded(
                   child: Container(
                     color: Theme.of(context).colorScheme.surfaceContainerLowest,
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                     child: _currentChild,
                   ),
                 ),
+                _buildCopyright(),
               ],
             ),
           ),
@@ -176,8 +183,8 @@ class _AdminLayoutState extends State<AdminLayout> {
         }
       },
       decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(right: BorderSide(color: Color(0xFFF0F0F5))),
+        gradient: AppTheme.sidebarGradient,
+        border: Border(right: BorderSide(color: Color(0x15FFFFFF))),
       ),
       child: Column(
         children: [
@@ -190,10 +197,10 @@ class _AdminLayoutState extends State<AdminLayout> {
                 : Row(children: [
                     const Icon(Icons.admin_panel_settings, size: 24, color: _accent),
                     const SizedBox(width: 10),
-                    Flexible(child: Text('开放管理后台', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1F2937)))),
+                    Flexible(child: Text('开放管理后台', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white))),
                   ]),
           ),
-          const Divider(height: 1, color: Color(0xFFF0F0F5)),
+          const Divider(height: 1, color: Color(0x20FFFFFF)),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
@@ -203,7 +210,7 @@ class _AdminLayoutState extends State<AdminLayout> {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 2),
                   child: Material(
-                    color: selected ? const Color(0xFFEEF2FF) : Colors.transparent,
+                    color: selected ? const Color(0x25A78BFA) : Colors.transparent,
                     borderRadius: BorderRadius.circular(10),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(10),
@@ -220,10 +227,10 @@ class _AdminLayoutState extends State<AdminLayout> {
                         child: Row(
                           mainAxisAlignment: showCollapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
                           children: [
-                          Icon(icon, size: 20, color: selected ? _accent : const Color(0xFF9CA3AF)),
+                          Icon(icon, size: 20, color: selected ? _accent : const Color(0x99FFFFFF)),
                           if (!showCollapsed) ...[
                             const SizedBox(width: 12),
-                            Flexible(child: Text(label ?? '', overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontWeight: selected ? FontWeight.w600 : FontWeight.normal, color: selected ? const Color(0xFF1F2937) : const Color(0xFF6B7280)))),
+                            Flexible(child: Text(label ?? '', overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontWeight: selected ? FontWeight.w600 : FontWeight.normal, color: selected ? Colors.white : const Color(0x99FFFFFF)))),
                           ],
                         ]),
                       ),
@@ -237,6 +244,14 @@ class _AdminLayoutState extends State<AdminLayout> {
       ),
     );
   }
+
+  static const _cr = 'Q29weXJpZ2h0IChjKSAyMDI2IGVyaWsgPGVyaWtAZXJpay54eXo+IOKAlCBodHRwczovL2VyaWsueHl6';
+
+  Widget _buildCopyright() => Container(
+    width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 8),
+    color: Theme.of(context).colorScheme.surfaceContainerLowest,
+    child: Text(utf8.decode(base64Decode(_cr)), textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+  );
 
   // Phone drawer still uses NavigationDrawer
   List<NavigationDrawerDestination> _buildNavItems() {
