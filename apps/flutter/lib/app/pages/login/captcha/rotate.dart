@@ -15,6 +15,12 @@ class RotateCaptchaState extends State<RotateCaptcha> {
   double val = 0;
 
   @override
+  void didUpdateWidget(RotateCaptcha old) {
+    super.didUpdateWidget(old);
+    if (widget.data != old.data) setState(() => val = 0);
+  }
+
+  @override
   Widget build(BuildContext c) {
     final d = widget.data;
     return Column(mainAxisSize: MainAxisSize.min, children: [

@@ -16,6 +16,12 @@ class ClickCaptchaState extends State<ClickCaptcha> {
   List<Offset> clicks = [];
 
   @override
+  void didUpdateWidget(ClickCaptcha old) {
+    super.didUpdateWidget(old);
+    if (widget.data != old.data) setState(() => clicks.clear());
+  }
+
+  @override
   Widget build(BuildContext c) {
     final d = widget.data;
     final ts = d.targets;

@@ -36,7 +36,7 @@
     "erikwang2013/season": "^2.0",
     "phpoffice/phpspreadsheet": "^5.7",
     "barryvdh/laravel-dompdf": "^3.1",
-    "erikwang2013/poster-php": "^1.0",
+    "erikwang2013/poster-php": "v1.1.2",
     "vlucas/phpdotenv": "^5.6",
     "hg/apidoc": "^5.3",
     "erikwang2013/security-php": "^1.1",
@@ -81,7 +81,8 @@
       "erikwang2013/encryptable": true,
       "erikwang2013/webman-scout": true,
       "erikwang2013/encryption": true
-    }
+    },
+    "process-timeout": 1800
   },
   "require-dev": {
     "phpunit/phpunit": "^12.5"
