@@ -74,7 +74,7 @@ class InstallController
 
         try {
             $pdo = $this->getPdo($db);
-            $sqlFile = base_path() . '/database/migrations/open_admin.sql';
+            $sqlFile = base_path() . '/database/install.sql';
             $sql = file_get_contents($sqlFile);
 
             // 替换默认管理员凭证

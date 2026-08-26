@@ -101,9 +101,7 @@ open-admin/
 │   ├── route.php               # 路由 + API 版本策略
 │   └── middleware.php           # 全局中间件注册
 ├── database/
-│   ├── migrations/             # SQL 迁移文件
-│   │   ├── 2026_05_16_000000_init_tables.sql
-│   │   └── 2026_05_20_000001_seed_permissions.sql
+│   ├── install.sql             # 全量安装脚本（合并所有 SQL）
 │   └── backup/                 # 数据库备份脚本
 │       ├── backup.sh           # mysqldump+gzip，30天保留
 │       └── restore.sh          # 交互式恢复
@@ -123,7 +121,9 @@ open-admin/
 ├── vendor/                     # Composer 依赖
 ├── CLAUDE.md                   # 本文件
 ├── README.md                   # 中文说明
-├── README_EN.md                # 英文说明
+├── docs/translations/          # 多语言文档（12 种语言 × README/CLAUDE）
+│   ├── README.en.md            # 英文说明
+│   └── README.ko.md ... README.ja.md  # 其他语言说明（韩/俄/德/法/西/葡/印地/阿拉伯/孟加拉/印尼/日）
 ├── .env                        # 环境变量（不纳入版本控制）
 ├── .env.example                # 环境变量模板
 ├── .env.docker                 # Docker 环境变量

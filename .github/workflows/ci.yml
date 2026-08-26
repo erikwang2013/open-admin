@@ -1,5 +1,5 @@
 # ============================================================
-# CI/CD — 语法检查 → 单元测试 → 构建
+# CI/CD — 语法检查 → 单元测试 → 分析 → 自动发布
 # Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 # ============================================================
 
@@ -59,8 +59,7 @@ jobs:
 
       - name: Init database
         run: |
-          mysql -h 127.0.0.1 -u root -proot open_admin < database/migrations/2026_05_16_000000_init_tables.sql
-          mysql -h 127.0.0.1 -u root -proot open_admin < database/migrations/2026_05_20_000001_seed_permissions.sql
+          mysql -h 127.0.0.1 -u root -proot open_admin < database/install.sql
 
       - name: PHP Syntax Check
         run: find app config -name "*.php" -exec php -l {} \; | grep -v "No syntax"
@@ -90,3 +89,40 @@ jobs:
 
       - name: Analyze
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+  # ============================================================
+  # Release — 推送到 main 后自动打 tag + 创建 Release
+  # 版本号基于最新 tag 的 patch 位增量（v2.1.0 → v2.1.1）
+  # 仅创建 tag 和 Release，不打包应用
+  # ============================================================
+  release:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    needs: [php, flutter]
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Get latest version and bump patch
+        id: version
+        run: |
+          LATEST=$(git tag --sort=-v:refname | head -1)
+          if [ -z "$LATEST" ]; then
+            NEW_VERSION="v1.0.0"
+          else
+            V=${LATEST#v}
+            MAJOR=${V%%.*}; REST=${V#*.}; MINOR=${REST%%.*}; PATCH=${REST#*.}
+            NEW_VERSION="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+          fi
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Latest tag: ${LATEST:-none} -> New version: $NEW_VERSION"
+
+      - name: Create tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ steps.version.outputs.new_version }}" --target "$GITHUB_SHA" --generate-notes
