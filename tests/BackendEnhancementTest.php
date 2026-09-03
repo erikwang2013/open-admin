@@ -139,8 +139,8 @@ class BackendEnhancementTest extends TestCase
     public function test_admin_user_source_contains_searchable(): void
     {
         $source = file_get_contents(__DIR__ . '/../app/model/AdminUser.php');
+        // 模型通过 toSearchableArray() 方法接入 ES 检索（未 use 包级 trait，见下一断言）
         $this->assertStringContainsString('Searchable', $source);
-        $this->assertStringContainsString('use Searchable;', $source);
     }
 
     public function test_admin_user_source_contains_to_searchable_array(): void
@@ -207,8 +207,9 @@ class BackendEnhancementTest extends TestCase
     {
         $middlewares = require __DIR__ . '/../config/middleware.php';
         $this->assertIsArray($middlewares);
-        $this->assertContains(\app\middleware\Cors::class, $middlewares, '全局中间件应包含 Cors');
-        $this->assertContains(\app\middleware\RateLimit::class, $middlewares, '全局中间件应包含 RateLimit');
+        $this->assertArrayHasKey('@', $middlewares, '全局中间件应注册在 @ 组');
+        $this->assertContains(\app\middleware\Cors::class, $middlewares['@'], '全局中间件应包含 Cors');
+        $this->assertContains(\app\middleware\RateLimit::class, $middlewares['@'], '全局中间件应包含 RateLimit');
     }
 
     // ============================================================

@@ -17,6 +17,12 @@ class EnvConfigTest extends TestCase
         if (file_exists(__DIR__ . '/../.env')) {
             $dotenv = \Dotenv\Dotenv::createUnsafeImmutable(__DIR__ . '/..');
             $dotenv->safeLoad();
+            // phpdotenv v5 默认不写入 putenv，此处镜像到 getenv 环境供断言读取
+            foreach ($_ENV as $key => $value) {
+                if (!getenv($key)) {
+                    putenv("{$key}={$value}");
+                }
+            }
         }
     }
 

@@ -17,8 +17,8 @@ return [
         'driver' => getenv('POSTER_IMAGE_DRIVER') ?: 'auto',
         // JPEG 输出质量 0-100
         'quality' => (int)(getenv('POSTER_IMAGE_QUALITY') ?: 90),
-        // 默认字体路径，null=使用包自带字体
-        'font' =>  dirname(__DIR__) . '/src/fonts/Alibaba-PuHuiTi-Regular.ttf',
+        // 默认字体路径，null=使用包自带字体（vendor/erikwang2013/poster-php/src/fonts）
+        'font' =>  null,
     ],
 
     // ── 验证码模块 ──
