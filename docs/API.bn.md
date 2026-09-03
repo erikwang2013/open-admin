@@ -87,7 +87,7 @@ GET /api/docs
 ### 3.3 ক্যাপচা জেনারেট
 
 ```
-POST /api/captcha/generate
+POST /api/v1/captcha/generate
 ```
 
 - **অথেনটিকেশন**: প্রয়োজন নেই
@@ -180,7 +180,7 @@ POST /api/captcha/generate
 ### 3.4 ক্যাপচা ভেরিফাই
 
 ```
-POST /api/captcha/verify
+POST /api/v1/captcha/verify
 ```
 
 - **অথেনটিকেশন**: প্রয়োজন নেই
@@ -246,7 +246,7 @@ POST /api/captcha/verify
 ### 3.5 লগইন
 
 ```
-POST /api/auth/login
+POST /api/v1/auth/login
 ```
 
 - **অথেনটিকেশন**: প্রয়োজন নেই
@@ -266,7 +266,7 @@ POST /api/auth/login
 |------|------|------|---------|------|
 | username | string | হ্যাঁ | min:3, max:50 | ইউজারনেম |
 | password | string | হ্যাঁ | min:6, max:32 (প্লেইনটেক্সট) | AES-256-CBC-HMAC এনক্রিপশনের পর Base64 এনকোড (প্লেইনটেক্সট কম্প্যাটিবল) |
-| captcha_key | string | হ্যাঁ | | ক্যাপচা key (আগে `/api/captcha/verify` দিয়ে ভেরিফাই করতে হবে) |
+| captcha_key | string | হ্যাঁ | | ক্যাপচা key (আগে `/api/v1/captcha/verify` দিয়ে ভেরিফাই করতে হবে) |
 
 ### পাসওয়ার্ড এনক্রিপশন প্রোটোকল
 
@@ -315,7 +315,7 @@ POST /api/auth/login
 
 **সম্ভাব্য এরর**:
 - 422: প্যারামিটার ভ্যালিডেশন ব্যর্থ (আবশ্যক ফিল্ড অনুপস্থিত, ফরম্যাট সঠিক নয়)
-- 422: আগে ক্যাপচা ভেরিফিকেশন সম্পন্ন করুন (captcha_key `/api/captcha/verify` পাস করেনি)
+- 422: আগে ক্যাপচা ভেরিফিকেশন সম্পন্ন করুন (captcha_key `/api/v1/captcha/verify` পাস করেনি)
 - 401: ইউজারনেম বা পাসওয়ার্ড ভুল
 - 403: অ্যাকাউন্ট নিষ্ক্রিয় করা হয়েছে
 - 429: অ্যাকাউন্ট লক হয়েছে, অনুগ্রহ করে ১৫ মিনিট পর আবার চেষ্টা করুন (টানা ৫ বার লগইন ব্যর্থ হলে ট্রিগার)
@@ -323,7 +323,7 @@ POST /api/auth/login
 ### 3.6 রেজিস্টার
 
 ```
-POST /api/auth/register
+POST /api/v1/auth/register
 ```
 
 - **অথেনটিকেশন**: প্রয়োজন নেই
@@ -345,7 +345,7 @@ POST /api/auth/register
 | username | string | হ্যাঁ | min:3, max:50 | ইউজারনেম (ইউনিক) |
 | password | string | হ্যাঁ | min:6, max:32 (প্লেইনটেক্সট) | AES-256-CBC-HMAC এনক্রিপশনের পর Base64 এনকোড |
 | real_name | string | হ্যাঁ | max:50 | প্রকৃত নাম |
-| captcha_key | string | হ্যাঁ | | ক্যাপচা key (আগে `/api/captcha/verify` দিয়ে ভেরিফাই করতে হবে) |
+| captcha_key | string | হ্যাঁ | | ক্যাপচা key (আগে `/api/v1/captcha/verify` দিয়ে ভেরিফাই করতে হবে) |
 
 **রেসপন্স উদাহরণ**:
 ```json
@@ -370,7 +370,7 @@ POST /api/auth/register
 ### 3.7 টোকেন রিফ্রেশ
 
 ```
-POST /api/auth/refresh
+POST /api/v1/auth/refresh
 ```
 
 - **অথেনটিকেশন**: প্রয়োজন নেই
@@ -514,7 +514,7 @@ GET /admin/dashboard
         "id": "hashid...",
         "action": "用户登录",
         "method": "POST",
-        "path": "/api/auth/login",
+        "path": "/api/v1/auth/login",
         "ip": "192.168.1.1",
         "user_name": "admin",
         "created_at": "2026-05-21 10:30:00"
@@ -1334,7 +1334,7 @@ GET /admin/log
         "user_name": "admin",
         "action": "用户登录",
         "method": "POST",
-        "path": "/api/auth/login",
+        "path": "/api/v1/auth/login",
         "ip": "192.168.1.1",
         "source": "web",
         "input": "{\"username\":\"admin\"}",
@@ -1656,8 +1656,8 @@ POST /admin/upload
 
 রেট লিমিট বিস্তারিত:
 - ডিফল্ট গ্লোবাল লিমিট: ৬০ বার/মিনিট / IP+পাথ
-- লগইন এন্ডপয়েন্ট `/api/auth/login`: ১০ বার/মিনিট
-- রেজিস্টার এন্ডপয়েন্ট `/api/auth/register`: ৫ বার/মিনিট
+- লগইন এন্ডপয়েন্ট `/api/v1/auth/login`: ১০ বার/মিনিট
+- রেজিস্টার এন্ডপয়েন্ট `/api/v1/auth/register`: ৫ বার/মিনিট
 - Redis অ্যাটমিক স্লাইডিং উইন্ডো অ্যালগরিদম (Lua ZSET) ব্যবহার করে, TOCTOU রেস কন্ডিশন এড়ায়
 - Redis অনুপলব্ধ হলে fail open (পাস), রিকোয়েস্ট ব্লক করে না
 
@@ -1666,14 +1666,14 @@ POST /admin/upload
 সম্পূর্ণ অথেনটিকেশন সিকোয়েন্স:
 
 ```
-1. 客户端请求 POST /api/captcha/generate
+1. 客户端请求 POST /api/v1/captcha/generate
    (请求头: API-Version: v1)
     ↓
    服务端返回: key + type(click|slider|rotate) + base64 图片 + extra(类型相关数据)
    
 2. 用户交互完成验证码操作（点击/拖拽/旋转），客户端收集答案
    
-3. 客户端请求 POST /api/captcha/verify
+3. 客户端请求 POST /api/v1/captcha/verify
    (请求头: API-Version: v1, Content-Type: application/json)
    请求体: { key, type, clicks }
    - type=click:  clicks = [{x, y}, ...]        // 坐标数组
@@ -1688,7 +1688,7 @@ POST /admin/upload
     ↓
    服务端返回: { valid: true/false }
 
-4. 客户端请求 POST /api/auth/login
+4. 客户端请求 POST /api/v1/auth/login
    (请求头: API-Version: v1, Content-Type: application/json)
    请求体: { username, password(加密), captcha_key }
     ↓
@@ -1723,7 +1723,7 @@ POST /admin/upload
    Response + X-RateLimit-* 头
 
 6. Access Token 过期前刷新
-   客户端请求 POST /api/auth/refresh
+   客户端请求 POST /api/v1/auth/refresh
    请求体: { refresh_token: "..." }
     ↓
    服务端解码 refresh_token → 签发新 access + refresh

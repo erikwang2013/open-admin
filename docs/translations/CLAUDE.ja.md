@@ -156,7 +156,7 @@ open-admin/
 バージョンはリクエストヘッダー `API-Version` で制御（デフォルト `v1`）、URL には表れません：
 
 ```bash
-curl -H "API-Version: v1" http://localhost:8787/api/auth/login
+curl http://localhost:8787/api/v1/auth/login
 ```
 
 新しいバージョンを追加するには、`app/api/{version}/controller/` ディレクトリを作成し、`ApiVersion` ミドルウェアに登録するだけです。
@@ -198,7 +198,7 @@ Redis スライディングウィンドウ（Lua アトミック）、デフォ�
 
 ### HarmonyOS
 - `@ohos.net.http` ネイティブ HTTP クライアントを使用
-- Token の無感リフレッシュ：401 時に `/api/auth/refresh` を自動呼び出し
+- Token の無感リフレッシュ：401 時に `/api/v1/auth/refresh` を自動呼び出し
 - リフレッシュ失敗時は自動でログインページにリダイレクト
 
 ## デプロイ

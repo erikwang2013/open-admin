@@ -240,7 +240,7 @@ sequenceDiagram
     participant CAP as Captcha Service
 
     Note over U,CAP: === ধাপ ১: ক্যাপচা প্রাপ্তি ===
-    CL->>SV: POST /api/captcha/generate
+    CL->>SV: POST /api/v1/captcha/generate
     SV->>CAP: captcha_create('click')
     CAP->>CAP: 300×200 ব্যাকগ্রাউন্ড ইমেজ তৈরি
     CAP->>CAP: এলোমেলোভাবে Nটি চাইনিজ টার্গেট বসানো
@@ -255,7 +255,7 @@ sequenceDiagram
     CL->>CL: clicks সংগ্রহ: [{x,y}, {x,y}, {x,y}]
 
     Note over U,CAP: === ধাপ ৩: লগইন ===
-    CL->>SV: POST /api/auth/login { username, password, captcha_key, clicks }
+    CL->>SV: POST /api/v1/auth/login { username, password, captcha_key, clicks }
     SV->>CAP: captcha_verify(key, 'click', clicks)
     alt ক্যাপচা ভুল
         CAP-->>SV: false

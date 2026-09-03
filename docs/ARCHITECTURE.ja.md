@@ -240,7 +240,7 @@ sequenceDiagram
     participant CAP as Captcha Service
 
     Note over U,CAP: === ステップ 1: キャプチャ取得 ===
-    CL->>SV: POST /api/captcha/generate
+    CL->>SV: POST /api/v1/captcha/generate
     SV->>CAP: captcha_create('click')
     CAP->>CAP: 300×200 背景画像を生成
     CAP->>CAP: 中国語のターゲットを N 個ランダム配置
@@ -255,7 +255,7 @@ sequenceDiagram
     CL->>CL: clicks: [{x,y}, {x,y}, {x,y}] を収集
 
     Note over U,CAP: === ステップ 3: ログイン ===
-    CL->>SV: POST /api/auth/login { username, password, captcha_key, clicks }
+    CL->>SV: POST /api/v1/auth/login { username, password, captcha_key, clicks }
     SV->>CAP: captcha_verify(key, 'click', clicks)
     alt キャプチャエラー
         CAP-->>SV: false

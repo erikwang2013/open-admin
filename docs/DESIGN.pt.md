@@ -174,8 +174,8 @@ erik_system_config (configuração do sistema) — tabela independente
 ### 4.1 Convenções de URL
 
 ```
-Endpoints públicos:  /api/captcha/{generate|verify}
-           /api/auth/{login|register|refresh}
+Endpoints públicos:  /api/v1/captcha/{generate|verify}
+           /api/v1/auth/{login|register|refresh}
 
 Painel:   /admin/{resource}[/{hashid}]
           /admin/export/{excel|pdf}
@@ -219,13 +219,13 @@ Exemplo de extensão — adicionar a API v2:
 
 ```bash
 # Usar v1
-curl -H "API-Version: v1" /api/auth/login
+curl /api/v1/auth/login
 
 # Usar v2
-curl -H "API-Version: v2" /api/auth/login
+curl -H "API-Version: v2" /api/v1/auth/login
 
 # Sem o cabeçalho, padrão v1
-curl /api/auth/login
+curl /api/v1/auth/login
 ```
 
 ### 4.3 Estratégia de rate limit
@@ -235,8 +235,8 @@ Baseada no algoritmo de janela deslizante com Redis Sorted Set, executada com sc
 | Endpoint | Limite |
 |------|------|
 | Padrão | 60 requisições/minuto/IP/rota |
-| POST /api/auth/login | 10 requisições/minuto |
-| POST /api/auth/register | 5 requisições/minuto |
+| POST /api/v1/auth/login | 10 requisições/minuto |
+| POST /api/v1/auth/register | 5 requisições/minuto |
 
 Ao exceder o limite, retorna 429; os cabeçalhos de resposta incluem X-RateLimit-Limit / Remaining / Reset / Retry-After.
 
@@ -265,13 +265,13 @@ Ao exceder o limite, retorna 429; os cabeçalhos de resposta incluem X-RateLimit
 ```
 Cliente                               Servidor
   │                                    │
-  │  ① POST /api/captcha/generate     │ captcha_create('click')
+  │  ① POST /api/v1/captcha/generate     │ captcha_create('click')
   │◄── {key, image(base64), targets}  │
   │                                    │
   │  ② o usuário clica nas posições    │
   │     dos textos na imagem           │
   │                                    │
-  │  ③ POST /api/auth/login           │
+  │  ③ POST /api/v1/auth/login           │
   │     {username, password,          │
   │      captcha_key, clicks}         │
   │────────────────────────────────►  │

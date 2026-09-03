@@ -38,11 +38,11 @@ class AuthController
      * @Apidoc\Title("登录")
      * @Apidoc\Group("认证")
      * @Apidoc\Method("POST")
-     * @Apidoc\Url("/api/auth/login")
+     * @Apidoc\Url("/api/v1/auth/login")
      * @Apidoc\Desc("验证码校验通过后登录。密码使用 RSA-2048 公钥加密后 Base64 传输，私钥仅服务端持有")
      * @Apidoc\Param("username", type="string", require=true, desc="用户名")
      * @Apidoc\Param("password", type="string", require=true, desc="RSA-2048 PKCS1v1.5 加密后 Base64（兼容 AES/明文回退）")
-     * @Apidoc\Param("captcha_key", type="string", require=true, desc="验证码key（需先通过 /api/captcha/verify）")
+     * @Apidoc\Param("captcha_key", type="string", require=true, desc="验证码key（需先通过 /api/v1/captcha/verify）")
      * @Apidoc\Returned("access_token", type="string", desc="访问令牌")
      * @Apidoc\Returned("refresh_token", type="string", desc="刷新令牌")
      * @Apidoc\Returned("expires_in", type="int", desc="过期时间(秒)")
@@ -63,7 +63,7 @@ class AuthController
             return json(['code' => 422, 'message' => '验证码参数缺失', 'data' => []]);
         }
 
-        // 检查验证码是否已通过 /api/captcha/verify 校验
+        // 检查验证码是否已通过 /api/v1/captcha/verify 校验
         try {
             $verified = Redis::get("captcha_verified:{$captchaKey}");
             if (!$verified) {
@@ -145,7 +145,7 @@ class AuthController
      * @Apidoc\Title("刷新令牌")
      * @Apidoc\Group("认证")
      * @Apidoc\Method("POST")
-     * @Apidoc\Url("/api/auth/refresh")
+     * @Apidoc\Url("/api/v1/auth/refresh")
      * @Apidoc\Desc("使用refresh_token刷新access_token")
      * @Apidoc\Param("refresh_token", type="string", require=true, desc="刷新令牌")
      * @Apidoc\Returned("access_token", type="string", desc="访问令牌")

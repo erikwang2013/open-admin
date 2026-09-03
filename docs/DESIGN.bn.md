@@ -174,8 +174,8 @@ erik_system_config (系统配置) — 独立表
 ### 4.1 URL নিয়মাবলি
 
 ```
-公开接口:  /api/captcha/{generate|verify}
-           /api/auth/{login|register|refresh}
+公开接口:  /api/v1/captcha/{generate|verify}
+           /api/v1/auth/{login|register|refresh}
 
 管理端:   /admin/{resource}[/{hashid}]
           /admin/export/{excel|pdf}
@@ -219,13 +219,13 @@ API-Version: v1
 
 ```bash
 # v1 ব্যবহার
-curl -H "API-Version: v1" /api/auth/login
+curl /api/v1/auth/login
 
 # v2 ব্যবহার
-curl -H "API-Version: v2" /api/auth/login
+curl -H "API-Version: v2" /api/v1/auth/login
 
 # না দিলে, ডিফল্ট v1
-curl /api/auth/login
+curl /api/v1/auth/login
 ```
 
 ### 4.3 রেট লিমিট পলিসি
@@ -235,8 +235,8 @@ Redis Sorted Set স্লাইডিং উইন্ডো অ্যালগ�
 | ইন্টারফেস | সীমা |
 |------|------|
 | ডিফল্ট | ৬০ বার/মিনিট/IP/রাউট |
-| POST /api/auth/login | ১০ বার/মিনিট |
-| POST /api/auth/register | ৫ বার/মিনিট |
+| POST /api/v1/auth/login | ১০ বার/মিনিট |
+| POST /api/v1/auth/register | ৫ বার/মিনিট |
 
 সীমা অতিক্রম করলে 429 রিটার্ন, রেসপন্স হেডারে X-RateLimit-Limit / Remaining / Reset / Retry-After থাকে।
 
@@ -265,12 +265,12 @@ Redis Sorted Set স্লাইডিং উইন্ডো অ্যালগ�
 ```
 客户端                               服务端
   │                                    │
-  │  ① POST /api/captcha/generate     │ captcha_create('click')
+  │  ① POST /api/v1/captcha/generate     │ captcha_create('click')
   │◄── {key, image(base64), targets}  │
   │                                    │
   │  ② 用户点击图中文字位置              │
   │                                    │
-  │  ③ POST /api/auth/login           │
+  │  ③ POST /api/v1/auth/login           │
   │     {username, password,          │
   │      captcha_key, clicks}         │
   │────────────────────────────────►  │

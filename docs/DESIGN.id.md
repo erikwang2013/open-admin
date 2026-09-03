@@ -174,8 +174,8 @@ erik_system_config (系统配置) — 独立表
 ### 4.1 Standar URL
 
 ```
-公开接口:  /api/captcha/{generate|verify}
-           /api/auth/{login|register|refresh}
+公开接口:  /api/v1/captcha/{generate|verify}
+           /api/v1/auth/{login|register|refresh}
 
 管理端:   /admin/{resource}[/{hashid}]
           /admin/export/{excel|pdf}
@@ -219,13 +219,13 @@ Contoh ekstensi — menambah API v2:
 
 ```bash
 # 使用 v1
-curl -H "API-Version: v1" /api/auth/login
+curl /api/v1/auth/login
 
 # 使用 v2
-curl -H "API-Version: v2" /api/auth/login
+curl -H "API-Version: v2" /api/v1/auth/login
 
 # 不传，默认 v1
-curl /api/auth/login
+curl /api/v1/auth/login
 ```
 
 ### 4.3 Kebijakan Rate Limit
@@ -235,8 +235,8 @@ Berdasarkan algoritma sliding window Redis Sorted Set, dieksekusi dengan skrip L
 | Antarmuka | Batasan |
 |------|------|
 | Default | 60 kali/menit/IP/rute |
-| POST /api/auth/login | 10 kali/menit |
-| POST /api/auth/register | 5 kali/menit |
+| POST /api/v1/auth/login | 10 kali/menit |
+| POST /api/v1/auth/register | 5 kali/menit |
 
 Melebihi batas mengembalikan 429, header respons berisi X-RateLimit-Limit / Remaining / Reset / Retry-After.
 
@@ -265,12 +265,12 @@ Melebihi batas mengembalikan 429, header respons berisi X-RateLimit-Limit / Rema
 ```
 客户端                               服务端
   │                                    │
-  │  ① POST /api/captcha/generate     │ captcha_create('click')
+  │  ① POST /api/v1/captcha/generate     │ captcha_create('click')
   │◄── {key, image(base64), targets}  │
   │                                    │
   │  ② 用户点击图中文字位置              │
   │                                    │
-  │  ③ POST /api/auth/login           │
+  │  ③ POST /api/v1/auth/login           │
   │     {username, password,          │
   │      captcha_key, clicks}         │
   │────────────────────────────────►  │

@@ -122,8 +122,8 @@ Das Lua-Skript wird serverseitig in Redis single-threaded ausgeführt und ist **
 | Route | Limit | Fenster | Szenario |
 |------|------|------|------|
 | Standard (alle Routen) | 60/Minute | 60s | Allgemeine API |
-| `/api/auth/login` | 10/Minute | 60s | Login (verhindert Brute-Force) |
-| `/api/auth/register` | 5/Minute | 60s | Registrierung (verhindert Massenregistrierung) |
+| `/api/v1/auth/login` | 10/Minute | 60s | Login (verhindert Brute-Force) |
+| `/api/v1/auth/register` | 5/Minute | 60s | Registrierung (verhindert Massenregistrierung) |
 
 ### Response-Header
 

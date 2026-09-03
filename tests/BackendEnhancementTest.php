@@ -14,16 +14,19 @@ use Webman\Http\Response;
 class BackendEnhancementTest extends TestCase
 {
     // ============================================================
-    // 1. v() 辅助函数 — 逐源码验证（避免触发 webman 运行时）
+    // 1. API 版本策略 — 逐源码验证（避免触发 webman 运行时）
     // ============================================================
 
-    public function test_v_helper_function_exists_in_route_file(): void
+    public function test_api_version_is_in_url_not_header(): void
     {
         $source = file_get_contents(__DIR__ . '/../config/route.php');
-        $this->assertStringContainsString('function v(', $source, 'route.php 应定义 v() 函数');
-        $this->assertStringContainsString('$request->apiVersion', $source, 'v() 应读取 apiVersion');
-        $this->assertStringContainsString('apiVersion ??', $source, 'v() 应有 apiVersion 默认值回退');
-        $this->assertStringContainsString('return (new $class)->', $source, 'v() 应实例化并调用控制器');
+
+        // 版本必须体现在路由前缀中，不使用 API-Version 请求头
+        $this->assertStringContainsString("Route::group('/api/v1'", $source, 'route.php 应注册 /api/v1 路由组');
+        $this->assertStringNotContainsString('API-Version', $source, '路由文件不应再出现 API-Version 头');
+        $this->assertStringNotContainsString('function v(', $source, 'v() 辅助函数应已移除');
+        $this->assertStringContainsString('v1\\controller\\AuthController::class', $source, '应静态绑定 v1 控制器');
+        $this->assertStringContainsString('v1\\controller\\CaptchaController::class', $source, '应静态绑定 v1 控制器');
     }
 
     // ============================================================
@@ -181,10 +184,11 @@ class BackendEnhancementTest extends TestCase
         }
     }
 
-    public function test_route_file_has_api_version_middleware(): void
+    public function test_api_version_middleware_was_removed(): void
     {
         $content = file_get_contents(__DIR__ . '/../config/route.php');
-        $this->assertStringContainsString('ApiVersion::class', $content);
+        $this->assertStringNotContainsString('ApiVersion', $content, 'ApiVersion 中间件已删除，版本由 URL 前缀分发');
+        $this->assertStringContainsString('api\\v1\\controller', $content, 'v1 路由应直接绑定版本化控制器');
     }
 
     public function test_route_file_has_sensitive_batch_routes_after_resource(): void

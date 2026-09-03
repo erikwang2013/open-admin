@@ -240,7 +240,7 @@ sequenceDiagram
     participant CAP as Captcha Service
 
     Note over U,CAP: === चरण 1: कैप्चा प्राप्त करें ===
-    CL->>SV: POST /api/captcha/generate
+    CL->>SV: POST /api/v1/captcha/generate
     SV->>CAP: captcha_create('click')
     CAP->>CAP: 300×200 बैकग्राउंड इमेज जनरेट
     CAP->>CAP: N चीनी लक्ष्य बेतरतीब ढंग से रखें
@@ -255,7 +255,7 @@ sequenceDiagram
     CL->>CL: clicks एकत्र करें: [{x,y}, {x,y}, {x,y}]
 
     Note over U,CAP: === चरण 3: लॉगिन ===
-    CL->>SV: POST /api/auth/login { username, password, captcha_key, clicks }
+    CL->>SV: POST /api/v1/auth/login { username, password, captcha_key, clicks }
     SV->>CAP: captcha_verify(key, 'click', clicks)
     alt कैप्चा गलत
         CAP-->>SV: false

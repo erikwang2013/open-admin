@@ -60,7 +60,7 @@
 | 层 | 目录 | 职责 |
 |---|------|------|
 | 路由 | `config/route.php` | URL 到控制器的映射，中间件绑定，版本化路由 |
-| 中间件 | `app/middleware/` | 攻击拦截(SecurityFilter)、限流(RateLimit)、认证(JWT)、授权(RBAC)、API版本(ApiVersion) |
+| 中间件 | `app/middleware/` | 攻击拦截(SecurityFilter)、限流(RateLimit)、认证(JWT)、授权(RBAC) |
 | 控制器 | 14 个：Dashboard/User/Role/Permission/Config/Log/Profile/Export/Import/Upload/Health/Docs (管理端) + Captcha/Auth (API v1) | 请求参数校验、调用业务逻辑、响应格式化 |
 | 业务服务 | `app/service/` | 可复用的业务逻辑（预留） |
 | 数据模型 | `app/model/` | ORM 映射、关联关系、字段加解密 |
@@ -88,8 +88,9 @@ Route 匹配
   RateLimit ───────────► Redis 滑动窗口限流
   │ (失败返回 429 + Retry-After 头)
   ▼
-  ApiVersion ─────────► API-Version 头校验，注入 $request->apiVersion
-  │ (失败返回 400)
+  路由分发 ───────────► 版本号体现在 URL 前缀（/api/v1/...、/api/v2/...）
+  │                     /api/v1 请求 → 静态注册路由组直连控制器
+  │                     /admin 请求 → 继续下方中间件链
   ▼
   AdminAuth ──────────► JWT 验证，注入 $request->adminId
   │ (失败返回 401)
@@ -172,8 +173,8 @@ erik_system_config (系统配置) — 独立表
 ### 4.1 URL 规范
 
 ```
-公开接口:  /api/captcha/{generate|verify}
-           /api/auth/{login|register|refresh}
+公开接口:  /api/v1/captcha/{generate|verify}
+           /api/v1/auth/{login|register|refresh}
 
 管理端:   /admin/{resource}[/{hashid}]
           /admin/export/{excel|pdf}
@@ -197,33 +198,25 @@ erik_system_config (系统配置) — 独立表
 
 ### 4.2 API 版本策略
 
-API 版本通过请求头控制，**不在 URL 路径中体现**：
-
-```http
-API-Version: v1
-```
+API 版本号体现在 URL 前缀中（`/api/v1/...`、`/api/v2/...`），**不使用请求头**。`config/route.php` 静态注册各版本的路由组直连对应版本的控制器，版本分发不经过任何中间件。
 
 | 机制 | 说明 |
 |------|------|
-| 默认版本 | 未携带 `API-Version` 头时默认 `v1` |
-| 校验 | `ApiVersion` 中间件校验，不支持的版本返回 400 |
-| 路由 | `v()` 辅助函数根据版本动态解析控制器类 |
+| URL 前缀 | 版本号固定为 URL 第一段路径: `/api/v1/...`、`/api/v2/...` |
+| 路由 | `config/route.php` 中静态注册 `Route::group('/api/v1', ...)` 直连控制器 |
 | 目录 | 控制器按版本组织: `app/api/{version}/controller/` |
+| 运维端点 | `/api/docs`、`/health`、`/metrics` 等不带版本前缀 |
 
 扩展示例——新增 v2 API：
 1. 创建 `app/api/v2/controller/AuthController.php`
-2. `ApiVersion` 中间件 `SUPPORTED` 常量添加 `'v2'`
-3. 路由定义无需修改
+2. `config/route.php` 注册 `Route::group('/api/v2', ...)` 路由组
 
 ```bash
-# 使用 v1
-curl -H "API-Version: v1" /api/auth/login
+# v1
+curl http://localhost:8787/api/v1/auth/login
 
-# 使用 v2
-curl -H "API-Version: v2" /api/auth/login
-
-# 不传，默认 v1
-curl /api/auth/login
+# v2（新增版本后）
+curl http://localhost:8787/api/v2/auth/login
 ```
 
 ### 4.3 限流策略
@@ -233,8 +226,8 @@ curl /api/auth/login
 | 接口 | 限制 |
 |------|------|
 | 默认 | 60 次/分钟/IP/路由 |
-| POST /api/auth/login | 10 次/分钟 |
-| POST /api/auth/register | 5 次/分钟 |
+| POST /api/v1/auth/login | 10 次/分钟 |
+| POST /api/v1/auth/register | 5 次/分钟 |
 
 超限返回 429，响应头包含 X-RateLimit-Limit / Remaining / Reset / Retry-After。
 
@@ -263,12 +256,12 @@ curl /api/auth/login
 ```
 客户端                               服务端
   │                                    │
-  │  ① POST /api/captcha/generate     │ captcha_create('click')
+  │  ① POST /api/v1/captcha/generate     │ captcha_create('click')
   │◄── {key, image(base64), targets}  │
   │                                    │
   │  ② 用户点击图中文字位置              │
   │                                    │
-  │  ③ POST /api/auth/login           │
+  │  ③ POST /api/v1/auth/login           │
   │     {username, password,          │
   │      captcha_key, clicks}         │
   │────────────────────────────────►  │

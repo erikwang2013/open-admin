@@ -161,7 +161,7 @@ open-admin/
 Versi dikontrol melalui header `API-Version` (default `v1`), tidak tampil di URL:
 
 ```bash
-curl -H "API-Version: v1" http://localhost:8787/api/auth/login
+curl http://localhost:8787/api/v1/auth/login
 ```
 
 Menambah versi baru hanya perlu membuat direktori `app/api/{version}/controller/` dan mendaftarkannya ke middleware `ApiVersion`.
@@ -194,7 +194,7 @@ Sliding window Redis (atomik Lua), default 60 kali/menit/IP/rute:
 
 ### HarmonyOS
 - Menggunakan klien HTTP native `@ohos.net.http`
-- Refresh token tanpa terasa: saat 401 otomatis memanggil `/api/auth/refresh`
+- Refresh token tanpa terasa: saat 401 otomatis memanggil `/api/v1/auth/refresh`
 - Gagal refresh otomatis dialihkan ke halaman login
 
 ## Deployment

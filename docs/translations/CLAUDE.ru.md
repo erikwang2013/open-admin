@@ -165,7 +165,7 @@ open-admin/
 Версия задаётся заголовком `API-Version` (по умолчанию `v1`) и не отражается в URL:
 
 ```bash
-curl -H "API-Version: v1" http://localhost:8787/api/auth/login
+curl http://localhost:8787/api/v1/auth/login
 ```
 
 Для новой версии достаточно создать каталог `app/api/{version}/controller/` и зарегистрировать его в middleware `ApiVersion`.
@@ -207,7 +207,7 @@ curl -H "API-Version: v1" http://localhost:8787/api/auth/login
 
 ### HarmonyOS
 - Использование нативного HTTP-клиента `@ohos.net.http`
-- Бесшовное обновление токена: при 401 автоматически вызывается `/api/auth/refresh`
+- Бесшовное обновление токена: при 401 автоматически вызывается `/api/v1/auth/refresh`
 - При неудачном обновлении — автоматический редирект на страницу входа
 
 ## Развертывание

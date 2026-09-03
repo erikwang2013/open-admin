@@ -240,7 +240,7 @@ sequenceDiagram
     participant CAP as Captcha Service
 
     Note over U,CAP: === 1단계: 캡차 획득 ===
-    CL->>SV: POST /api/captcha/generate
+    CL->>SV: POST /api/v1/captcha/generate
     SV->>CAP: captcha_create('click')
     CAP->>CAP: 300×200 배경 이미지 생성
     CAP->>CAP: N개의 중국어 대상 무작위 배치
@@ -255,7 +255,7 @@ sequenceDiagram
     CL->>CL: clicks 수집: [{x,y}, {x,y}, {x,y}]
 
     Note over U,CAP: === 3단계: 로그인 ===
-    CL->>SV: POST /api/auth/login { username, password, captcha_key, clicks }
+    CL->>SV: POST /api/v1/auth/login { username, password, captcha_key, clicks }
     SV->>CAP: captcha_verify(key, 'click', clicks)
     alt 캡차 오류
         CAP-->>SV: false

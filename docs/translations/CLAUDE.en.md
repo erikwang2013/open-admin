@@ -164,7 +164,7 @@ open-admin/
 The version is controlled via the `API-Version` request header (default `v1`), not reflected in the URL:
 
 ```bash
-curl -H "API-Version: v1" http://localhost:8787/api/auth/login
+curl http://localhost:8787/api/v1/auth/login
 ```
 
 Adding a new version only requires creating the `app/api/{version}/controller/` directory and registering it in the `ApiVersion` middleware.
@@ -206,7 +206,7 @@ Redis sliding window (Lua atomic), default 60 req/min/IP/route:
 
 ### HarmonyOS
 - Uses the `@ohos.net.http` native HTTP client
-- Seamless token refresh: auto-calls `/api/auth/refresh` on 401
+- Seamless token refresh: auto-calls `/api/v1/auth/refresh` on 401
 - Auto-redirects to the login page when refresh fails
 
 ## Deployment

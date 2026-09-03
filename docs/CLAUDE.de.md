@@ -161,7 +161,7 @@ Global:  Cors → Locale(Accept-Language) → SecurityFilter(Methodenprüfung→
 Die Version wird über den Request-Header `API-Version` gesteuert (Standard `v1`) und erscheint nicht in der URL:
 
 ```bash
-curl -H "API-Version: v1" http://localhost:8787/api/auth/login
+curl http://localhost:8787/api/v1/auth/login
 ```
 
 Eine neue Version erfordert lediglich die Erstellung des Verzeichnisses `app/api/{version}/controller/` und die Registrierung in der `ApiVersion`-Middleware.
@@ -194,7 +194,7 @@ Redis-Gleitfenster (atomar per Lua), Standard 60/Minute/IP/Route:
 
 ### HarmonyOS
 - Natives HTTP-Client `@ohos.net.http`
-- Nahtlose Token-Erneuerung: bei 401 automatisch `/api/auth/refresh` aufrufen
+- Nahtlose Token-Erneuerung: bei 401 automatisch `/api/v1/auth/refresh` aufrufen
 - Bei fehlgeschlagener Erneuerung automatische Weiterleitung zur Login-Seite
 
 ## Deployment

@@ -87,7 +87,7 @@ GET /api/docs
 ### 3.3 कैप्चा जनरेट करें
 
 ```
-POST /api/captcha/generate
+POST /api/v1/captcha/generate
 ```
 
 - **प्रमाणीकरण**: आवश्यक नहीं
@@ -180,7 +180,7 @@ POST /api/captcha/generate
 ### 3.4 कैप्चा सत्यापित करें
 
 ```
-POST /api/captcha/verify
+POST /api/v1/captcha/verify
 ```
 
 - **प्रमाणीकरण**: आवश्यक नहीं
@@ -246,7 +246,7 @@ POST /api/captcha/verify
 ### 3.5 लॉगिन
 
 ```
-POST /api/auth/login
+POST /api/v1/auth/login
 ```
 
 - **प्रमाणीकरण**: आवश्यक नहीं
@@ -266,7 +266,7 @@ POST /api/auth/login
 |------|------|------|---------|------|
 | username | string | हाँ | min:3, max:50 | उपयोगकर्ता नाम |
 | password | string | हाँ | min:6, max:32 (प्लेनटेक्स्ट) | AES-256-CBC-HMAC एन्क्रिप्शन के बाद Base64 एन्कोडिंग (प्लेनटेक्स्ट के साथ संगत) |
-| captcha_key | string | हाँ | | कैप्चा key (पहले `/api/captcha/verify` से सत्यापित करना आवश्यक) |
+| captcha_key | string | हाँ | | कैप्चा key (पहले `/api/v1/captcha/verify` से सत्यापित करना आवश्यक) |
 
 ### पासवर्ड एन्क्रिप्शन प्रोटोकॉल
 
@@ -315,7 +315,7 @@ POST /api/auth/login
 
 **संभावित त्रुटियाँ**:
 - 422: पैरामीटर सत्यापन विफल (अनिवार्य फ़ील्ड अनुपस्थित, फॉर्मेट गलत)
-- 422: कृपया पहले कैप्चा सत्यापन पूरा करें (captcha_key `/api/captcha/verify` से पास नहीं हुआ)
+- 422: कृपया पहले कैप्चा सत्यापन पूरा करें (captcha_key `/api/v1/captcha/verify` से पास नहीं हुआ)
 - 401: उपयोगकर्ता नाम या पासवर्ड गलत
 - 403: खाता अक्षम किया जा चुका है
 - 429: खाता लॉक हो चुका है, कृपया 15 मिनट बाद प्रयास करें (लगातार 5 बार लॉगिन विफल होने पर ट्रिगर)
@@ -323,7 +323,7 @@ POST /api/auth/login
 ### 3.6 रजिस्ट्रेशन
 
 ```
-POST /api/auth/register
+POST /api/v1/auth/register
 ```
 
 - **प्रमाणीकरण**: आवश्यक नहीं
@@ -345,7 +345,7 @@ POST /api/auth/register
 | username | string | हाँ | min:3, max:50 | उपयोगकर्ता नाम (अद्वितीय) |
 | password | string | हाँ | min:6, max:32 (प्लेनटेक्स्ट) | AES-256-CBC-HMAC एन्क्रिप्शन के बाद Base64 एन्कोडिंग |
 | real_name | string | हाँ | max:50 | वास्तविक नाम |
-| captcha_key | string | हाँ | | कैप्चा key (पहले `/api/captcha/verify` से सत्यापित करना आवश्यक) |
+| captcha_key | string | हाँ | | कैप्चा key (पहले `/api/v1/captcha/verify` से सत्यापित करना आवश्यक) |
 
 **रिस्पॉन्स उदाहरण**:
 ```json
@@ -370,7 +370,7 @@ POST /api/auth/register
 ### 3.7 टोकन रीफ़्रेश
 
 ```
-POST /api/auth/refresh
+POST /api/v1/auth/refresh
 ```
 
 - **प्रमाणीकरण**: आवश्यक नहीं
@@ -514,7 +514,7 @@ GET /admin/dashboard
         "id": "hashid...",
         "action": "用户登录",
         "method": "POST",
-        "path": "/api/auth/login",
+        "path": "/api/v1/auth/login",
         "ip": "192.168.1.1",
         "user_name": "admin",
         "created_at": "2026-05-21 10:30:00"
@@ -1334,7 +1334,7 @@ GET /admin/log
         "user_name": "admin",
         "action": "用户登录",
         "method": "POST",
-        "path": "/api/auth/login",
+        "path": "/api/v1/auth/login",
         "ip": "192.168.1.1",
         "source": "web",
         "input": "{\"username\":\"admin\"}",
@@ -1656,8 +1656,8 @@ POST /admin/upload
 
 रेट लिमिट विवरण:
 - डिफ़ॉल्ट ग्लोबल लिमिट: 60 बार/मिनट / IP+पाथ
-- लॉगिन एंडपॉइंट `/api/auth/login`: 10 बार/मिनट
-- रजिस्ट्रेशन एंडपॉइंट `/api/auth/register`: 5 बार/मिनट
+- लॉगिन एंडपॉइंट `/api/v1/auth/login`: 10 बार/मिनट
+- रजिस्ट्रेशन एंडपॉइंट `/api/v1/auth/register`: 5 बार/मिनट
 - Redis एटॉमिक स्लाइडिंग विंडो एल्गोरिदम (Lua ZSET) उपयोग, TOCTOU रेस से बचाव
 - Redis अनुपलब्ध होने पर fail open (अनुमति), रिक्वेस्ट ब्लॉक नहीं होती
 
@@ -1666,14 +1666,14 @@ POST /admin/upload
 पूर्ण प्रमाणीकरण सीक्वेंस:
 
 ```
-1. क्लाइंट रिक्वेस्ट POST /api/captcha/generate
+1. क्लाइंट रिक्वेस्ट POST /api/v1/captcha/generate
    (रिक्वेस्ट हेडर: API-Version: v1)
     ↓
    सर्वर लौटाता है: key + type(click|slider|rotate) + base64 छवि + extra(प्रकार-संबंधित डेटा)
    
 2. उपयोगकर्ता कैप्चा ऑपरेशन पूरा करता है (क्लिक/ड्रैग/रोटेट), क्लाइंट उत्तर एकत्र करता है
    
-3. क्लाइंट रिक्वेस्ट POST /api/captcha/verify
+3. क्लाइंट रिक्वेस्ट POST /api/v1/captcha/verify
    (रिक्वेस्ट हेडर: API-Version: v1, Content-Type: application/json)
    रिक्वेस्ट बॉडी: { key, type, clicks }
    - type=click:  clicks = [{x, y}, ...]        // निर्देशांक एरे
@@ -1688,7 +1688,7 @@ POST /admin/upload
     ↓
    सर्वर लौटाता है: { valid: true/false }
 
-4. क्लाइंट रिक्वेस्ट POST /api/auth/login
+4. क्लाइंट रिक्वेस्ट POST /api/v1/auth/login
    (रिक्वेस्ट हेडर: API-Version: v1, Content-Type: application/json)
    रिक्वेस्ट बॉडी: { username, password(एन्क्रिप्टेड), captcha_key }
     ↓
@@ -1723,7 +1723,7 @@ POST /admin/upload
    Response + X-RateLimit-* हेडर
 
 6. Access Token समाप्ति से पहले रीफ़्रेश
-   क्लाइंट रिक्वेस्ट POST /api/auth/refresh
+   क्लाइंट रिक्वेस्ट POST /api/v1/auth/refresh
    रिक्वेस्ट बॉडी: { refresh_token: "..." }
     ↓
    सर्वर refresh_token डिकोड करता है → नया access + refresh जारी करता है

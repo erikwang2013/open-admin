@@ -174,8 +174,8 @@ erik_system_config (系统配置) — 独立表
 ### 4.1 URL 規約
 
 ```
-公开接口:  /api/captcha/{generate|verify}
-           /api/auth/{login|register|refresh}
+公开接口:  /api/v1/captcha/{generate|verify}
+           /api/v1/auth/{login|register|refresh}
 
 管理端:   /admin/{resource}[/{hashid}]
           /admin/export/{excel|pdf}
@@ -219,13 +219,13 @@ API-Version: v1
 
 ```bash
 # v1 を使用
-curl -H "API-Version: v1" /api/auth/login
+curl /api/v1/auth/login
 
 # v2 を使用
-curl -H "API-Version: v2" /api/auth/login
+curl -H "API-Version: v2" /api/v1/auth/login
 
 # 未指定、デフォルト v1
-curl /api/auth/login
+curl /api/v1/auth/login
 ```
 
 ### 4.3 レート制限戦略
@@ -235,8 +235,8 @@ Redis Sorted Set スライディングウィンドウアルゴリズム、原子
 | インターフェース | 制限 |
 |------|------|
 | デフォルト | 60 回/分/IP/ルート |
-| POST /api/auth/login | 10 回/分 |
-| POST /api/auth/register | 5 回/分 |
+| POST /api/v1/auth/login | 10 回/分 |
+| POST /api/v1/auth/register | 5 回/分 |
 
 超過すると 429 を返し、レスポンスヘッダーに X-RateLimit-Limit / Remaining / Reset / Retry-After を含みます。
 
@@ -265,12 +265,12 @@ Redis Sorted Set スライディングウィンドウアルゴリズム、原子
 ```
 客户端                               服务端
   │                                    │
-  │  ① POST /api/captcha/generate     │ captcha_create('click')
+  │  ① POST /api/v1/captcha/generate     │ captcha_create('click')
   │◄── {key, image(base64), targets}  │
   │                                    │
   │  ② 用户点击图中文字位置              │
   │                                    │
-  │  ③ POST /api/auth/login           │
+  │  ③ POST /api/v1/auth/login           │
   │     {username, password,          │
   │      captcha_key, clicks}         │
   │────────────────────────────────►  │

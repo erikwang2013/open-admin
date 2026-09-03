@@ -240,7 +240,7 @@ sequenceDiagram
     participant CAP as Captcha Service
 
     Note over U,CAP: === Шаг 1: получение капчи ===
-    CL->>SV: POST /api/captcha/generate
+    CL->>SV: POST /api/v1/captcha/generate
     SV->>CAP: captcha_create('click')
     CAP->>CAP: Генерация фонового изображения 300×200
     CAP->>CAP: Случайное размещение N китайских целей
@@ -255,7 +255,7 @@ sequenceDiagram
     CL->>CL: Сбор clicks: [{x,y}, {x,y}, {x,y}]
 
     Note over U,CAP: === Шаг 3: вход ===
-    CL->>SV: POST /api/auth/login { username, password, captcha_key, clicks }
+    CL->>SV: POST /api/v1/auth/login { username, password, captcha_key, clicks }
     SV->>CAP: captcha_verify(key, 'click', clicks)
     alt ошибка капчи
         CAP-->>SV: false

@@ -63,7 +63,7 @@ open-admin/
 │   │   ├── HealthController.php    # 健康检查
 │   │   ├── DocsController.php      # OpenAPI 文档
 │   │   └── MetricsController.php   # Prometheus 监控指标
-│   ├── api/v1/controller/      # API v1 控制器（版本头控制）
+│   ├── api/v1/controller/      # API v1 控制器（URL 前缀 /api/v1 分发）
 │   │   ├── CaptchaController.php
 │   │   └── AuthController.php
 │   ├── common/                 # 公共工具类
@@ -71,11 +71,10 @@ open-admin/
 │   │   ├── SnowflakeService.php
 │   │   └── EncryptionService.php
 │   ├── common/                 # 公共定义（含 Apidoc Definitions）
-│   ├── middleware/             # 中间件（8 个）
+│   ├── middleware/             # 中间件（7 个）
 │   │   ├── Cors.php            # 跨域（全局）
 │   │   ├── SecurityFilter.php  # 攻击拦截（全局：XSS/SQL注入/路径遍历/命令注入/CSRF）
 │   │   ├── RateLimit.php       # Redis 限流（全局，Lua 原子化）
-│   │   ├── ApiVersion.php      # API 版本校验
 │   │   ├── AdminAuth.php       # JWT 认证 + 黑名单
 │   │   ├── AdminPermission.php # RBAC 权限校验（Redis 60s 缓存）
 │   │   └── OperationLog.php    # 操作日志自动记录（含来源端检测）
@@ -140,7 +139,7 @@ open-admin/
 ```
 全局:  Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → {路由中间件}
 /admin: Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
-/api:   Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → ApiVersion → Controller
+/api/v1: Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → Controller（版本体现在 URL 前缀中）
 /health: Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → Controller
 ```
 
@@ -155,13 +154,13 @@ open-admin/
 
 ## API 版本策略
 
-版本通过请求头 `API-Version` 控制（默认 `v1`），不在 URL 中体现：
+版本号体现在 URL 前缀中（`/api/v1/...`、`/api/v2/...`），不使用请求头：
 
 ```bash
-curl -H "API-Version: v1" http://localhost:8787/api/auth/login
+curl http://localhost:8787/api/v1/auth/login
 ```
 
-新增版本只需创建 `app/api/{version}/controller/` 目录并注册到 `ApiVersion` 中间件。
+新增版本只需创建 `app/api/{version}/controller/` 目录，并在 `config/route.php` 注册对应版本的路由组。
 
 ## 限流策略
 
@@ -191,7 +190,7 @@ Redis 滑动窗口（Lua 原子化），默认 60 次/分钟/IP/路由：
 
 ### HarmonyOS
 - 使用 `@ohos.net.http` 原生 HTTP 客户端
-- Token 无感刷新：401 时自动调用 `/api/auth/refresh`
+- Token 无感刷新：401 时自动调用 `/api/v1/auth/refresh`
 - 刷新失败自动重定向登录页
 
 ## 部署

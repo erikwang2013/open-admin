@@ -240,7 +240,7 @@ sequenceDiagram
     participant CAP as Captcha Service
 
     Note over U,CAP: === Langkah 1: Mendapatkan Captcha ===
-    CL->>SV: POST /api/captcha/generate
+    CL->>SV: POST /api/v1/captcha/generate
     SV->>CAP: captcha_create('click')
     CAP->>CAP: Membuat gambar latar 300×200
     CAP->>CAP: Menempatkan N target karakter Cina secara acak
@@ -255,7 +255,7 @@ sequenceDiagram
     CL->>CL: Mengumpulkan clicks: [{x,y}, {x,y}, {x,y}]
 
     Note over U,CAP: === Langkah 3: Login ===
-    CL->>SV: POST /api/auth/login { username, password, captcha_key, clicks }
+    CL->>SV: POST /api/v1/auth/login { username, password, captcha_key, clicks }
     SV->>CAP: captcha_verify(key, 'click', clicks)
     alt Captcha salah
         CAP-->>SV: false

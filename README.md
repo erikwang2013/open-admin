@@ -68,7 +68,7 @@ open-admin/
 │   │   ├── DocsController.php      # OpenAPI 文档
 │   │   └── BaseController.php      # 基础控制器
 │   ├── api/
-│   │   └── v1/controller/          # API v1 控制器（版本由请求头 API-Version 控制）
+│   │   └── v1/controller/          # API v1 控制器（版本体现在 URL 前缀 /api/v1）
 │   │       ├── CaptchaController.php # 点击验证码
 │   │       └── AuthController.php    # 登录/刷新令牌
 │   ├── common/                 # 公共工具类
@@ -79,7 +79,6 @@ open-admin/
 │   │   ├── Cors.php            # 跨域
 │   │   ├── SecurityFilter.php  # 攻击检测拦截（HTTP方法限制/XSS/SQL注入/路径遍历/命令注入/CSRF）
 │   │   ├── RateLimit.php       # Redis 限流（滑动窗口 + 响应头）
-│   │   ├── ApiVersion.php      # API 版本校验
 │   │   ├── AdminAuth.php       # JWT 认证 + 黑名单
 │   │   ├── AdminPermission.php # RBAC 权限校验
 │   │   └── OperationLog.php    # 操作日志自动记录（含来源端检测）
@@ -218,7 +217,7 @@ docker-compose up -d
 
 - **统一响应格式**: `{ "code": 0, "message": "success", "data": {...} }`，`code=0` 表示成功
 - **错误码**: `400` 参数错误 / `401` 未登录 / `403` 无权限 / `404` 不存在 / `422` 验证失败 / `429` 限流 / `500` 服务器错误
-- **API 版本**: 通过请求头 `API-Version: v1` 控制（缺失时默认 v1），不在 URL 中体现
+- **API 版本**: 版本号体现在 URL 前缀中（如 `/api/v1/...`），不使用请求头
 - **认证**: `Authorization: Bearer <token>`；access_token 有效期 2 小时，refresh_token 14 天
 - **ID 处理**: 请求/响应中的 ID 为 hashids 加密字符串，不暴露真实数据库 ID
 
@@ -324,6 +323,23 @@ GitHub Actions 持续集成流水线：`.github/workflows/ci.yml`
   - 银行名称：THE BANK OF NEW YORK MELLON
   - SWIFT Code：IRVTUS3NXXX
   - 银行地址：THE BANK OF NEW YORK MELLON, 240 GREENWICH STREET, NEW YORK, United States
+
+### 虚拟币打赏 (Crypto Donation)
+
+如果这个项目对你有帮助，欢迎扫描二维码打赏支持，谢谢！
+
+| 主网 (Network) | 二维码 (QR Code) | 钱包地址 (Wallet Address) |
+|---|---|---|
+| BNB Smart Chain (BEP20) | [<img src="docs/coin/1.jpg" width="150" alt="BNB Smart Chain (BEP20)">](docs/coin/1.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
+| Tron (TRC20) | [<img src="docs/coin/2.jpg" width="150" alt="Tron (TRC20)">](docs/coin/2.jpg) | `TEdDHWLajt1XvqtPDWmQctdrJaC3pzZZzz` |
+| Ethereum (ERC20) | [<img src="docs/coin/3.jpg" width="150" alt="Ethereum (ERC20)">](docs/coin/3.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
+| Aptos | [<img src="docs/coin/4.jpg" width="150" alt="Aptos">](docs/coin/4.jpg) | `0x836e3780edfc3f7b2372b39e2a1a3a5d7adfaccd96c726f21cfde1b50dd68030` |
+| Plasma | [<img src="docs/coin/5.jpg" width="150" alt="Plasma">](docs/coin/5.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
+| Polygon POS | [<img src="docs/coin/6.jpg" width="150" alt="Polygon POS">](docs/coin/6.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
+| Solana | [<img src="docs/coin/7.jpg" width="150" alt="Solana">](docs/coin/7.jpg) | `2hfhboHdmdrYsY25XfQSsEWxq5ip4EQsR7f4AzSRMUyr` |
+| The Open Network (TON) | [<img src="docs/coin/8.jpg" width="150" alt="The Open Network (TON)">](docs/coin/8.jpg) | `UQB9kFQohzmXUir9QSSZq01iwl9aQZIDdBpNmDklljRtCoGK` |
+| Arbitrum One | [<img src="docs/coin/9.jpg" width="150" alt="Arbitrum One">](docs/coin/9.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
+| AVAX C-Chain | [<img src="docs/coin/10.jpg" width="150" alt="AVAX C-Chain">](docs/coin/10.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
 
 ---
 

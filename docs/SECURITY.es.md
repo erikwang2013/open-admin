@@ -122,8 +122,8 @@ El script Lua se ejecuta en un solo hilo en el servidor Redis, por lo que es **n
 | Ruta | Límite | Ventana | Escenario |
 |------|------|------|------|
 | Por defecto (todas las rutas) | 60 peticiones/minuto | 60s | API general |
-| `/api/auth/login` | 10 peticiones/minuto | 60s | Inicio de sesión (previene la fuerza bruta) |
-| `/api/auth/register` | 5 peticiones/minuto | 60s | Registro (previene el registro masivo) |
+| `/api/v1/auth/login` | 10 peticiones/minuto | 60s | Inicio de sesión (previene la fuerza bruta) |
+| `/api/v1/auth/register` | 5 peticiones/minuto | 60s | Registro (previene el registro masivo) |
 
 ### Cabeceras de respuesta
 

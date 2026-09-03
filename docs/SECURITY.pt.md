@@ -122,8 +122,8 @@ O script Lua é executado em thread única no lado do servidor Redis, sendo **na
 | Rota | Limite | Janela | Cenário |
 |------|------|------|------|
 | Padrão (todas as rotas) | 60 requisições/minuto | 60s | API geral |
-| `/api/auth/login` | 10 requisições/minuto | 60s | Login (evita força bruta) |
-| `/api/auth/register` | 5 requisições/minuto | 60s | Registro (evita registro em massa) |
+| `/api/v1/auth/login` | 10 requisições/minuto | 60s | Login (evita força bruta) |
+| `/api/v1/auth/register` | 5 requisições/minuto | 60s | Registro (evita registro em massa) |
 
 ### Cabeçalhos de resposta
 

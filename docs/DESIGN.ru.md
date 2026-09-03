@@ -174,8 +174,8 @@ erik_system_config (系统配置) — 独立表
 ### 4.1 Стандарты URL
 
 ```
-公开接口:  /api/captcha/{generate|verify}
-           /api/auth/{login|register|refresh}
+公开接口:  /api/v1/captcha/{generate|verify}
+           /api/v1/auth/{login|register|refresh}
 
 管理端:   /admin/{resource}[/{hashid}]
           /admin/export/{excel|pdf}
@@ -219,13 +219,13 @@ API-Version: v1
 
 ```bash
 # Использование v1
-curl -H "API-Version: v1" /api/auth/login
+curl /api/v1/auth/login
 
 # Использование v2
-curl -H "API-Version: v2" /api/auth/login
+curl -H "API-Version: v2" /api/v1/auth/login
 
 # Без заголовка — по умолчанию v1
-curl /api/auth/login
+curl /api/v1/auth/login
 ```
 
 ### 4.3 Политика лимитов запросов
@@ -235,8 +235,8 @@ curl /api/auth/login
 | Интерфейс | Лимит |
 |------|------|
 | По умолчанию | 60 раз/мин/IP/маршрут |
-| POST /api/auth/login | 10 раз/мин |
-| POST /api/auth/register | 5 раз/мин |
+| POST /api/v1/auth/login | 10 раз/мин |
+| POST /api/v1/auth/register | 5 раз/мин |
 
 При превышении возвращается 429, заголовки ответа содержат X-RateLimit-Limit / Remaining / Reset / Retry-After.
 
@@ -265,12 +265,12 @@ curl /api/auth/login
 ```
 客户端                               服务端
   │                                    │
-  │  ① POST /api/captcha/generate     │ captcha_create('click')
+  │  ① POST /api/v1/captcha/generate     │ captcha_create('click')
   │◄── {key, image(base64), targets}  │
   │                                    │
   │  ② 用户点击图中文字位置              │
   │                                    │
-  │  ③ POST /api/auth/login           │
+  │  ③ POST /api/v1/auth/login           │
   │     {username, password,          │
   │      captcha_key, clicks}         │
   │────────────────────────────────►  │

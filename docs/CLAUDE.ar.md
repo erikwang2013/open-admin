@@ -161,7 +161,7 @@ open-admin/
 يُتحكم في الإصدار عبر ترويسة الطلب `API-Version` (الافتراضي `v1`)، ولا يظهر في URL:
 
 ```bash
-curl -H "API-Version: v1" http://localhost:8787/api/auth/login
+curl http://localhost:8787/api/v1/auth/login
 ```
 
 لإضافة إصدار جديد يكفي إنشاء دليل `app/api/{version}/controller/` وتسجيله في وسيط `ApiVersion`.
@@ -194,7 +194,7 @@ curl -H "API-Version: v1" http://localhost:8787/api/auth/login
 
 ### HarmonyOS
 - استخدام عميل HTTP الأصلي `@ohos.net.http`
-- تحديث الرمز دون إشعار: استدعاء تلقائي لـ `/api/auth/refresh` عند 401
+- تحديث الرمز دون إشعار: استدعاء تلقائي لـ `/api/v1/auth/refresh` عند 401
 - إعادة توجيه تلقائية إلى صفحة الدخول عند فشل التحديث
 
 ## النشر

@@ -122,8 +122,8 @@ Le script Lua s'exécute en monothread côté serveur Redis, **naturellement ato
 | Route | Limite | Fenêtre | Scénario |
 |------|------|------|------|
 | Défaut (toutes les routes) | 60 requêtes/minute | 60 s | API générale |
-| `/api/auth/login` | 10 requêtes/minute | 60 s | Connexion (contre le brute force) |
-| `/api/auth/register` | 5 requêtes/minute | 60 s | Inscription (contre l'inscription de masse) |
+| `/api/v1/auth/login` | 10 requêtes/minute | 60 s | Connexion (contre le brute force) |
+| `/api/v1/auth/register` | 5 requêtes/minute | 60 s | Inscription (contre l'inscription de masse) |
 
 ### En-têtes de réponse
 

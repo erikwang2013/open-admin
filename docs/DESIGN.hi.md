@@ -174,8 +174,8 @@ erik_system_config (सिस्टम कॉन्फ़िगरेशन) —
 ### 4.1 URL मानक
 
 ```
-सार्वजनिक इंटरफ़ेस:  /api/captcha/{generate|verify}
-           /api/auth/{login|register|refresh}
+सार्वजनिक इंटरफ़ेस:  /api/v1/captcha/{generate|verify}
+           /api/v1/auth/{login|register|refresh}
 
 एडमिन साइड:   /admin/{resource}[/{hashid}]
           /admin/export/{excel|pdf}
@@ -219,13 +219,13 @@ API-Version: v1
 
 ```bash
 # v1 उपयोग करें
-curl -H "API-Version: v1" /api/auth/login
+curl /api/v1/auth/login
 
 # v2 उपयोग करें
-curl -H "API-Version: v2" /api/auth/login
+curl -H "API-Version: v2" /api/v1/auth/login
 
 # न भेजें, डिफ़ॉल्ट v1
-curl /api/auth/login
+curl /api/v1/auth/login
 ```
 
 ### 4.3 रेट लिमिट नीति
@@ -235,8 +235,8 @@ Redis Sorted Set स्लाइडिंग विंडो एल्गोर�
 | इंटरफ़ेस | सीमा |
 |------|------|
 | डिफ़ॉल्ट | 60 बार/मिनट/IP/रूट |
-| POST /api/auth/login | 10 बार/मिनट |
-| POST /api/auth/register | 5 बार/मिनट |
+| POST /api/v1/auth/login | 10 बार/मिनट |
+| POST /api/v1/auth/register | 5 बार/मिनट |
 
 सीमा से अधिक होने पर 429 लौटता है, रिस्पॉन्स हेडर में X-RateLimit-Limit / Remaining / Reset / Retry-After।
 
@@ -265,12 +265,12 @@ Redis Sorted Set स्लाइडिंग विंडो एल्गोर�
 ```
 क्लाइंट                               सर्वर
   │                                    │
-  │  ① POST /api/captcha/generate     │ captcha_create('click')
+  │  ① POST /api/v1/captcha/generate     │ captcha_create('click')
   │◄── {key, image(base64), targets}  │
   │                                    │
   │  ② उपयोगकर्ता छवि में टेक्स्ट स्थान पर क्लिक करता है    │
   │                                    │
-  │  ③ POST /api/auth/login           │
+  │  ③ POST /api/v1/auth/login           │
   │     {username, password,          │
   │      captcha_key, clicks}         │
   │────────────────────────────────►  │

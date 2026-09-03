@@ -10,27 +10,14 @@ use support\Request;
  * API 路由配置
  *
  * 路由分组说明:
- * - /admin/*  管理端接口，需要 JWT 认证 + 权限校验
- * - /api/*    客户端接口（部分白名单，部分需认证）
- * - /health   健康检查（无需认证）
+ * - /admin/*   管理端接口，需要 JWT 认证 + 权限校验
+ * - /api/v{version}/*  客户端接口，版本号体现在路由前缀中（如 /api/v1/auth/login）
+ * - /health     健康检查（无需认证）
  *
  * API 版本策略:
- * - 版本号通过请求头 API-Version 携带（如 "v1"、"v2"），不在 URL 中体现
- * - 缺失时默认使用 v1
- * - 由 ApiVersion 中间件校验，路由闭包按版本解析对应控制器
+ * - 版本号以 URL 前缀形式存在（/api/v1/...、/api/v2/...），不使用请求头
+ * - 新增版本: 创建 app/api/{version}/controller/ 目录并在下方注册对应版本路由组
  */
-
-/**
- * 创建版本化 API 路由闭包
- */
-function v(string $controller, string $action): \Closure
-{
-    return function (Request $request) use ($controller, $action) {
-        $version = $request->apiVersion ?? 'v1';
-        $class = "\\app\\api\\{$version}\\controller\\{$controller}";
-        return (new $class)->{$action}($request);
-    };
-}
 
 // ============================================================
 // 系统安装向导（无需认证，无中间件依赖）
@@ -113,19 +100,18 @@ Route::get('/admin/profile', [app\admin\controller\ProfileController::class, 'sh
     ->middleware([app\middleware\AdminAuth::class]);
 
 // ============================================================
-// 公开接口（通过 API-Version 头路由到版本化控制器）
+// 公开接口 v1（版本体现在 URL 前缀 /api/v1，不使用请求头）
+// 新增版本: 创建 app/api/v{version}/controller/ 目录并注册对应路由组
 // ============================================================
-Route::group('/api', function () {
+Route::group('/api/v1', function () {
     // 点击验证码
-    Route::post('/captcha/generate', v('CaptchaController', 'generate'));
-    Route::post('/captcha/verify', v('CaptchaController', 'verify'));
+    Route::post('/captcha/generate', [app\api\v1\controller\CaptchaController::class, 'generate']);
+    Route::post('/captcha/verify', [app\api\v1\controller\CaptchaController::class, 'verify']);
 
     // 认证
-    Route::post('/auth/login', v('AuthController', 'login'));
-    Route::post('/auth/refresh', v('AuthController', 'refresh'));
-})->middleware([
-    app\middleware\ApiVersion::class,
-]);
+    Route::post('/auth/login', [app\api\v1\controller\AuthController::class, 'login']);
+    Route::post('/auth/refresh', [app\api\v1\controller\AuthController::class, 'refresh']);
+});
 
 // CORS 预检兜底 — OPTIONS 不匹配已注册路由，fallback 不走中间件链，
 // 故在此直接注入 CORS 响应头
@@ -134,7 +120,7 @@ Route::fallback(function (\support\Request $request) {
         return response('', 204, [
             'Access-Control-Allow-Origin'      => '*',
             'Access-Control-Allow-Methods'     => 'GET,POST,PUT,DELETE,OPTIONS',
-            'Access-Control-Allow-Headers'     => 'Authorization,Content-Type,API-Version,Accept-Language',
+            'Access-Control-Allow-Headers'     => 'Authorization,Content-Type,Accept-Language',
             'Access-Control-Max-Age'           => '86400',
         ]);
     }

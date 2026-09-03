@@ -240,7 +240,7 @@ sequenceDiagram
     participant CAP as Captcha Service
 
     Note over U,CAP: === Paso 1: Obtener el captcha ===
-    CL->>SV: POST /api/captcha/generate
+    CL->>SV: POST /api/v1/captcha/generate
     SV->>CAP: captcha_create('click')
     CAP->>CAP: Genera la imagen de fondo 300×200
     CAP->>CAP: Coloca N objetivos en chino de forma aleatoria
@@ -255,7 +255,7 @@ sequenceDiagram
     CL->>CL: Recopila clicks: [{x,y}, {x,y}, {x,y}]
 
     Note over U,CAP: === Paso 3: Inicio de sesión ===
-    CL->>SV: POST /api/auth/login { username, password, captcha_key, clicks }
+    CL->>SV: POST /api/v1/auth/login { username, password, captcha_key, clicks }
     SV->>CAP: captcha_verify(key, 'click', clicks)
     alt Captcha incorrecto
         CAP-->>SV: false

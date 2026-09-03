@@ -174,8 +174,8 @@ erik_system_config (系统配置) — 独立表
 ### 4.1 URL 규칙
 
 ```
-公开接口:  /api/captcha/{generate|verify}
-           /api/auth/{login|register|refresh}
+公开接口:  /api/v1/captcha/{generate|verify}
+           /api/v1/auth/{login|register|refresh}
 
 管理端:   /admin/{resource}[/{hashid}]
           /admin/export/{excel|pdf}
@@ -219,13 +219,13 @@ API-Version: v1
 
 ```bash
 # v1 사용
-curl -H "API-Version: v1" /api/auth/login
+curl /api/v1/auth/login
 
 # v2 사용
-curl -H "API-Version: v2" /api/auth/login
+curl -H "API-Version: v2" /api/v1/auth/login
 
 # 미지정 시 기본 v1
-curl /api/auth/login
+curl /api/v1/auth/login
 ```
 
 ### 4.3 레이트 리밋 정책
@@ -235,8 +235,8 @@ Redis Sorted Set 슬라이딩 윈도우 알고리즘 기반, 원자적 Lua 스�
 | 인터페이스 | 제한 |
 |------|------|
 | 기본 | 60회/분/IP/라우트 |
-| POST /api/auth/login | 10회/분 |
-| POST /api/auth/register | 5회/분 |
+| POST /api/v1/auth/login | 10회/분 |
+| POST /api/v1/auth/register | 5회/분 |
 
 초과 시 429를 반환하며, 응답 헤더에 X-RateLimit-Limit / Remaining / Reset / Retry-After가 포함됩니다.
 
@@ -265,12 +265,12 @@ Redis Sorted Set 슬라이딩 윈도우 알고리즘 기반, 원자적 Lua 스�
 ```
 客户端                               服务端
   │                                    │
-  │  ① POST /api/captcha/generate     │ captcha_create('click')
+  │  ① POST /api/v1/captcha/generate     │ captcha_create('click')
   │◄── {key, image(base64), targets}  │
   │                                    │
   │  ② 用户点击图中文字位置              │
   │                                    │
-  │  ③ POST /api/auth/login           │
+  │  ③ POST /api/v1/auth/login           │
   │     {username, password,          │
   │      captcha_key, clicks}         │
   │────────────────────────────────►  │

@@ -161,7 +161,7 @@ open-admin/
 버전은 요청 헤더 `API-Version`으로 제어 (기본 `v1`), URL에 나타나지 않습니다:
 
 ```bash
-curl -H "API-Version: v1" http://localhost:8787/api/auth/login
+curl http://localhost:8787/api/v1/auth/login
 ```
 
 새 버전 추가는 `app/api/{version}/controller/` 디렉터리를 만들고 `ApiVersion` 미들웨어에 등록하기만 하면 됩니다.
@@ -194,7 +194,7 @@ Redis 슬라이딩 윈도우 (Lua 원자화), 기본 60회/분/IP/라우트:
 
 ### HarmonyOS
 - `@ohos.net.http` 네이티브 HTTP 클라이언트 사용
-- Token 무감지 갱신: 401 시 자동으로 `/api/auth/refresh` 호출
+- Token 무감지 갱신: 401 시 자동으로 `/api/v1/auth/refresh` 호출
 - 갱신 실패 시 자동으로 로그인 페이지 리다이렉트
 
 ## 배포

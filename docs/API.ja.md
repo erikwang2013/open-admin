@@ -87,7 +87,7 @@ GET /api/docs
 ### 3.3 キャプチャ生成
 
 ```
-POST /api/captcha/generate
+POST /api/v1/captcha/generate
 ```
 
 - **認証**: 不要
@@ -180,7 +180,7 @@ POST /api/captcha/generate
 ### 3.4 キャプチャ検証
 
 ```
-POST /api/captcha/verify
+POST /api/v1/captcha/verify
 ```
 
 - **認証**: 不要
@@ -246,7 +246,7 @@ POST /api/captcha/verify
 ### 3.5 ログイン
 
 ```
-POST /api/auth/login
+POST /api/v1/auth/login
 ```
 
 - **認証**: 不要
@@ -266,7 +266,7 @@ POST /api/auth/login
 |------|------|------|---------|------|
 | username | string | はい | min:3, max:50 | ユーザー名 |
 | password | string | はい | min:6, max:32 (平文) | AES-256-CBC-HMAC 暗号化後 Base64 エンコード（平文も互換） |
-| captcha_key | string | はい | | キャプチャ key（事前に `/api/captcha/verify` で検証が必要） |
+| captcha_key | string | はい | | キャプチャ key（事前に `/api/v1/captcha/verify` で検証が必要） |
 
 ### パスワード暗号化プロトコル
 
@@ -315,7 +315,7 @@ POST /api/auth/login
 
 **発生し得るエラー**:
 - 422: パラメータ検証失敗（必須フィールド欠落、形式不一致）
-- 422: 先にキャプチャ検証を完了してください（captcha_key が `/api/captcha/verify` を通過していない）
+- 422: 先にキャプチャ検証を完了してください（captcha_key が `/api/v1/captcha/verify` を通過していない）
 - 401: ユーザー名またはパスワードが誤り
 - 403: アカウントが無効化されている
 - 429: アカウントがロックされています。15分後に再試行してください（連続5回のログイン失敗で発動）
@@ -323,7 +323,7 @@ POST /api/auth/login
 ### 3.6 登録
 
 ```
-POST /api/auth/register
+POST /api/v1/auth/register
 ```
 
 - **認証**: 不要
@@ -345,7 +345,7 @@ POST /api/auth/register
 | username | string | はい | min:3, max:50 | ユーザー名（一意） |
 | password | string | はい | min:6, max:32 (平文) | AES-256-CBC-HMAC 暗号化後 Base64 エンコード |
 | real_name | string | はい | max:50 | 氏名 |
-| captcha_key | string | はい | | キャプチャ key（事前に `/api/captcha/verify` で検証が必要） |
+| captcha_key | string | はい | | キャプチャ key（事前に `/api/v1/captcha/verify` で検証が必要） |
 
 **レスポンス例**:
 ```json
@@ -370,7 +370,7 @@ POST /api/auth/register
 ### 3.7 トークン更新
 
 ```
-POST /api/auth/refresh
+POST /api/v1/auth/refresh
 ```
 
 - **認証**: 不要
@@ -514,7 +514,7 @@ GET /admin/dashboard
         "id": "hashid...",
         "action": "用户登录",
         "method": "POST",
-        "path": "/api/auth/login",
+        "path": "/api/v1/auth/login",
         "ip": "192.168.1.1",
         "user_name": "admin",
         "created_at": "2026-05-21 10:30:00"
@@ -1334,7 +1334,7 @@ GET /admin/log
         "user_name": "admin",
         "action": "用户登录",
         "method": "POST",
-        "path": "/api/auth/login",
+        "path": "/api/v1/auth/login",
         "ip": "192.168.1.1",
         "source": "web",
         "input": "{\"username\":\"admin\"}",
@@ -1656,8 +1656,8 @@ POST /admin/upload
 
 レート制限の詳細:
 - デフォルトのグローバル制限: 60 回/分 / IP+パス
-- ログインエンドポイント `/api/auth/login`: 10 回/分
-- 登録エンドポイント `/api/auth/register`: 5 回/分
+- ログインエンドポイント `/api/v1/auth/login`: 10 回/分
+- 登録エンドポイント `/api/v1/auth/register`: 5 回/分
 - Redis の原子化スライディングウィンドウアルゴリズム（Lua ZSET）を使用し、TOCTOU 競合を回避
 - Redis が利用できない場合は fail open（通過させる）、リクエストをブロックしない
 
@@ -1666,14 +1666,14 @@ POST /admin/upload
 完全な認証シーケンス：
 
 ```
-1. 客户端请求 POST /api/captcha/generate
+1. 客户端请求 POST /api/v1/captcha/generate
    (请求头: API-Version: v1)
     ↓
    服务端返回: key + type(click|slider|rotate) + base64 图片 + extra(类型相关数据)
    
 2. 用户交互完成验证码操作（点击/拖拽/旋转），客户端收集答案
    
-3. 客户端请求 POST /api/captcha/verify
+3. 客户端请求 POST /api/v1/captcha/verify
    (请求头: API-Version: v1, Content-Type: application/json)
    请求体: { key, type, clicks }
    - type=click:  clicks = [{x, y}, ...]        // 坐标数组
@@ -1688,7 +1688,7 @@ POST /admin/upload
     ↓
    服务端返回: { valid: true/false }
 
-4. 客户端请求 POST /api/auth/login
+4. 客户端请求 POST /api/v1/auth/login
    (请求头: API-Version: v1, Content-Type: application/json)
    请求体: { username, password(加密), captcha_key }
     ↓
@@ -1723,7 +1723,7 @@ POST /admin/upload
    Response + X-RateLimit-* 头
 
 6. Access Token 过期前刷新
-   客户端请求 POST /api/auth/refresh
+   客户端请求 POST /api/v1/auth/refresh
    请求体: { refresh_token: "..." }
     ↓
    服务端解码 refresh_token → 签发新 access + refresh

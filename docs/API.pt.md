@@ -87,7 +87,7 @@ GET /api/docs
 ### 3.3 Gerar captcha
 
 ```
-POST /api/captcha/generate
+POST /api/v1/captcha/generate
 ```
 
 - **Autenticação**: não necessária
@@ -180,7 +180,7 @@ POST /api/captcha/generate
 ### 3.4 Validar captcha
 
 ```
-POST /api/captcha/verify
+POST /api/v1/captcha/verify
 ```
 
 - **Autenticação**: não necessária
@@ -246,7 +246,7 @@ Em caso de falha na validação, o `code` é 422, o `message` é `"验证失败�
 ### 3.5 Login
 
 ```
-POST /api/auth/login
+POST /api/v1/auth/login
 ```
 
 - **Autenticação**: não necessária
@@ -266,7 +266,7 @@ POST /api/auth/login
 |------|------|------|---------|------|
 | username | string | sim | min:3, max:50 | Nome de usuário |
 | password | string | sim | min:6, max:32 (texto puro) | Criptografado com AES-256-CBC-HMAC e codificado em Base64 (compatível com texto puro) |
-| captcha_key | string | sim | | Chave do captcha (é necessário passar pela validação de `/api/captcha/verify` primeiro) |
+| captcha_key | string | sim | | Chave do captcha (é necessário passar pela validação de `/api/v1/captcha/verify` primeiro) |
 
 ### Protocolo de criptografia de senha
 
@@ -315,7 +315,7 @@ A chave pública está embutida no aplicativo frontend e não precisa ser transm
 
 **Erros possíveis**:
 - 422: falha na validação de parâmetros (campo obrigatório ausente, formato incorreto)
-- 422: conclua primeiro a validação do captcha (captcha_key não passou em `/api/captcha/verify`)
+- 422: conclua primeiro a validação do captcha (captcha_key não passou em `/api/v1/captcha/verify`)
 - 401: nome de usuário ou senha incorretos
 - 403: conta desabilitada
 - 429: conta bloqueada, tente novamente em 15 minutos (acionado por 5 falhas consecutivas de login)
@@ -323,7 +323,7 @@ A chave pública está embutida no aplicativo frontend e não precisa ser transm
 ### 3.6 Registro
 
 ```
-POST /api/auth/register
+POST /api/v1/auth/register
 ```
 
 - **Autenticação**: não necessária
@@ -345,7 +345,7 @@ POST /api/auth/register
 | username | string | sim | min:3, max:50 | Nome de usuário (exclusivo) |
 | password | string | sim | min:6, max:32 (texto puro) | Criptografado com AES-256-CBC-HMAC e codificado em Base64 |
 | real_name | string | sim | max:50 | Nome real |
-| captcha_key | string | sim | | Chave do captcha (é necessário passar pela validação de `/api/captcha/verify` primeiro) |
+| captcha_key | string | sim | | Chave do captcha (é necessário passar pela validação de `/api/v1/captcha/verify` primeiro) |
 
 **Exemplo de resposta**:
 ```json
@@ -370,7 +370,7 @@ Após o registro bem-sucedido, o token JWT é retornado diretamente e o status d
 ### 3.7 Atualizar token
 
 ```
-POST /api/auth/refresh
+POST /api/v1/auth/refresh
 ```
 
 - **Autenticação**: não necessária
@@ -514,7 +514,7 @@ GET /admin/dashboard
         "id": "hashid...",
         "action": "用户登录",
         "method": "POST",
-        "path": "/api/auth/login",
+        "path": "/api/v1/auth/login",
         "ip": "192.168.1.1",
         "user_name": "admin",
         "created_at": "2026-05-21 10:30:00"
@@ -1334,7 +1334,7 @@ GET /admin/log
         "user_name": "admin",
         "action": "用户登录",
         "method": "POST",
-        "path": "/api/auth/login",
+        "path": "/api/v1/auth/login",
         "ip": "192.168.1.1",
         "source": "web",
         "input": "{\"username\":\"admin\"}",
@@ -1656,8 +1656,8 @@ Todas as APIs (injetadas na camada de middleware global) incluem os seguintes ca
 
 Detalhes do rate limit:
 - Limite global padrão: 60 requisições/minuto / IP+caminho
-- Endpoint de login `/api/auth/login`: 10 requisições/minuto
-- Endpoint de registro `/api/auth/register`: 5 requisições/minuto
+- Endpoint de login `/api/v1/auth/login`: 10 requisições/minuto
+- Endpoint de registro `/api/v1/auth/register`: 5 requisições/minuto
 - Usa algoritmo de janela deslizante atômica do Redis (Lua ZSET), evitando corrida TOCTOU
 - Quando o Redis está indisponível, fail open (libera), sem bloquear requisições
 
@@ -1666,14 +1666,14 @@ Detalhes do rate limit:
 Sequência completa de autenticação:
 
 ```
-1. O cliente solicita POST /api/captcha/generate
+1. O cliente solicita POST /api/v1/captcha/generate
    (cabeçalho: API-Version: v1)
     ↓
    O servidor retorna: key + type(click|slider|rotate) + imagem base64 + extra(dados relacionados ao tipo)
    
 2. O usuário interage e conclui a operação do captcha (clique/arraste/rotação), e o cliente coleta as respostas
    
-3. O cliente solicita POST /api/captcha/verify
+3. O cliente solicita POST /api/v1/captcha/verify
    (cabeçalho: API-Version: v1, Content-Type: application/json)
    corpo da requisição: { key, type, clicks }
    - type=click:  clicks = [{x, y}, ...]        // array de coordenadas
@@ -1688,7 +1688,7 @@ Sequência completa de autenticação:
     ↓
    O servidor retorna: { valid: true/false }
 
-4. O cliente solicita POST /api/auth/login
+4. O cliente solicita POST /api/v1/auth/login
    (cabeçalho: API-Version: v1, Content-Type: application/json)
    corpo da requisição: { username, password(criptografada), captcha_key }
     ↓
@@ -1723,7 +1723,7 @@ Sequência completa de autenticação:
    Response + cabeçalhos X-RateLimit-*
 
 6. Renovação antes da expiração do Access Token
-   O cliente solicita POST /api/auth/refresh
+   O cliente solicita POST /api/v1/auth/refresh
    corpo da requisição: { refresh_token: "..." }
     ↓
    O servidor decodifica o refresh_token → emite novo access + refresh

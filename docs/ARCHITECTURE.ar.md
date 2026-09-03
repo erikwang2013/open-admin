@@ -240,7 +240,7 @@ sequenceDiagram
     participant CAP as Captcha Service
 
     Note over U,CAP: === الخطوة الأولى: الحصول على كود التحقق ===
-    CL->>SV: POST /api/captcha/generate
+    CL->>SV: POST /api/v1/captcha/generate
     SV->>CAP: captcha_create('click')
     CAP->>CAP: توليد صورة خلفية 300×200
     CAP->>CAP: وضع N أهداف صينية عشوائيًا
@@ -255,7 +255,7 @@ sequenceDiagram
     CL->>CL: جمع clicks: [{x,y}, {x,y}, {x,y}]
 
     Note over U,CAP: === الخطوة الثالثة: تسجيل الدخول ===
-    CL->>SV: POST /api/auth/login { username, password, captcha_key, clicks }
+    CL->>SV: POST /api/v1/auth/login { username, password, captcha_key, clicks }
     SV->>CAP: captcha_verify(key, 'click', clicks)
     alt كود تحقق خاطئ
         CAP-->>SV: false

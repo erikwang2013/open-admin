@@ -87,7 +87,7 @@ GET /api/docs
 ### 3.3 Membuat Captcha
 
 ```
-POST /api/captcha/generate
+POST /api/v1/captcha/generate
 ```
 
 - **Autentikasi**: Tidak diperlukan
@@ -180,7 +180,7 @@ POST /api/captcha/generate
 ### 3.4 Verifikasi Captcha
 
 ```
-POST /api/captcha/verify
+POST /api/v1/captcha/verify
 ```
 
 - **Autentikasi**: Tidak diperlukan
@@ -246,7 +246,7 @@ Saat verifikasi gagal, `code` adalah 422, `message` adalah `"验证失败，请�
 ### 3.5 Login
 
 ```
-POST /api/auth/login
+POST /api/v1/auth/login
 ```
 
 - **Autentikasi**: Tidak diperlukan
@@ -266,7 +266,7 @@ POST /api/auth/login
 |------|------|------|---------|------|
 | username | string | Ya | min:3, max:50 | Nama pengguna |
 | password | string | Ya | min:6, max:32 (teks polos) | Dienkripsi AES-256-CBC-HMAC lalu di-encode Base64 (kompatibel teks polos) |
-| captcha_key | string | Ya | | Key captcha (harus lolos verifikasi `/api/captcha/verify` terlebih dahulu) |
+| captcha_key | string | Ya | | Key captcha (harus lolos verifikasi `/api/v1/captcha/verify` terlebih dahulu) |
 
 ### Protokol Enkripsi Kata Sandi
 
@@ -315,7 +315,7 @@ Kunci publik tertanam di aplikasi frontend, tidak perlu dikirim melalui jaringan
 
 **Kesalahan yang mungkin**:
 - 422: Gagal validasi parameter (bidang wajib kosong, format tidak sesuai)
-- 422: Selesaikan verifikasi captcha terlebih dahulu (captcha_key tidak lolos `/api/captcha/verify`)
+- 422: Selesaikan verifikasi captcha terlebih dahulu (captcha_key tidak lolos `/api/v1/captcha/verify`)
 - 401: Nama pengguna atau kata sandi salah
 - 403: Akun telah dinonaktifkan
 - 429: Akun telah terkunci, coba lagi setelah 15 menit (dipicu 5 kali kegagalan login berturut-turut)
@@ -323,7 +323,7 @@ Kunci publik tertanam di aplikasi frontend, tidak perlu dikirim melalui jaringan
 ### 3.6 Registrasi
 
 ```
-POST /api/auth/register
+POST /api/v1/auth/register
 ```
 
 - **Autentikasi**: Tidak diperlukan
@@ -345,7 +345,7 @@ POST /api/auth/register
 | username | string | Ya | min:3, max:50 | Nama pengguna (unik) |
 | password | string | Ya | min:6, max:32 (teks polos) | Dienkripsi AES-256-CBC-HMAC lalu di-encode Base64 |
 | real_name | string | Ya | max:50 | Nama asli |
-| captcha_key | string | Ya | | Key captcha (harus lolos verifikasi `/api/captcha/verify` terlebih dahulu) |
+| captcha_key | string | Ya | | Key captcha (harus lolos verifikasi `/api/v1/captcha/verify` terlebih dahulu) |
 
 **Contoh respons**:
 ```json
@@ -370,7 +370,7 @@ Setelah registrasi berhasil, token JWT langsung dikembalikan, status pengguna de
 ### 3.7 Refresh Token
 
 ```
-POST /api/auth/refresh
+POST /api/v1/auth/refresh
 ```
 
 - **Autentikasi**: Tidak diperlukan
@@ -514,7 +514,7 @@ GET /admin/dashboard
         "id": "hashid...",
         "action": "用户登录",
         "method": "POST",
-        "path": "/api/auth/login",
+        "path": "/api/v1/auth/login",
         "ip": "192.168.1.1",
         "user_name": "admin",
         "created_at": "2026-05-21 10:30:00"
@@ -1334,7 +1334,7 @@ GET /admin/log
         "user_name": "admin",
         "action": "用户登录",
         "method": "POST",
-        "path": "/api/auth/login",
+        "path": "/api/v1/auth/login",
         "ip": "192.168.1.1",
         "source": "web",
         "input": "{\"username\":\"admin\"}",
@@ -1656,8 +1656,8 @@ Semua antarmuka (disuntikkan pada lapisan middleware global) menyertakan header 
 
 Detail rate limit:
 - Batas global default: 60 kali/menit / IP+path
-- Endpoint login `/api/auth/login`: 10 kali/menit
-- Endpoint registrasi `/api/auth/register`: 5 kali/menit
+- Endpoint login `/api/v1/auth/login`: 10 kali/menit
+- Endpoint registrasi `/api/v1/auth/register`: 5 kali/menit
 - Menggunakan algoritma sliding window atomik Redis (Lua ZSET), menghindari race condition TOCTOU
 - Saat Redis tidak tersedia, fail open (membiarkan lewat), tidak memblokir permintaan
 
@@ -1666,14 +1666,14 @@ Detail rate limit:
 Urutan autentikasi lengkap:
 
 ```
-1. 客户端请求 POST /api/captcha/generate
+1. 客户端请求 POST /api/v1/captcha/generate
    (请求头: API-Version: v1)
     ↓
    服务端返回: key + type(click|slider|rotate) + base64 图片 + extra(类型相关数据)
    
 2. 用户交互完成验证码操作（点击/拖拽/旋转），客户端收集答案
    
-3. 客户端请求 POST /api/captcha/verify
+3. 客户端请求 POST /api/v1/captcha/verify
    (请求头: API-Version: v1, Content-Type: application/json)
    请求体: { key, type, clicks }
    - type=click:  clicks = [{x, y}, ...]        // 坐标数组
@@ -1688,7 +1688,7 @@ Urutan autentikasi lengkap:
     ↓
    服务端返回: { valid: true/false }
 
-4. 客户端请求 POST /api/auth/login
+4. 客户端请求 POST /api/v1/auth/login
    (请求头: API-Version: v1, Content-Type: application/json)
    请求体: { username, password(加密), captcha_key }
     ↓
@@ -1723,7 +1723,7 @@ Urutan autentikasi lengkap:
    Response + X-RateLimit-* 头
 
 6. Access Token 过期前刷新
-   客户端请求 POST /api/auth/refresh
+   客户端请求 POST /api/v1/auth/refresh
    请求体: { refresh_token: "..." }
     ↓
    服务端解码 refresh_token → 签发新 access + refresh

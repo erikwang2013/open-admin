@@ -122,8 +122,8 @@ Skrip Lua dieksekusi single-thread di sisi server Redis, **atomik secara alami**
 | Rute | Batasan | Jendela | Skenario |
 |------|------|------|------|
 | Default (semua rute) | 60 kali/menit | 60s | API umum |
-| `/api/auth/login` | 10 kali/menit | 60s | Login (mencegah brute force) |
-| `/api/auth/register` | 5 kali/menit | 60s | Registrasi (mencegah registrasi massal) |
+| `/api/v1/auth/login` | 10 kali/menit | 60s | Login (mencegah brute force) |
+| `/api/v1/auth/register` | 5 kali/menit | 60s | Registrasi (mencegah registrasi massal) |
 
 ### Header Respons
 
