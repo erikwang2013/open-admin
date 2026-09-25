@@ -14,7 +14,7 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
 | 域 | 功能 |
 |----|------|
-| 认证 | 登录/注册/刷新/登出 + 验证码 + 账号锁定 + 会话限制 |
+| 认证 | 登录/刷新/登出 + 点击验证码 + 账号锁定 + 会话限制 |
 | 仪表盘 | 实时统计/趋势/分布/日志（Redis 5m 缓存）|
 | 用户 | CRUD + 批量删除/启禁用 + Excel 导入 |
 | 角色权限 | CRUD + 权限树 + RBAC method.path 鉴权 |
@@ -23,6 +23,18 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 | 文件 | 上传 + Excel/PDF 导出（敏感数据脱敏）|
 | 安全 | 18 层纵深防御（XSS/SQL注入/CSRF/限流/CSP...）|
 | 运维 | 健康检查/Prometheus 指标/API 文档/security.txt + Docker + CI/CD |
+
+## 项目宠物 · 小安
+
+盾形守卫机器人「小安」（Xiao An），取自「**安**全」与「管理后**台**」，守在中间件链的「防护」与「鉴权」两道关卡上。
+
+- **样式单一来源**：`public/img/pet.svg`（纯 SVG，无脚本/无外部依赖，含 `prefers-reduced-motion` 降级）。修改此文件即同时更新站点首页、安装向导与浏览器图标，**不要再复制出第二份**。
+- **已接入位置**：
+  - `GET /` 站点首页 → `app/view/index/view.html`（路由在 `config/route.php` 顶部，免认证）
+  - 安装向导 4 个页面 → `InstallController::layout()` 统一注入
+  - 站点图标 → `<link rel="icon" type="image/svg+xml" href="/img/pet.svg">`（首页 + 安装向导 + `apps/flutter/web/index.html`）
+- **配色规范**：主色 `#1677FF`、暖色天线 `#FA8C16`、校验绿 `#52C41A`；画布 `240 × 320`。
+- **设计图**：`docs/diagrams/architecture.svg`（系统架构）、`features.svg`（功能设计）、`lifecycle.svg`（生命周期）——同为手写 SVG，与宠物保持同一套配色；README 与文档中直接引用。
 
 ## 技术栈
 
@@ -79,6 +91,7 @@ open-admin/
 │   │   ├── AdminPermission.php # RBAC 权限校验（Redis 60s 缓存）
 │   │   └── OperationLog.php    # 操作日志自动记录（含来源端检测）
 │   ├── model/                  # 数据模型
+│   ├── view/index/view.html    # 站点首页模板（GET /，项目宠物 + 入口导航）
 │   ├── queue/                  # 队列任务
 │   └── process/                # 进程 (Http, Monitor)
 ├── apps/
@@ -110,11 +123,16 @@ open-admin/
 │   ├── SECURITY.md             # 安全架构设计
 │   ├── API.md                  # API 参考文档
 │   ├── nginx-security.conf     # Nginx 安全参考配置
-│   ├── diagrams/               # 分解架构图
+│   ├── diagrams/               # 图表
+│   │   ├── architecture.svg    # 系统架构设计图（手写 SVG）
+│   │   ├── features.svg        # 功能设计图（手写 SVG）
+│   │   ├── lifecycle.svg       # 生命周期图（手写 SVG）
+│   │   └── 01..12-*.md         # 分解架构图（Mermaid，12 种语言）
 │   └── superpowers/            # 规范与计划
 │       ├── specs/              # 设计规范
 │       └── plans/              # 实现计划
 ├── public/                     # 公共入口
+│   └── img/pet.svg             # 项目宠物「小安」（SVG，兼作站点图标）
 ├── runtime/                    # 运行时文件
 ├── tests/                      # 测试
 ├── vendor/                     # Composer 依赖
@@ -169,9 +187,10 @@ curl http://localhost:8787/api/v1/auth/login
 ## 限流策略
 
 Redis 滑动窗口（Lua 原子化），默认 60 次/分钟/IP/路由：
-- 登录: 10 次/分钟
-- 注册: 5 次/分钟
+- 登录 `/api/v1/auth/login`: 10 次/分钟
 - 响应头: `X-RateLimit-Limit/Remaining/Reset`，超限附加 `Retry-After`
+
+> `RateLimit::$sensitive` 的键必须与 `config/route.php` 中的**完整路径**一致（含 `/api/v{n}` 版本前缀），否则敏感路由会静默退回默认 60 次/分钟。
 
 ## 代码规范
 

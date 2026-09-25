@@ -5,6 +5,8 @@
 # Architekturdiagramme und Geschäftslogikdiagramme
 
 > Die folgenden Mermaid-Diagramme werden in GitHub / GitLab / VS Code automatisch gerendert. In anderen Umgebungen nutzen Sie den [Mermaid Live Editor](https://mermaid.live/).
+>
+> Statische Diagramme (SVG), die keinen Renderer benötigen, finden Sie in [Abschnitt 14](#14-statische-design-diagramme-svg).
 
 ---
 
@@ -22,11 +24,10 @@ flowchart TB
     end
 
     subgraph "Anwendungsebene (webman v2)"
-        C0["ApiVersion-Middleware<br/>API-Version-Header-Prüfung"]
         C1["AdminAuth-Middleware<br/>JWT-Validierung"]
         C2["AdminPermission-Middleware<br/>RBAC-Berechtigungsprüfung"]
         C3["Admin-Controller<br/>Dashboard / User / Role / Permission"]
-        C4["Öffentliche Controller v1<br/>Captcha / Auth"]
+        C4["/api/v1-Routengruppe direkt zu öffentlichen Controllern<br/>Captcha / Auth"]
         C5["Common Services<br/>Hashids / Snowflake / Encryption"]
     end
 
@@ -43,11 +44,10 @@ flowchart TB
 
     A1 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
     A2 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
-    B1 --> C0
-    C0 --> C1
+    B1 --> C1
+    B1 --> C4
     C1 --> C2
     C2 --> C3
-    C0 --> C4
     C3 --> C5
     C4 --> C5
     C3 --> D1
@@ -59,7 +59,6 @@ flowchart TB
     style A1 fill:#1677FF,color:#fff
     style A2 fill:#1677FF,color:#fff
     style B1 fill:#722ED1,color:#fff
-    style C0 fill:#EB2F96,color:#fff
     style C1 fill:#FA8C16,color:#fff
     style C2 fill:#FA8C16,color:#fff
     style C3 fill:#52C41A,color:#fff
@@ -83,7 +82,6 @@ flowchart TD
     subgraph "Middleware-Ebene Middleware Layer"
         M_RL["RateLimit<br/>Redis-Gleitfenster-Rate-Limiting<br/>X-RateLimit-Response-Header"]
         M_SF["SecurityFilter<br/>Angriffserkennung und -block<br/>XSS/SQL-Injection/Pfad-Traversal/CSRF"]
-        M0["ApiVersion<br/>API-Versionsprüfung<br/>apiVersion injizieren"]
         M1["AdminAuth<br/>JWT-Token-Prüfung<br/>adminId injizieren"]
         M2["AdminPermission<br/>RBAC-Autorisierung<br/>method.path-Abgleich<br/>Redis-60s-Berechtigungscache"]
     end
@@ -96,7 +94,7 @@ flowchart TD
         CT5["DashboardController<br/>Statistiken/Trends/Verteilung"]
         CT6["ExportController<br/>Excel/PDF-Export"]
         CT7["CaptchaController<br/>Captcha-Erzeugung/-Validierung"]
-        CT8["AuthController<br/>Login/Registrierung/Erneuerung"]
+        CT8["AuthController<br/>Login/Erneuerung"]
     end
 
     subgraph "Service-Ebene Service Layer"
@@ -119,11 +117,11 @@ flowchart TD
         D3["Redis"]
     end
 
-    R1 --> M_SF --> M_RL --> M0
-    M0 --> M1
+    R1 --> M_SF --> M_RL
+    M_RL --> M1
+    M_RL --> CT7 & CT8
     M1 --> M2
     M2 --> CT2 & CT3 & CT4 & CT5 & CT6
-    M0 --> CT7 & CT8
     CT1 -.->|extends| CT2 & CT3 & CT4 & CT5 & CT6
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> S1 & S2 & S3
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> MD1 & MD2 & MD3 & MD4 & MD5
@@ -134,7 +132,6 @@ flowchart TD
     style R1 fill:#722ED1,color:#fff
     style M_SF fill:#FF4D4F,color:#fff
     style M_RL fill:#EB2F96,color:#fff
-    style M0 fill:#EB2F96,color:#fff
     style M1 fill:#FA8C16,color:#fff
     style M2 fill:#FA8C16,color:#fff
     style CT1 fill:#1677FF,color:#fff
@@ -151,7 +148,6 @@ sequenceDiagram
     participant MW_LOC as Locale
     participant MW_SF as SecurityFilter
     participant MW_RL as RateLimit
-    participant MW0 as ApiVersion
     participant MW1 as AdminAuth
     participant MW2 as AdminPermission
     participant CTL as Controller
@@ -160,7 +156,7 @@ sequenceDiagram
     participant DB as MySQL
     participant OPLOG as OperationLog
 
-    C->>N: HTTPS-Request<br/>Header: API-Version: v1, Accept-Language: zh_CN
+    C->>N: HTTPS-Anfrage an /admin<br/>Header: Accept-Language: zh_CN
     N->>MW_LOC: Weiterleitung
 
     MW_LOC->>MW_LOC: locale = zh_CN (Accept-Language / ?lang=)
@@ -182,13 +178,7 @@ sequenceDiagram
         MW_RL-->>C: 429 + Retry-After
     end
 
-    MW_RL->>MW0: Durchgelassen
-
-    alt Nicht unterstützte Version
-        MW0-->>C: 400 Nicht unterstützte API-Version
-    else Version gültig
-        MW0->>MW0: $request->apiVersion = v1
-    end
+    MW_RL->>MW1: Durchgelassen
 
     alt Token fehlt oder ungültig
         MW1-->>C: 401 Unauthorized
@@ -607,7 +597,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph "Schicht 1: Mensch-Maschine-Verifizierung"
-        L1["Klick-Captcha<br/>Click Captcha<br/>Pflicht bei Login/Registrierung"]
+        L1["Klick-Captcha<br/>Click Captcha<br/>Pflicht bei Login"]
     end
 
     subgraph "Schicht 2: Operationsbestätigung"
@@ -692,3 +682,17 @@ flowchart TB
     style ES fill:#1890FF,color:#fff
     style REDIS fill:#1890FF,color:#fff
 ```
+
+---
+
+## 14. Statische Design-Diagramme (SVG)
+
+Die folgenden drei Diagramme sind **handgeschriebene SVGs** (keine Skripte, keine externen Abhängigkeiten, unbegrenzt skalierbar). Sie sind ohne Mermaid-Renderer sichtbar und eignen sich zum direkten Einfügen in Dokumentation, PPT und README:
+
+| Diagramm | Inhalt | Datei |
+|---|------|------|
+| Systemarchitektur-Design | Vierschichtige Topologie: Client-Ebene → Gateway-Ebene → webman-Anwendungsebene → Speicherebene, inkl. Sicherheitsschutz und Observability | [architecture.svg](diagrams/architecture.svg) |
+| Funktionsdesign | 12 Funktionsbereiche → Controller-Einstieg → Kernfähigkeiten, mit Middleware-Ausführungskette und Daten-Interface-Spezifikation | [features.svg](diagrams/features.svg) |
+| Lebenszyklus | Installation → Start → Anbindung → Schutz → Authentifizierung → Verarbeitung → Persistenz → Response-Audit, inkl. Ausnahmezweigen und Token-Lebenszyklus | [lifecycle.svg](diagrams/lifecycle.svg) |
+
+> Material des Projekt-Maskottchens „Xiao An": [`public/img/pet.svg`](../public/img/pet.svg) (reines SVG, dient zugleich als Startseite, Installationsassistent und Browser-Icon)

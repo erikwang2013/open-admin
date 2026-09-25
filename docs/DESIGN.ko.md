@@ -5,10 +5,12 @@
 > [中文](DESIGN.md) | [English](DESIGN.en.md) | [한국어](DESIGN.ko.md) | [Русский](DESIGN.ru.md) | [Deutsch](DESIGN.de.md) | [Français](DESIGN.fr.md) | [Español](DESIGN.es.md) | [Português](DESIGN.pt.md) | [हिन्दी](DESIGN.hi.md) | [العربية](DESIGN.ar.md) | [বাংলা](DESIGN.bn.md) | [Bahasa Indonesia](DESIGN.id.md) | [日本語](DESIGN.ja.md)
 
 > 상세한 Mermaid 아키텍처 다이어그램은 [ARCHITECTURE.md](ARCHITECTURE.ko.md)를 참조하세요 (GitHub/GitLab/VS Code에서 자동 렌더링).
+>
+> 정적 설계도(SVG): [시스템 아키텍처](diagrams/architecture.svg) · [기능 설계](diagrams/features.svg) · [수명 주기](diagrams/lifecycle.svg)
 
 ## 1. 시스템 아키텍처
 
-> **기능 목록**: 인증(login/register/refresh/logout + 계정 잠금 + 세션 제한) | 대시보드(Redis 캐시) | 사용자 CRUD+일괄+가져오기 | 역할·권한(RBAC) | 시스템 설정 | 작업 감사(8플랫폼 출처 단말) | 파일(업로드+내보내기+마스킹) | 보안(18계층 방어) | 운영(health/metrics/docs/Docker/CI)
+> **기능 목록**: 인증(login/refresh/logout + 계정 잠금 + 세션 제한) | 대시보드(Redis 캐시) | 사용자 CRUD+일괄+가져오기 | 역할·권한(RBAC) | 시스템 설정 | 작업 감사(8플랫폼 출처 단말) | 파일(업로드+내보내기+마스킹) | 보안(18계층 방어) | 운영(health/metrics/docs/Docker/CI)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -62,7 +64,7 @@
 | 계층 | 디렉터리 | 책임 |
 |---|------|------|
 | 라우트 | `config/route.php` | URL과 컨트롤러 매핑, 미들웨어 바인딩, 버전별 라우팅 |
-| 미들웨어 | `app/middleware/` | 공격 차단(SecurityFilter), 레이트 리밋(RateLimit), 인증(JWT), 인가(RBAC), API 버전(ApiVersion) |
+| 미들웨어 | `app/middleware/` | 공격 차단(SecurityFilter), 레이트 리밋(RateLimit), 인증(JWT), 인가(RBAC) |
 | 컨트롤러 | 14개: Dashboard/User/Role/Permission/Config/Log/Profile/Export/Import/Upload/Health/Docs (관리자) + Captcha/Auth (API v1) | 요청 파라미터 검증, 비즈니스 로직 호출, 응답 포맷팅 |
 | 비즈니스 서비스 | `app/service/` | 재사용 가능한 비즈니스 로직 (예약) |
 | 데이터 모델 | `app/model/` | ORM 매핑, 연결 관계, 필드 암·복호화 |
@@ -90,8 +92,9 @@ Route 匹配
   RateLimit ───────────► Redis 滑动窗口限流
   │ (失败返回 429 + Retry-After 头)
   ▼
-  ApiVersion ─────────► API-Version 头校验，注入 $request->apiVersion
-  │ (失败返回 400)
+  라우트 분기 ─────────► 버전 번호는 URL 접두사에 포함 (/api/v1/..., /api/v2/...)
+  │                     /api/v1 요청 → 정적 등록된 라우트 그룹이 컨트롤러에 직결
+  │                     /admin 요청 → 아래 미들웨어 체인 계속
   ▼
   AdminAuth ──────────► JWT 验证，注入 $request->adminId
   │ (失败返回 401)
@@ -175,7 +178,7 @@ erik_system_config (系统配置) — 独立表
 
 ```
 公开接口:  /api/v1/captcha/{generate|verify}
-           /api/v1/auth/{login|register|refresh}
+           /api/v1/auth/{login|refresh}
 
 管理端:   /admin/{resource}[/{hashid}]
           /admin/export/{excel|pdf}
@@ -199,33 +202,25 @@ erik_system_config (系统配置) — 独立表
 
 ### 4.2 API 버전 정책
 
-API 버전은 요청 헤더로 제어되며 **URL 경로에 나타나지 않습니다**:
-
-```http
-API-Version: v1
-```
+API 버전 번호는 URL 접두사에 나타나며 (`/api/v1/...`, `/api/v2/...`), **요청 헤더를 사용하지 않습니다**. `config/route.php`가 각 버전의 라우트 그룹을 정적으로 등록하여 해당 버전 컨트롤러에 직결하며, 버전 분기는 어떤 미들웨어도 거치지 않습니다.
 
 | 메커니즘 | 설명 |
 |------|------|
-| 기본 버전 | `API-Version` 헤더 미포함 시 기본 `v1` |
-| 검증 | `ApiVersion` 미들웨어가 검증, 지원하지 않는 버전은 400 반환 |
-| 라우팅 | `v()` 헬퍼 함수가 버전에 따라 컨트롤러 클래스를 동적으로 해석 |
+| URL 접두사 | 버전 번호는 URL 첫 번째 경로 세그먼트로 고정: `/api/v1/...`, `/api/v2/...` |
+| 라우팅 | `config/route.php`에 `Route::group('/api/v1', ...)`를 정적으로 등록하여 컨트롤러에 직결 |
 | 디렉터리 | 컨트롤러를 버전별로 구성: `app/api/{version}/controller/` |
+| 운영 엔드포인트 | `/api/docs`, `/health`, `/metrics` 등은 버전 접두사 없음 |
 
 확장 예시 — v2 API 추가:
 1. `app/api/v2/controller/AuthController.php` 생성
-2. `ApiVersion` 미들웨어 `SUPPORTED` 상수에 `'v2'` 추가
-3. 라우트 정의는 수정 불필요
+2. `config/route.php`에 `Route::group('/api/v2', ...)` 라우트 그룹 등록
 
 ```bash
-# v1 사용
-curl /api/v1/auth/login
+# v1
+curl http://localhost:8787/api/v1/auth/login
 
-# v2 사용
-curl -H "API-Version: v2" /api/v1/auth/login
-
-# 미지정 시 기본 v1
-curl /api/v1/auth/login
+# v2 (새 버전 추가 후)
+curl http://localhost:8787/api/v2/auth/login
 ```
 
 ### 4.3 레이트 리밋 정책
@@ -236,7 +231,6 @@ Redis Sorted Set 슬라이딩 윈도우 알고리즘 기반, 원자적 Lua 스�
 |------|------|
 | 기본 | 60회/분/IP/라우트 |
 | POST /api/v1/auth/login | 10회/분 |
-| POST /api/v1/auth/register | 5회/분 |
 
 초과 시 429를 반환하며, 응답 헤더에 X-RateLimit-Limit / Remaining / Reset / Retry-After가 포함됩니다.
 
@@ -362,7 +356,7 @@ Redis Sorted Set 슬라이딩 윈도우 알고리즘 기반, 원자적 Lua 스�
 |------|------|
 | 메서드 제한 | SecurityFilter HTTP 메서드 화이트리스트, GET/POST/PUT/DELETE/OPTIONS/HEAD만 허용, 비표준 메서드는 405 반환 |
 | 공격 차단 | SecurityFilter 미들웨어, XSS/SQL 주입/경로 탐색/명령 주입/CSRF 탐지 차단 |
-| 사람·기계 검증 | 클릭 캡차 (Click Captcha), 로그인/회원가입 강제 검증 |
+| 사람·기계 검증 | 클릭 캡차 (Click Captcha), 로그인 강제 검증 |
 | 계정 잠금 | 연속 5회 로그인 실패 시 계정 15분 잠금, 잠금 기간 중 429 반환 |
 | 세션 제한 | 동일 사용자 최대 3개 동시 Token, 초과 시 가장 오래된 Token 자동 블랙리스트 |
 | 레이트 리밋 | RateLimit 미들웨어, Redis 슬라이딩 윈도우, Lua 원자화 |

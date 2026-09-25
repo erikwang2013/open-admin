@@ -5,10 +5,12 @@
 # Open Admin — Document de conception
 
 > Pour les diagrammes Mermaid détaillés, consultez [ARCHITECTURE.md](ARCHITECTURE.fr.md) (rendu automatique dans GitHub/GitLab/VS Code).
+>
+> Schémas statiques (SVG) : [Architecture système](diagrams/architecture.svg) · [Conception fonctionnelle](diagrams/features.svg) · [Cycle de vie](diagrams/lifecycle.svg)
 
 ## 1. Architecture du système
 
-> **Liste des fonctionnalités** : authentification (login/register/refresh/logout + verrouillage du compte + limitation des sessions) | tableau de bord (cache Redis) | CRUD utilisateurs + groupé + import | rôles et permissions (RBAC) | configuration système | audit des opérations (source de 8 plates-formes) | fichiers (upload + export + masquage) | sécurité (18 couches de défense) | exploitation (health/metrics/docs/Docker/CI)
+> **Liste des fonctionnalités** : authentification (login/refresh/logout + verrouillage du compte + limitation des sessions) | tableau de bord (cache Redis) | CRUD utilisateurs + groupé + import | rôles et permissions (RBAC) | configuration système | audit des opérations (source de 8 plates-formes) | fichiers (upload + export + masquage) | sécurité (18 couches de défense) | exploitation (health/metrics/docs/Docker/CI)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -62,7 +64,7 @@
 | Couche | Répertoire | Responsabilités |
 |---|------|------|
 | Routage | `config/route.php` | Mapping URL vers contrôleur, liaison des middlewares, routage versionné |
-| Middleware | `app/middleware/` | Interception des attaques (SecurityFilter), limitation de débit (RateLimit), authentification (JWT), autorisation (RBAC), version API (ApiVersion) |
+| Middleware | `app/middleware/` | Interception des attaques (SecurityFilter), limitation de débit (RateLimit), authentification (JWT), autorisation (RBAC) |
 | Contrôleurs | 14 : Dashboard/User/Role/Permission/Config/Log/Profile/Export/Import/Upload/Health/Docs (panneau d'administration) + Captcha/Auth (API v1) | Validation des paramètres de requête, appel de la logique métier, formatage des réponses |
 | Services métier | `app/service/` | Logique métier réutilisable (réservé) |
 | Modèles de données | `app/model/` | Mapping ORM, relations, chiffrement/déchiffrement des champs |
@@ -90,8 +92,9 @@ Route 匹配
   RateLimit ───────────► Redis 滑动窗口限流
   │ (失败返回 429 + Retry-After 头)
   ▼
-  ApiVersion ─────────► API-Version 头校验，注入 $request->apiVersion
-  │ (失败返回 400)
+  路由分发 ───────────► 版本号体现在 URL 前缀（/api/v1/...、/api/v2/...）
+  │                     /api/v1 请求 → 静态注册路由组直连控制器
+  │                     /admin 请求 → 继续下方中间件链
   ▼
   AdminAuth ──────────► JWT 验证，注入 $request->adminId
   │ (失败返回 401)
@@ -175,7 +178,7 @@ erik_system_config (系统配置) — 独立表
 
 ```
 接口公开:  /api/v1/captcha/{generate|verify}
-           /api/v1/auth/{login|register|refresh}
+           /api/v1/auth/{login|refresh}
 
 管理端:   /admin/{resource}[/{hashid}]
           /admin/export/{excel|pdf}
@@ -199,33 +202,25 @@ erik_system_config (系统配置) — 独立表
 
 ### 4.2 Stratégie de version API
 
-La version de l'API est contrôlée par l'en-tête de requête, **non visible dans le chemin URL** :
-
-```http
-API-Version: v1
-```
+Le numéro de version de l'API est porté par le préfixe d'URL (`/api/v1/...`, `/api/v2/...`), **aucun en-tête de requête n'est utilisé**. `config/route.php` enregistre statiquement un groupe de routes par version, reliant directement les contrôleurs de la version correspondante ; la répartition par version ne passe par aucun middleware.
 
 | Mécanisme | Description |
 |------|------|
-| Version par défaut | `v1` si l'en-tête `API-Version` est absent |
-| Validation | Le middleware `ApiVersion` valide, une version non prise en charge renvoie 400 |
-| Routage | La fonction d'aide `v()` résout dynamiquement la classe de contrôleur selon la version |
+| Préfixe d'URL | Le numéro de version est fixé au premier segment du chemin : `/api/v1/...`, `/api/v2/...` |
+| Routage | `config/route.php` enregistre statiquement `Route::group('/api/v1', ...)` en direct vers les contrôleurs |
 | Répertoire | Contrôleurs organisés par version : `app/api/{version}/controller/` |
+| Points de terminaison d'exploitation | `/api/docs`, `/health`, `/metrics`, etc. ne portent aucun préfixe de version |
 
 Exemple d'extension — ajout d'une API v2 :
 1. Créer `app/api/v2/controller/AuthController.php`
-2. Ajouter `'v2'` à la constante `SUPPORTED` du middleware `ApiVersion`
-3. Aucune modification des définitions de routes nécessaire
+2. Enregistrer un groupe de routes `Route::group('/api/v2', ...)` dans `config/route.php`
 
 ```bash
-# Utiliser v1
-curl /api/v1/auth/login
+# v1
+curl http://localhost:8787/api/v1/auth/login
 
-# Utiliser v2
-curl -H "API-Version: v2" /api/v1/auth/login
-
-# Sans en-tête, v1 par défaut
-curl /api/v1/auth/login
+# v2 (après ajout de la nouvelle version)
+curl http://localhost:8787/api/v2/auth/login
 ```
 
 ### 4.3 Stratégie de limitation de débit
@@ -236,7 +231,6 @@ Basée sur l'algorithme de fenêtre glissante Redis Sorted Set, exécutée en sc
 |------|------|
 | Défaut | 60 requêtes/minute/IP/route |
 | POST /api/v1/auth/login | 10 requêtes/minute |
-| POST /api/v1/auth/register | 5 requêtes/minute |
 
 En cas de dépassement, 429 est renvoyé, avec les en-têtes X-RateLimit-Limit / Remaining / Reset / Retry-After.
 
@@ -362,7 +356,7 @@ Flux de données : Page ← DataService ← ApiService (JWT Bearer) ← HTTP ←
 |------|------|
 | Limitation des méthodes | Liste blanche des méthodes HTTP de SecurityFilter, seuls GET/POST/PUT/DELETE/OPTIONS/HEAD sont autorisés, les méthodes non standard renvoient 405 |
 | Interception des attaques | Middleware SecurityFilter, détection et interception des XSS/injections SQL/traversées de chemin/injections de commandes/CSRF |
-| Vérification homme-machine | Captcha à clic (Click Captcha), validation obligatoire à la connexion/inscription |
+| Vérification homme-machine | Captcha à clic (Click Captcha), validation obligatoire à la connexion |
 | Verrouillage du compte | 5 échecs de connexion consécutifs ⇒ verrouillage de 15 minutes, 429 pendant la période de verrouillage |
 | Limitation des sessions | 3 jetons concurrents maximum par utilisateur, au-delà le jeton le plus ancien est automatiquement mis en liste noire |
 | Limitation de débit | Middleware RateLimit, fenêtre glissante Redis, atomique en Lua |

@@ -5,10 +5,12 @@
 # Open Admin — Design Document
 
 > For detailed Mermaid architecture diagrams, see [ARCHITECTURE.en.md](ARCHITECTURE.en.md) (renders automatically on GitHub/GitLab/VS Code).
+>
+> Static design diagrams (SVG): [System Architecture](diagrams/architecture.svg) · [Feature Design](diagrams/features.svg) · [Lifecycle](diagrams/lifecycle.svg)
 
 ## 1. System Architecture
 
-> **Feature list**: auth (login/register/refresh/logout + account lockout + session limit) | dashboard (Redis cached) | user CRUD + batch + import | roles & permissions (RBAC) | system config | operation audit (8 platform sources) | files (upload + export + masking) | security (18 layers of defense) | ops (health/metrics/docs/Docker/CI)
+> **Feature list**: auth (login/refresh/logout + account lockout + session limit) | dashboard (Redis cached) | user CRUD + batch + import | roles & permissions (RBAC) | system config | operation audit (8 platform sources) | files (upload + export + masking) | security (18 layers of defense) | ops (health/metrics/docs/Docker/CI)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -176,7 +178,7 @@ erik_system_config (系统配置) — 独立表
 
 ```
 公开接口:  /api/v1/captcha/{generate|verify}
-           /api/v1/auth/{login|register|refresh}
+           /api/v1/auth/{login|refresh}
 
 管理端:   /admin/{resource}[/{hashid}]
           /admin/export/{excel|pdf}
@@ -229,7 +231,6 @@ Based on the Redis Sorted Set sliding window algorithm, executed as atomic Lua s
 |------|------|
 | Default | 60/min per IP/route |
 | POST /api/v1/auth/login | 10/min |
-| POST /api/v1/auth/register | 5/min |
 
 Exceeding the limit returns 429; response headers include X-RateLimit-Limit / Remaining / Reset / Retry-After.
 
@@ -355,7 +356,7 @@ Data flow: Page ← DataService ← ApiService (JWT Bearer) ← HTTP ← webman
 |------|------|
 | Method restriction | SecurityFilter HTTP method whitelist; only GET/POST/PUT/DELETE/OPTIONS/HEAD allowed, non-standard methods return 405 |
 | Attack blocking | SecurityFilter middleware detects/blocks XSS, SQL injection, path traversal, command injection, CSRF |
-| Human verification | Click captcha, mandatory for login/register |
+| Human verification | Click captcha, mandatory for login |
 | Account lockout | 5 consecutive login failures lock the account for 15 min; 429 returned while locked |
 | Session limit | Max 3 concurrent tokens per user; oldest token auto-blacklisted when exceeded |
 | Rate limiting | RateLimit middleware, Redis sliding window, atomic Lua |

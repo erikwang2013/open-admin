@@ -1,6 +1,15 @@
 # Open Admin (open-admin)
 
-A full-stack admin dashboard built with webman v2 + Flutter.
+<p align="center">
+  <img src="public/img/pet.svg" width="150" height="200" alt="Xiao An — open-admin project pet">
+</p>
+
+A full-stack admin dashboard built on **webman v2 + Flutter**: authentication and RBAC permissions, 18 layers of defense in depth, Prometheus observability, and multi-platform clients (Flutter Web / HarmonyOS).
+
+> The project pet "**Xiao An**" is a shield-shaped guard robot, standing guard at the "protection" and "authentication" checkpoints of the middleware chain.
+> Asset [`public/img/pet.svg`](public/img/pet.svg): pure SVG (no scripts, no external dependencies, supports dark backgrounds and `prefers-reduced-motion`), also used as the site icon.
+>
+> Design diagrams: [System Architecture](docs/diagrams/architecture.svg) · [Feature Design](docs/diagrams/features.svg) · [Lifecycle](docs/diagrams/lifecycle.svg)
 
 > [中文](../README.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md) | [Architecture Diagrams](docs/ARCHITECTURE.en.md) | [Design Doc](docs/DESIGN.en.md) | [Security](docs/SECURITY.en.md) | [API Reference](docs/API.en.md)
 
@@ -19,8 +28,38 @@ A full-stack admin dashboard built with webman v2 + Flutter.
 | 📋 Audit | Log query + source detection | 8 platforms auto-detected |
 | 📁 Files | Upload/Excel export/PDF export | Sensitive data auto-masked |
 | 🛡 Security | 18-layer defense-in-depth | XSS/SQLi/path traversal/cmd injection/CSRF/rate limit/CSP... |
-| 🏥 Ops | Health check/metrics/API docs/security.txt | Prometheus + OpenAPI 3.0 + hg/apidoc interactive docs |
+| 🏥 Ops | Health check/metrics/API docs/security.txt | Prometheus + OpenAPI 3.0 + erikwang2013/apidoc-php interactive docs |
 | 🌐 i18n | Chinese/English | Accept-Language header / ?lang= param |
+
+## Project Pet · Xiao An
+
+<table>
+<tr>
+<td width="170"><img src="public/img/pet.svg" width="150" height="200" alt="Xiao An"></td>
+<td>
+
+**Xiao An** (小安) is the open-admin project pet, named after 「**安**全」 (security) and 「管理后**台**」 (admin dashboard) — a shield-shaped guard robot.
+
+- **Shield-shaped body** — stands for the 18 layers of defense in depth; the antenna on top stays lit, standing for a service that lives in memory (webman/workerman)
+- **Two eyes on the face screen** — they blink on a timer; they watch every request, and they watch the middleware chain
+- **Verification badge on the chest** — the checkmark stays lit, standing for a passing `method.path` permission check
+
+**Where it appears**
+
+| Location | Form |
+|------|------|
+| Site home page `GET /` | Main mascot + project intro and entry navigation ([`app/view/index/view.html`](app/view/index/view.html)) |
+| Install wizard `/install` | Header mascot of the three-step wizard (`InstallController::layout()`) |
+| Browser tab | Site icon `rel="icon" type="image/svg+xml"` |
+| This document and the design diagrams | Project avatar + the pet card in the bottom-right corner of the architecture diagram |
+
+> Single source of the asset: [`public/img/pet.svg`](public/img/pet.svg). Editing it updates every location above at once.
+
+</td>
+</tr>
+</table>
+
+**Want to draw your own?** Icon spec: primary `#1677FF`, warm antenna `#FA8C16`, verification green `#52C41A`; canvas `240 × 320`, shield centered, minimum usable size 48 px.
 
 ## Copyright
 
@@ -75,24 +114,52 @@ open-admin/
 │   │   ├── HealthController.php    # Health check
 │   │   └── DocsController.php      # OpenAPI docs
 │   ├── api/
-│   │   └── v1/controller/          # API v1 (version via API-Version header)
+│   │   └── v1/controller/          # API v1 controllers (version reflected in the /api/v1 URL prefix)
 │   │       ├── CaptchaController.php
 │   │       └── AuthController.php    # Login/Refresh
 │   ├── middleware/             # Middleware
 │   │   ├── Cors.php            # CORS
 │   │   ├── SecurityFilter.php  # Attack detection (HTTP method restriction/XSS/SQLi/path traversal/cmd injection/CSRF)
 │   │   ├── RateLimit.php       # Redis rate limiting
-│   │   ├── ApiVersion.php      # API version validation
 │   │   ├── AdminAuth.php       # JWT auth + blacklist
 │   │   ├── AdminPermission.php # RBAC authorization
 │   │   └── OperationLog.php    # Auto operation logging (with source detection)
-│   └── model/                  # Eloquent models
+│   ├── model/                  # Eloquent models
+│   └── view/index/view.html    # Site home page template (GET /, with the project pet and entry navigation)
 ├── apps/
 │   ├── flutter/                # Flutter Web admin panel
 │   └── harmonyos/              # HarmonyOS client (auto token refresh)
 ├── config/                     # Config files
 ├── database/install.sql        # SQL install script (incl. permission seeds)
+├── docs/                       # Documentation
+│   ├── diagrams/               # Diagram directory
+│   │   ├── architecture.svg    # System architecture design diagram (hand-written SVG)
+│   │   ├── features.svg        # Feature design diagram (hand-written SVG)
+│   │   ├── lifecycle.svg       # Lifecycle diagram (hand-written SVG)
+│   │   └── 01..12-*.md         # Decomposed diagrams (Mermaid, 12 language editions)
+│   └── translations/           # Multilingual docs (12 languages × README/CLAUDE)
+├── public/                     # Public entry (Web root)
+│   └── img/pet.svg             # Project pet "Xiao An" (SVG, also the site icon)
 └── vendor/                     # Composer dependencies
+```
+
+## Architecture Design and Diagrams
+
+All three diagrams are **pure hand-written SVG** (no scripts, no external font dependencies, infinitely scalable). View them directly on GitHub or in a browser, or drop them into slides and documents:
+
+| Diagram | Content | File |
+|---|------|------|
+| System Architecture | Four-layer topology: client layer → gateway layer → webman application layer (middleware chain / controllers / common services) → storage layer, with security and observability on the right | [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg) |
+| Feature Design | 12 feature domains → controller entry points → key capabilities, with the middleware execution chain and data interface conventions at the bottom | [`docs/diagrams/features.svg`](docs/diagrams/features.svg) |
+| Lifecycle | Install → startup → request intake → protection → authentication → processing → persistence → response audit, including exception branches and token lifecycle | [`docs/diagrams/lifecycle.svg`](docs/diagrams/lifecycle.svg) |
+
+<img src="docs/diagrams/architecture.svg" width="1100" alt="open-admin system architecture design diagram">
+
+<img src="docs/diagrams/features.svg" width="1100" alt="open-admin feature design diagram">
+
+<img src="docs/diagrams/lifecycle.svg" width="1100" alt="open-admin lifecycle diagram">
+
+> For editable source-level diagrams, see [`docs/ARCHITECTURE.en.md`](docs/ARCHITECTURE.en.md) and [`docs/diagrams/`](docs/diagrams/) (Mermaid, can be pasted into [Mermaid Live](https://mermaid.live/) for editing).
 ```
 
 ## Requirements
@@ -209,7 +276,7 @@ The complete API reference (response format, error codes, all endpoint details, 
 
 - **Response format**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0` means success
 - **Error codes**: `400` bad request / `401` unauthenticated / `403` forbidden / `404` not found / `422` validation failed / `429` rate limited / `500` server error
-- **API versioning**: via the `API-Version: v1` request header (defaults to v1), not in the URL
+- **API versioning**: the version is reflected in the URL prefix (e.g. `/api/v1/...`), not in request headers
 - **Authentication**: `Authorization: Bearer <token>`; access_token TTL 2h, refresh_token TTL 14d
 - **ID handling**: IDs in requests/responses are hashid-encrypted strings, real database IDs are never exposed
 

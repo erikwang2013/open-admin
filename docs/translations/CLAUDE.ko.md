@@ -18,7 +18,7 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
 | 영역 | 기능 |
 |----|------|
-| 인증 | 로그인/회원가입/갱신/로그아웃 + 캡차 + 계정 잠금 + 세션 제한 |
+| 인증 | 로그인/갱신/로그아웃 + 클릭 캡차 + 계정 잠금 + 세션 제한 |
 | 대시보드 | 실시간 통계/추세/분포/로그 (Redis 5m 캐시) |
 | 사용자 | CRUD + 일괄 삭제/활성·비활성화 + Excel 가져오기 |
 | 역할·권한 | CRUD + 권한 트리 + RBAC method.path 인가 |
@@ -27,6 +27,18 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 | 파일 | 업로드 + Excel/PDF 내보내기 (민감 데이터 마스킹) |
 | 보안 | 18계층 심층 방어 (XSS/SQL 주입/CSRF/레이트 리밋/CSP...) |
 | 운영 | 헬스 체크/Prometheus 지표/API 문서/security.txt + Docker + CI/CD |
+
+## 프로젝트 펫 · 샤오안
+
+방패형 수호 로봇 「샤오안」(Xiao An)은 「**안**전(安全)」과 「관리 백엔드(管理后台)」에서 이름을 딴 존재로, 미들웨어 체인의 「방어」와 「인증」 두 관문을 지킵니다.
+
+- **스타일 단일 소스**: `public/img/pet.svg` (순수 SVG, 스크립트/외부 의존성 없음, `prefers-reduced-motion` 폴백 포함). 이 파일을 수정하면 사이트 첫 페이지, 설치 마법사, 브라우저 아이콘이 동시에 갱신되므로 **두 번째 사본을 만들지 마세요**.
+- **적용 위치**:
+  - `GET /` 사이트 첫 페이지 → `app/view/index/view.html` (라우트는 `config/route.php` 상단, 인증 불필요)
+  - 설치 마법사 4개 페이지 → `InstallController::layout()`에서 일괄 주입
+  - 사이트 아이콘 → `<link rel="icon" type="image/svg+xml" href="/img/pet.svg">` (첫 페이지 + 설치 마법사 + `apps/flutter/web/index.html`)
+- **배색 규격**: 주 색상 `#1677FF`, 웜 색상 안테나 `#FA8C16`, 검증 그린 `#52C41A`; 캔버스 `240 × 320`.
+- **설계도**: `docs/diagrams/architecture.svg`(시스템 아키텍처), `features.svg`(기능 설계), `lifecycle.svg`(수명 주기) — 모두 손으로 작성한 SVG이며 펫과 동일한 배색을 사용합니다. README와 문서에서 직접 인용합니다.
 
 ## 기술 스택
 
@@ -67,7 +79,7 @@ open-admin/
 │   │   ├── HealthController.php    # 헬스 체크
 │   │   ├── DocsController.php      # OpenAPI 문서
 │   │   └── MetricsController.php   # Prometheus 모니터링 지표
-│   ├── api/v1/controller/      # API v1 컨트롤러 (버전 헤더 제어)
+│   ├── api/v1/controller/      # API v1 컨트롤러 (URL 접두사 /api/v1로 분배)
 │   │   ├── CaptchaController.php
 │   │   └── AuthController.php
 │   ├── common/                 # 공용 유틸리티 클래스
@@ -75,15 +87,15 @@ open-admin/
 │   │   ├── SnowflakeService.php
 │   │   └── EncryptionService.php
 │   ├── common/                 # 공용 정의 (Apidoc Definitions 포함)
-│   ├── middleware/             # 미들웨어 (8개)
+│   ├── middleware/             # 미들웨어 (7개)
 │   │   ├── Cors.php            # 크로스 도메인 (전역)
-│   │   ├── SecurityFilter.php  # 공격 차단 (전역: XSS/SQL 주입/경로 탐색/명령 주입/CSRF)
+│   │   └── (erikwang2013/security-php 패키지로 이관됨)  # 31종 공격 탐지
 │   │   ├── RateLimit.php       # Redis 레이트 리밋 (전역, Lua 원자화)
-│   │   ├── ApiVersion.php      # API 버전 검증
 │   │   ├── AdminAuth.php       # JWT 인증 + 블랙리스트
 │   │   ├── AdminPermission.php # RBAC 권한 검증 (Redis 60s 캐시)
 │   │   └── OperationLog.php    # 작업 로그 자동 기록 (출처 단말 감지 포함)
 │   ├── model/                  # 데이터 모델
+│   ├── view/index/view.html    # 사이트 첫 페이지 템플릿 (GET /, 프로젝트 펫 + 진입 내비게이션)
 │   ├── queue/                  # 큐 작업
 │   └── process/                # 프로세스 (Http, Monitor)
 ├── apps/
@@ -115,18 +127,24 @@ open-admin/
 │   ├── SECURITY.md             # 보안 아키텍처 설계
 │   ├── API.md                  # API 참조 문서
 │   ├── nginx-security.conf     # Nginx 보안 참조 설정
-│   ├── diagrams/               # 분해 아키텍처 다이어그램
+│   ├── diagrams/               # 다이어그램
+│   │   ├── architecture.svg    # 시스템 아키텍처 설계도 (손으로 작성한 SVG)
+│   │   ├── features.svg        # 기능 설계도 (손으로 작성한 SVG)
+│   │   ├── lifecycle.svg       # 수명 주기 도표 (손으로 작성한 SVG)
+│   │   └── 01..12-*.md         # 분해 아키텍처 다이어그램 (Mermaid, 12개 언어)
 │   └── superpowers/            # 규범과 계획
 │       ├── specs/              # 설계 규범
 │       └── plans/              # 구현 계획
 ├── public/                     # 공용 진입점
+│   └── img/pet.svg             # 프로젝트 펫 「샤오안」 (SVG, 사이트 아이콘 겸용)
 ├── runtime/                    # 런타임 파일
 ├── tests/                      # 테스트
 ├── vendor/                     # Composer 의존성
 ├── CLAUDE.md                   # 본 파일
 ├── README.md                   # 중국어 설명
-├── README.en.md                # 영어 설명
-├── README.ko.md ... README.ja.md  # 다국어 설명 (한/러/독/프/서/포/힌디/아랍/벵골/인니/일)
+├── docs/translations/          # 다국어 문서 (12개 언어 × README/CLAUDE)
+│   ├── README.en.md            # 영어 설명
+│   └── README.ko.md ... README.ja.md  # 기타 언어 설명 (한/러/독/프/서/포/힌디/아랍/벵골/인니/일)
 ├── .env                        # 환경 변수 (버전 관리에 포함하지 않음)
 ├── .env.example                # 환경 변수 템플릿
 ├── .env.docker                 # Docker 환경 변수
@@ -143,7 +161,7 @@ open-admin/
 ```
 전역:  Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → {라우트 미들웨어}
 /admin: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
-/api:   Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → ApiVersion → Controller
+/api/v1: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller (버전은 URL 접두사에 포함)
 /health: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller
 ```
 
@@ -162,20 +180,21 @@ open-admin/
 
 ## API 버전 정책
 
-버전은 요청 헤더 `API-Version`으로 제어 (기본 `v1`), URL에 나타나지 않습니다:
+버전 번호는 URL 접두사에 나타나며 (`/api/v1/...`, `/api/v2/...`), 요청 헤더는 사용하지 않습니다:
 
 ```bash
 curl http://localhost:8787/api/v1/auth/login
 ```
 
-새 버전 추가는 `app/api/{version}/controller/` 디렉터리를 만들고 `ApiVersion` 미들웨어에 등록하기만 하면 됩니다.
+새 버전 추가는 `app/api/{version}/controller/` 디렉터리를 만들고 `config/route.php`에 해당 버전의 라우트 그룹을 등록하기만 하면 됩니다.
 
 ## 레이트 리밋 정책
 
 Redis 슬라이딩 윈도우 (Lua 원자화), 기본 60회/분/IP/라우트:
-- 로그인: 10회/분
-- 회원가입: 5회/분
+- 로그인 `/api/v1/auth/login`: 10회/분
 - 응답 헤더: `X-RateLimit-Limit/Remaining/Reset`, 초과 시 `Retry-After` 추가
+
+> `RateLimit::$sensitive`의 키는 반드시 `config/route.php`의 **전체 경로**(`/api/v{n}` 버전 접두사 포함)와 일치해야 하며, 그렇지 않으면 민감 라우트가 조용히 기본 60회/분으로 되돌아갑니다.
 
 ## 코드 규칙
 

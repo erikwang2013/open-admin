@@ -6,7 +6,7 @@
 
 ```mermaid
 flowchart TB
-    l1["Ebene 1: Mensch-Maschine-Verifizierung<br/>Click-Captcha ClickCaptcha<br/>Pflichtprüfung bei Login/Registrierung"]
+    l1["Ebene 1: Mensch-Maschine-Verifizierung<br/>Click-Captcha ClickCaptcha<br/>Pflichtprüfung bei Login"]
     l2["Ebene 2: Aktionsbestätigung<br/>Passwort-Bestätigung<br/>erforderlich bei DELETE"]
     l3["Ebene 3: Transportsicherheit<br/>HTTPS + JWT Bearer<br/>AES-256-CBC"]
     l4["Ebene 4: Identitätsauthentifizierung<br/>JWT HS256<br/>access_token 2h<br/>refresh_token 14d"]

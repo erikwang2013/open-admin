@@ -5,6 +5,8 @@
 # Diagram Arsitektur & Diagram Alur Bisnis
 
 > Diagram Mermaid berikut dapat dirender otomatis di GitHub / GitLab / VS Code. Untuk lingkungan lain gunakan [Mermaid Live Editor](https://mermaid.live/).
+>
+> Untuk diagram statis tanpa perlu renderer (SVG), lihat [Bagian 14](#14-diagram-desain-statis-svg).
 
 ---
 
@@ -22,11 +24,10 @@ flowchart TB
     end
 
     subgraph "Lapisan Aplikasi (webman v2)"
-        C0["Middleware ApiVersion<br/>Validasi Header API-Version"]
         C1["Middleware AdminAuth<br/>Verifikasi JWT"]
         C2["Middleware AdminPermission<br/>Validasi Hak Akses RBAC"]
         C3["Controller Sisi Admin<br/>Dashboard / User / Role / Permission"]
-        C4["Controller Publik v1<br/>Captcha / Auth"]
+        C4["Grup rute /api/v1 terhubung langsung ke Controller publik<br/>Captcha / Auth"]
         C5["Layanan Umum<br/>Hashids / Snowflake / Encryption"]
     end
 
@@ -43,11 +44,10 @@ flowchart TB
 
     A1 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
     A2 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
-    B1 --> C0
-    C0 --> C1
+    B1 --> C1
+    B1 --> C4
     C1 --> C2
     C2 --> C3
-    C0 --> C4
     C3 --> C5
     C4 --> C5
     C3 --> D1
@@ -59,7 +59,6 @@ flowchart TB
     style A1 fill:#1677FF,color:#fff
     style A2 fill:#1677FF,color:#fff
     style B1 fill:#722ED1,color:#fff
-    style C0 fill:#EB2F96,color:#fff
     style C1 fill:#FA8C16,color:#fff
     style C2 fill:#FA8C16,color:#fff
     style C3 fill:#52C41A,color:#fff
@@ -83,7 +82,6 @@ flowchart TD
     subgraph "Lapisan Middleware Middleware Layer"
         M_RL["RateLimit<br/>Rate limit sliding window Redis<br/>Header respons X-RateLimit"]
         M_SF["SecurityFilter<br/>Interception deteksi serangan<br/>XSS/Injeksi SQL/Path Traversal/CSRF"]
-        M0["ApiVersion<br/>Validasi versi API<br/>injeksi apiVersion"]
         M1["AdminAuth<br/>Validasi Token JWT<br/>injeksi adminId"]
         M2["AdminPermission<br/>Otorisasi RBAC<br/>pencocokan method.path<br/>cache hak akses Redis 60s"]
     end
@@ -96,7 +94,7 @@ flowchart TD
         CT5["DashboardController<br/>Statistik/Tren/Distribusi"]
         CT6["ExportController<br/>Ekspor Excel/PDF"]
         CT7["CaptchaController<br/>Pembuatan/Verifikasi Captcha"]
-        CT8["AuthController<br/>Login/Registrasi/Refresh"]
+        CT8["AuthController<br/>Login/Refresh"]
     end
 
     subgraph "Lapisan Layanan Service Layer"
@@ -119,11 +117,11 @@ flowchart TD
         D3["Redis"]
     end
 
-    R1 --> M_SF --> M_RL --> M0
-    M0 --> M1
+    R1 --> M_SF --> M_RL
+    M_RL --> M1
+    M_RL --> CT7 & CT8
     M1 --> M2
     M2 --> CT2 & CT3 & CT4 & CT5 & CT6
-    M0 --> CT7 & CT8
     CT1 -.->|extends| CT2 & CT3 & CT4 & CT5 & CT6
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> S1 & S2 & S3
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> MD1 & MD2 & MD3 & MD4 & MD5
@@ -134,7 +132,6 @@ flowchart TD
     style R1 fill:#722ED1,color:#fff
     style M_SF fill:#FF4D4F,color:#fff
     style M_RL fill:#EB2F96,color:#fff
-    style M0 fill:#EB2F96,color:#fff
     style M1 fill:#FA8C16,color:#fff
     style M2 fill:#FA8C16,color:#fff
     style CT1 fill:#1677FF,color:#fff
@@ -151,7 +148,6 @@ sequenceDiagram
     participant MW_LOC as Locale
     participant MW_SF as SecurityFilter
     participant MW_RL as RateLimit
-    participant MW0 as ApiVersion
     participant MW1 as AdminAuth
     participant MW2 as AdminPermission
     participant CTL as Controller
@@ -160,7 +156,7 @@ sequenceDiagram
     participant DB as MySQL
     participant OPLOG as OperationLog
 
-    C->>N: Permintaan HTTPS<br/>Header: API-Version: v1, Accept-Language: zh_CN
+    C->>N: Permintaan HTTPS /admin<br/>Header: Accept-Language: zh_CN
     N->>MW_LOC: Teruskan
 
     MW_LOC->>MW_LOC: locale = zh_CN (Accept-Language / ?lang=)
@@ -182,13 +178,7 @@ sequenceDiagram
         MW_RL-->>C: 429 + Retry-After
     end
 
-    MW_RL->>MW0: Lolos
-
-    alt Versi tidak didukung
-        MW0-->>C: 400 Versi API tidak didukung
-    else Versi valid
-        MW0->>MW0: $request->apiVersion = v1
-    end
+    MW_RL->>MW1: Lolos
 
     alt Token hilang atau tidak valid
         MW1-->>C: 401 Unauthorized
@@ -607,7 +597,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph "Lapisan 1: Verifikasi Manusia"
-        L1["Captcha Klik<br/>Click Captcha<br/>Wajib untuk login/registrasi"]
+        L1["Captcha Klik<br/>Click Captcha<br/>Wajib untuk login"]
     end
 
     subgraph "Lapisan 2: Konfirmasi Operasi"
@@ -692,3 +682,17 @@ flowchart TB
     style ES fill:#1890FF,color:#fff
     style REDIS fill:#1890FF,color:#fff
 ```
+
+---
+
+## 14. Diagram Desain Statis (SVG)
+
+Ketiga diagram berikut adalah **SVG tulis tangan** (tanpa skrip, tanpa dependensi eksternal, dapat diperbesar tanpa batas), dapat dilihat tanpa renderer Mermaid, cocok untuk langsung disisipkan ke dokumentasi, PPT, dan README:
+
+| Diagram | Konten | File |
+|---|------|------|
+| Desain Arsitektur Sistem | Topologi empat lapis: Lapisan Klien → Lapisan Gateway → Lapisan Aplikasi webman → Lapisan Penyimpanan, termasuk perlindungan keamanan dan observabilitas | [architecture.svg](diagrams/architecture.svg) |
+| Desain Fitur | 12 domain fitur → titik masuk kontroler → kemampuan kunci, dilengkapi rantai eksekusi middleware dan spesifikasi antarmuka data | [features.svg](diagrams/features.svg) |
+| Siklus Hidup | Instalasi → Startup → Akses → Perlindungan → Autentikasi → Pemrosesan → Persistensi → Audit respons, termasuk cabang pengecualian dan siklus hidup token | [lifecycle.svg](diagrams/lifecycle.svg) |
+
+> Aset hewan peliharaan proyek 「Xiao An (小安)」: [`public/img/pet.svg`](../public/img/pet.svg) (SVG murni, sekaligus digunakan sebagai halaman utama situs, wizard instalasi, dan ikon browser)

@@ -123,7 +123,6 @@ Lua scripts execute single-threaded on the Redis server, making them **inherentl
 |------|------|------|------|
 | Default (all routes) | 60/min | 60s | General API |
 | `/api/v1/auth/login` | 10/min | 60s | Login (brute-force protection) |
-| `/api/v1/auth/register` | 5/min | 60s | Register (anti bulk registration) |
 
 ### Response Headers
 

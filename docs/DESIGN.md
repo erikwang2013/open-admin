@@ -3,10 +3,12 @@
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
 > 详细的 Mermaid 架构图请参阅 [ARCHITECTURE.md](ARCHITECTURE.md)（GitHub/GitLab/VS Code 可自动渲染）。
+>
+> 静态设计图（SVG）：[系统架构](diagrams/architecture.svg) · [功能设计](diagrams/features.svg) · [生命周期](diagrams/lifecycle.svg)
 
 ## 1. 系统架构
 
-> **功能清单**：认证(login/register/refresh/logout + 账号锁定 + 会话限制) | 仪表盘(Redis缓存) | 用户CRUD+批量+导入 | 角色权限(RBAC) | 系统配置 | 操作审计(8平台来源端) | 文件(上传+导出+脱敏) | 安全(18层防御) | 运维(health/metrics/docs/Docker/CI)
+> **功能清单**：认证(login/refresh/logout + 账号锁定 + 会话限制) | 仪表盘(Redis缓存) | 用户CRUD+批量+导入 | 角色权限(RBAC) | 系统配置 | 操作审计(8平台来源端) | 文件(上传+导出+脱敏) | 安全(18层防御) | 运维(health/metrics/docs/Docker/CI)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -174,7 +176,7 @@ erik_system_config (系统配置) — 独立表
 
 ```
 公开接口:  /api/v1/captcha/{generate|verify}
-           /api/v1/auth/{login|register|refresh}
+           /api/v1/auth/{login|refresh}
 
 管理端:   /admin/{resource}[/{hashid}]
           /admin/export/{excel|pdf}
@@ -227,7 +229,6 @@ curl http://localhost:8787/api/v2/auth/login
 |------|------|
 | 默认 | 60 次/分钟/IP/路由 |
 | POST /api/v1/auth/login | 10 次/分钟 |
-| POST /api/v1/auth/register | 5 次/分钟 |
 
 超限返回 429，响应头包含 X-RateLimit-Limit / Remaining / Reset / Retry-After。
 
@@ -353,7 +354,7 @@ curl http://localhost:8787/api/v2/auth/login
 |------|------|
 | 方法限制 | SecurityFilter HTTP 方法白名单，仅允许 GET/POST/PUT/DELETE/OPTIONS/HEAD，非标准方法返回 405 |
 | 攻击拦截 | SecurityFilter 中间件，XSS/SQL注入/路径遍历/命令注入/CSRF 检测拦截 |
-| 人机验证 | 点击验证码（Click Captcha），登录/注册强制校验 |
+| 人机验证 | 点击验证码（Click Captcha），登录强制校验 |
 | 账号锁定 | 连续 5 次登录失败锁定账号 15 分钟，锁定期间返回 429 |
 | 会话限制 | 同一用户最多 3 个并发 Token，超出时最旧 Token 自动黑名单 |
 | 限流 | RateLimit 中间件，Redis 滑动窗口，Lua 原子化 |

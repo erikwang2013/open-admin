@@ -5,6 +5,8 @@
 > [中文](ARCHITECTURE.md) | [English](ARCHITECTURE.en.md) | [한국어](ARCHITECTURE.ko.md) | [Русский](ARCHITECTURE.ru.md) | [Deutsch](ARCHITECTURE.de.md) | [Français](ARCHITECTURE.fr.md) | [Español](ARCHITECTURE.es.md) | [Português](ARCHITECTURE.pt.md) | [हिन्दी](ARCHITECTURE.hi.md) | [العربية](ARCHITECTURE.ar.md) | [বাংলা](ARCHITECTURE.bn.md) | [Bahasa Indonesia](ARCHITECTURE.id.md) | [日本語](ARCHITECTURE.ja.md)
 
 > Los siguientes diagramas Mermaid se renderizan automáticamente en GitHub / GitLab / VS Code. En otros entornos, utilice [Mermaid Live Editor](https://mermaid.live/).
+>
+> Para diagramas estáticos (SVG) que no necesitan renderizador, consulte [la sección 14](#14-diagramas-de-diseño-estáticos-svg).
 
 ---
 
@@ -22,11 +24,10 @@ flowchart TB
     end
 
     subgraph "Capa de aplicación (webman v2)"
-        C0["Middleware ApiVersion<br/>Validación de la cabecera API-Version"]
         C1["Middleware AdminAuth<br/>Validación JWT"]
         C2["Middleware AdminPermission<br/>Verificación de permisos RBAC"]
         C3["Controllers del panel<br/>Dashboard / User / Role / Permission"]
-        C4["Controllers públicos v1<br/>Captcha / Auth"]
+        C4["Grupo de rutas /api/v1 → Controllers públicos<br/>Captcha / Auth"]
         C5["Common Services<br/>Hashids / Snowflake / Encryption"]
     end
 
@@ -43,11 +44,10 @@ flowchart TB
 
     A1 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
     A2 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
-    B1 --> C0
-    C0 --> C1
+    B1 --> C1
+    B1 --> C4
     C1 --> C2
     C2 --> C3
-    C0 --> C4
     C3 --> C5
     C4 --> C5
     C3 --> D1
@@ -59,7 +59,6 @@ flowchart TB
     style A1 fill:#1677FF,color:#fff
     style A2 fill:#1677FF,color:#fff
     style B1 fill:#722ED1,color:#fff
-    style C0 fill:#EB2F96,color:#fff
     style C1 fill:#FA8C16,color:#fff
     style C2 fill:#FA8C16,color:#fff
     style C3 fill:#52C41A,color:#fff
@@ -83,7 +82,6 @@ flowchart TD
     subgraph "Capa de middleware Middleware Layer"
         M_RL["RateLimit<br/>Límite de peticiones con ventana deslizante Redis<br/>Cabeceras de respuesta X-RateLimit"]
         M_SF["SecurityFilter<br/>Bloqueo por detección de ataques<br/>XSS/inyección SQL/traversal de rutas/CSRF"]
-        M0["ApiVersion<br/>Validación de versión de API<br/>Inyecta apiVersion"]
         M1["AdminAuth<br/>Validación del token JWT<br/>Inyecta adminId"]
         M2["AdminPermission<br/>Autorización RBAC<br/>Coincidencia method.path<br/>Permisos en caché Redis 60s"]
     end
@@ -96,7 +94,7 @@ flowchart TD
         CT5["DashboardController<br/>estadísticas/tendencias/distribución"]
         CT6["ExportController<br/>Exportación Excel/PDF"]
         CT7["CaptchaController<br/>Generación/validación de captcha"]
-        CT8["AuthController<br/>login/registro/renovación"]
+        CT8["AuthController<br/>login/renovación"]
     end
 
     subgraph "Capa de servicios Service Layer"
@@ -119,11 +117,11 @@ flowchart TD
         D3["Redis"]
     end
 
-    R1 --> M_SF --> M_RL --> M0
-    M0 --> M1
+    R1 --> M_SF --> M_RL
+    M_RL --> M1
+    M_RL --> CT7 & CT8
     M1 --> M2
     M2 --> CT2 & CT3 & CT4 & CT5 & CT6
-    M0 --> CT7 & CT8
     CT1 -.->|extends| CT2 & CT3 & CT4 & CT5 & CT6
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> S1 & S2 & S3
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> MD1 & MD2 & MD3 & MD4 & MD5
@@ -134,7 +132,6 @@ flowchart TD
     style R1 fill:#722ED1,color:#fff
     style M_SF fill:#FF4D4F,color:#fff
     style M_RL fill:#EB2F96,color:#fff
-    style M0 fill:#EB2F96,color:#fff
     style M1 fill:#FA8C16,color:#fff
     style M2 fill:#FA8C16,color:#fff
     style CT1 fill:#1677FF,color:#fff
@@ -151,7 +148,6 @@ sequenceDiagram
     participant MW_LOC as Locale
     participant MW_SF as SecurityFilter
     participant MW_RL as RateLimit
-    participant MW0 as ApiVersion
     participant MW1 as AdminAuth
     participant MW2 as AdminPermission
     participant CTL as Controller
@@ -160,7 +156,7 @@ sequenceDiagram
     participant DB as MySQL
     participant OPLOG as OperationLog
 
-    C->>N: Petición HTTPS<br/>Cabecera: API-Version: v1, Accept-Language: zh_CN
+    C->>N: Petición HTTPS a los endpoints /admin<br/>Cabecera: Accept-Language: zh_CN
     N->>MW_LOC: Reenvío
 
     MW_LOC->>MW_LOC: locale = zh_CN (Accept-Language / ?lang=)
@@ -182,13 +178,7 @@ sequenceDiagram
         MW_RL-->>C: 429 + Retry-After
     end
 
-    MW_RL->>MW0: Aprobado
-
-    alt Versión no soportada
-        MW0-->>C: 400 Versión de API no soportada
-    else Versión válida
-        MW0->>MW0: $request->apiVersion = v1
-    end
+    MW_RL->>MW1: Aprobado
 
     alt Token ausente o no válido
         MW1-->>C: 401 Unauthorized
@@ -607,7 +597,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph "Capa 1: Verificación humano-máquina"
-        L1["Captcha de clic<br/>Click Captcha<br/>Obligatorio en login/registro"]
+        L1["Captcha de clic<br/>Click Captcha<br/>Obligatorio en login"]
     end
 
     subgraph "Capa 2: Confirmación de operación"
@@ -692,3 +682,17 @@ flowchart TB
     style ES fill:#1890FF,color:#fff
     style REDIS fill:#1890FF,color:#fff
 ```
+
+---
+
+## 14. Diagramas de diseño estáticos (SVG)
+
+Los tres diagramas siguientes son **SVG escritos a mano** (sin scripts, sin dependencias externas, escalables infinitamente); se pueden ver sin necesidad de un renderizador Mermaid y son adecuados para insertarlos directamente en documentación, PPT y el README:
+
+| Diagrama | Contenido | Archivo |
+|---|------|------|
+| Diseño de arquitectura del sistema | Topología de cuatro capas: capa de cliente → capa de puerta de enlace → capa de aplicación webman → capa de almacenamiento, con protección de seguridad y observabilidad | [architecture.svg](diagrams/architecture.svg) |
+| Diseño de funciones | 12 dominios funcionales → entrada de controladores → capacidades clave, con la cadena de ejecución de middleware y la especificación de interfaces de datos | [features.svg](diagrams/features.svg) |
+| Ciclo de vida | Instalación → arranque → acceso → protección → autenticación → procesamiento → persistencia → auditoría de respuesta, con ramas de excepción y ciclo de vida del token | [lifecycle.svg](diagrams/lifecycle.svg) |
+
+> Material del proyecto mascota «Xiao An»: [`public/img/pet.svg`](../public/img/pet.svg) (SVG puro, usado también como página de inicio del sitio, asistente de instalación e icono del navegador)

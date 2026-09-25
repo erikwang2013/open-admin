@@ -5,6 +5,8 @@
 > [中文](ARCHITECTURE.md) | [English](ARCHITECTURE.en.md) | [한국어](ARCHITECTURE.ko.md) | [Русский](ARCHITECTURE.ru.md) | [Deutsch](ARCHITECTURE.de.md) | [Français](ARCHITECTURE.fr.md) | [Español](ARCHITECTURE.es.md) | [Português](ARCHITECTURE.pt.md) | [हिन्दी](ARCHITECTURE.hi.md) | [العربية](ARCHITECTURE.ar.md) | [বাংলা](ARCHITECTURE.bn.md) | [Bahasa Indonesia](ARCHITECTURE.id.md) | [日本語](ARCHITECTURE.ja.md)
 
 > 아래 Mermaid 차트는 GitHub / GitLab / VS Code에서 자동으로 렌더링됩니다. 다른 환경에서는 [Mermaid Live Editor](https://mermaid.live/)를 사용하세요.
+>
+> 렌더러가 필요 없는 정적 이미지(SVG)는 [14장](#14-정적-설계도svg)을 참조하세요.
 
 ---
 
@@ -22,11 +24,10 @@ flowchart TB
     end
 
     subgraph "애플리케이션 계층 (webman v2)"
-        C0["ApiVersion 미들웨어<br/>API-Version 헤더 검증"]
         C1["AdminAuth 미들웨어<br/>JWT 검증"]
         C2["AdminPermission 미들웨어<br/>RBAC 권한 검증"]
         C3["관리자 Controller<br/>Dashboard / User / Role / Permission"]
-        C4["공개 Controller v1<br/>Captcha / Auth"]
+        C4["/api/v1 라우트 그룹 → 공개 Controller<br/>Captcha / Auth"]
         C5["Common Services<br/>Hashids / Snowflake / Encryption"]
     end
 
@@ -43,11 +44,10 @@ flowchart TB
 
     A1 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
     A2 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
-    B1 --> C0
-    C0 --> C1
+    B1 --> C1
+    B1 --> C4
     C1 --> C2
     C2 --> C3
-    C0 --> C4
     C3 --> C5
     C4 --> C5
     C3 --> D1
@@ -59,7 +59,6 @@ flowchart TB
     style A1 fill:#1677FF,color:#fff
     style A2 fill:#1677FF,color:#fff
     style B1 fill:#722ED1,color:#fff
-    style C0 fill:#EB2F96,color:#fff
     style C1 fill:#FA8C16,color:#fff
     style C2 fill:#FA8C16,color:#fff
     style C3 fill:#52C41A,color:#fff
@@ -83,7 +82,6 @@ flowchart TD
     subgraph "미들웨어 계층 Middleware Layer"
         M_RL["RateLimit<br/>Redis 슬라이딩 윈도우 레이트 리밋<br/>X-RateLimit 응답 헤더"]
         M_SF["SecurityFilter<br/>공격 탐지 차단<br/>XSS/SQL 주입/경로 탐색/CSRF"]
-        M0["ApiVersion<br/>API 버전 검증<br/>apiVersion 주입"]
         M1["AdminAuth<br/>JWT Token 검증<br/>adminId 주입"]
         M2["AdminPermission<br/>RBAC 인가<br/>method.path 매칭<br/>Redis 60s 권한 캐시"]
     end
@@ -96,7 +94,7 @@ flowchart TD
         CT5["DashboardController<br/>통계/추세/분포"]
         CT6["ExportController<br/>Excel/PDF 내보내기"]
         CT7["CaptchaController<br/>캡차 생성/검증"]
-        CT8["AuthController<br/>로그인/회원가입/갱신"]
+        CT8["AuthController<br/>로그인/갱신"]
     end
 
     subgraph "서비스 계층 Service Layer"
@@ -119,11 +117,11 @@ flowchart TD
         D3["Redis"]
     end
 
-    R1 --> M_SF --> M_RL --> M0
-    M0 --> M1
+    R1 --> M_SF --> M_RL
+    M_RL --> M1
+    M_RL --> CT7 & CT8
     M1 --> M2
     M2 --> CT2 & CT3 & CT4 & CT5 & CT6
-    M0 --> CT7 & CT8
     CT1 -.->|extends| CT2 & CT3 & CT4 & CT5 & CT6
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> S1 & S2 & S3
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> MD1 & MD2 & MD3 & MD4 & MD5
@@ -134,7 +132,6 @@ flowchart TD
     style R1 fill:#722ED1,color:#fff
     style M_SF fill:#FF4D4F,color:#fff
     style M_RL fill:#EB2F96,color:#fff
-    style M0 fill:#EB2F96,color:#fff
     style M1 fill:#FA8C16,color:#fff
     style M2 fill:#FA8C16,color:#fff
     style CT1 fill:#1677FF,color:#fff
@@ -151,7 +148,6 @@ sequenceDiagram
     participant MW_LOC as Locale
     participant MW_SF as SecurityFilter
     participant MW_RL as RateLimit
-    participant MW0 as ApiVersion
     participant MW1 as AdminAuth
     participant MW2 as AdminPermission
     participant CTL as Controller
@@ -160,7 +156,7 @@ sequenceDiagram
     participant DB as MySQL
     participant OPLOG as OperationLog
 
-    C->>N: HTTPS 요청<br/>Header: API-Version: v1, Accept-Language: zh_CN
+    C->>N: HTTPS 요청 /admin 인터페이스<br/>Header: Accept-Language: zh_CN
     N->>MW_LOC: 전달
 
     MW_LOC->>MW_LOC: locale = zh_CN (Accept-Language / ?lang=)
@@ -182,13 +178,7 @@ sequenceDiagram
         MW_RL-->>C: 429 + Retry-After
     end
 
-    MW_RL->>MW0: 통과
-
-    alt 지원하지 않는 버전
-        MW0-->>C: 400 지원하지 않는 API 버전
-    else 버전 유효
-        MW0->>MW0: $request->apiVersion = v1
-    end
+    MW_RL->>MW1: 통과
 
     alt Token 누락 또는 무효
         MW1-->>C: 401 Unauthorized
@@ -607,7 +597,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph "1계층: 사람·기계 검증"
-        L1["클릭 캡차<br/>Click Captcha<br/>로그인/회원가입 강제"]
+        L1["클릭 캡차<br/>Click Captcha<br/>로그인 강제"]
     end
 
     subgraph "2계층: 작업 확인"
@@ -692,3 +682,17 @@ flowchart TB
     style ES fill:#1890FF,color:#fff
     style REDIS fill:#1890FF,color:#fff
 ```
+
+---
+
+## 14. 정적 설계도(SVG)
+
+아래 세 장의 이미지는 **손으로 작성한 SVG**이며(스크립트 없음, 외부 의존성 없음, 무한 확대 가능), Mermaid 렌더러 없이도 볼 수 있어 문서, PPT, README에 바로 넣기 좋습니다:
+
+| 이미지 | 내용 | 파일 |
+|---|------|------|
+| 시스템 아키텍처 설계 | 4계층 토폴로지: 클라이언트 계층 → 게이트웨이 계층 → webman 애플리케이션 계층 → 저장 계층, 보안 방어와 관측 가능성 포함 | [architecture.svg](diagrams/architecture.svg) |
+| 기능 설계 | 12개 기능 영역 → 컨트롤러 진입점 → 핵심 역량, 미들웨어 실행 체인과 데이터 인터페이스 규격 포함 | [features.svg](diagrams/features.svg) |
+| 수명 주기 | 설치 → 시작 → 접속 → 보호 → 인증 → 처리 → 영속화 → 응답 감사, 예외 분기와 토큰 수명 주기 포함 | [lifecycle.svg](diagrams/lifecycle.svg) |
+
+> 프로젝트 펫 「샤오안」 소재: [`public/img/pet.svg`](../public/img/pet.svg)(순수 SVG, 사이트 첫 페이지·설치 마법사·브라우저 아이콘으로 동시에 사용)

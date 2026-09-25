@@ -6,13 +6,13 @@
 
 ## 1. نظرة عامة
 
-نظام الإدارة المفتوح (open-admin) مبني على webman v2 ويوفّر واجهات RESTful JSON API. جميع واجهات الإدارة تتطلب مصادقة JWT وتحقق صلاحيات RBAC، بينما تُوجَّه الواجهات العامة عبر ترويسة إصدار API إلى وحدات التحكم حسب الإصدار.
+نظام الإدارة المفتوح (open-admin) مبني على webman v2 ويوفّر واجهات RESTful JSON API. جميع واجهات الإدارة تتطلب مصادقة JWT وتحقق صلاحيات RBAC، بينما تحمل الواجهات العامة رقم الإصدار في بادئة URL (مثل `/api/v1/auth/login`) وتُوجَّه مباشرة إلى وحدات التحكم الخاصة بذلك الإصدار.
 
 - **عنوان URL الأساسي**: `http://localhost:8787`
-- **إصدار API**: يُتحكم عبر ترويسة الطلب `API-Version: v1` (الافتراضي v1 عند الغياب)
+- **إصدار API**: يظهر رقم الإصدار في بادئة URL (`/api/v1/...`، `/api/v2/...`)، ولا يُستخدم ترويسة الطلب
 - **اللغة**: التبديل عبر ترويسة `Accept-Language` أو المعامل `?lang=zh_CN|en` (الافتراضي zh_CN)، ويتم الكشف تلقائيًا عبر وسيط Locale
 
-> **نظرة عامة على النقاط الطرفية**: المصادقة(5) | لوحة التحكم(1) | المستخدمون(7) | الأدوار(4) | الصلاحيات(4) | الإعدادات(4) | السجلات(1) | الملف الشخصي(3) | الاستيراد والتصدير(3) | الرفع(1) | التشغيل والصيانة(4: health/metrics/docs/security.txt) | بإجمالي 37 نقطة طرفية
+> **نظرة عامة على النقاط الطرفية**: المصادقة(4) | لوحة التحكم(1) | المستخدمون(7) | الأدوار(4) | الصلاحيات(4) | الإعدادات(4) | السجلات(1) | الملف الشخصي(3) | الاستيراد والتصدير(3) | الرفع(1) | التشغيل والصيانة(4: health/metrics/docs/security.txt) | بإجمالي 36 نقطة طرفية
 - **المصادقة**: `Authorization: Bearer <token>` (JWT)
 - **تنسيق الاستجابة**: `{ "code": 0, "message": "success", "data": {...} }`
 - **نقطة التوثيق**: تُرجع `GET /api/docs` مواصفات OpenAPI 3.0 بصيغة JSON
@@ -43,8 +43,6 @@
 | 500 | خطأ داخلي في الخادم | |
 
 ## 3. النقاط الطرفية العامة
-
-تُركّب جميع النقاط الطرفية العامة تحت مجموعة `/api`، ويتم توزيعها عبر وسيط `ApiVersion` وفق ترويسة `API-Version` إلى وحدات التحكم حسب الإصدار (مثل `app\api\v1\controller\AuthController`).
 
 ### 3.1 فحص الصحة
 
@@ -91,7 +89,6 @@ POST /api/v1/captcha/generate
 ```
 
 - **المصادقة**: غير مطلوبة
-- **ترويسة الطلب**: `API-Version: v1` (إلزامية)
 - **تحديد المعدل**: الافتراضي العام (60 مرة/دقيقة)
 
 **جسم الطلب**:
@@ -184,7 +181,6 @@ POST /api/v1/captcha/verify
 ```
 
 - **المصادقة**: غير مطلوبة
-- **ترويسة الطلب**: `API-Version: v1` (إلزامية)
 - **تحديد المعدل**: الافتراضي العام (60 مرة/دقيقة)
 
 **جسم الطلب** — نوع النقر (`type: "click"`):
@@ -250,7 +246,6 @@ POST /api/v1/auth/login
 ```
 
 - **المصادقة**: غير مطلوبة
-- **ترويسة الطلب**: `API-Version: v1` (إلزامية)
 - **تحديد المعدل**: 10 مرات/دقيقة (حسب IP + المسار)
 
 **جسم الطلب**:
@@ -320,61 +315,13 @@ POST /api/v1/auth/login
 - 403: الحساب معطّل
 - 429: الحساب مقفول، يُرجى المحاولة بعد 15 دقيقة (يُفعَّل بعد 5 محاولات دخول فاشلة)
 
-### 3.6 التسجيل
-
-```
-POST /api/v1/auth/register
-```
-
-- **المصادقة**: غير مطلوبة
-- **ترويسة الطلب**: `API-Version: v1` (إلزامية)
-- **تحديد المعدل**: 5 مرات/دقيقة (حسب IP + المسار)
-
-**جسم الطلب**:
-```json
-{
-  "username": "newuser",
-  "password": "djGYscnyS5V6mW6KyDFjB8vGwjBBnB3Odpyxu8LY...",
-  "real_name": "新用户",
-  "captcha_key": "abc123def456"
-}
-```
-
-| الحقل | النوع | إلزامي | قواعد التحقق | الوصف |
-|------|------|------|---------|------|
-| username | string | نعم | min:3, max:50 | اسم المستخدم (فريد) |
-| password | string | نعم | min:6, max:32 (نص صريح) | مشفّر بـ AES-256-CBC-HMAC ثم ترميز Base64 |
-| real_name | string | نعم | max:50 | الاسم الحقيقي |
-| captcha_key | string | نعم | | مفتاح كود التحقق (يجب اجتياز `/api/v1/captcha/verify` أولاً) |
-
-**مثال على الاستجابة**:
-```json
-{
-  "code": 0,
-  "message": "注册成功",
-  "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 7200,
-    "user": {
-      "id": "e5f6g7h8",
-      "username": "newuser",
-      "real_name": "新用户"
-    }
-  }
-}
-```
-
-بعد نجاح التسجيل تُرجع رموز JWT مباشرة، وتكون حالة المستخدم مفعّلة افتراضيًا (status=1).
-
-### 3.7 تحديث الرمز
+### 3.6 تحديث الرمز
 
 ```
 POST /api/v1/auth/refresh
 ```
 
 - **المصادقة**: غير مطلوبة
-- **ترويسة الطلب**: `API-Version: v1` (إلزامية)
 - **تحديد المعدل**: الافتراضي العام (60 مرة/دقيقة)
 
 **جسم الطلب**:
@@ -386,7 +333,7 @@ POST /api/v1/auth/refresh
 
 | الحقل | النوع | إلزامي | الوصف |
 |------|------|------|------|
-| refresh_token | string | نعم | refresh_token الذي حصلت عليه عند الدخول/التسجيل |
+| refresh_token | string | نعم | refresh_token الذي حصلت عليه عند الدخول |
 
 **مثال على الاستجابة**:
 ```json
@@ -407,7 +354,7 @@ POST /api/v1/auth/refresh
 - 422: رمز التحديث مفقود
 - 401: رمز التحديث غير صالح أو منتهي الصلاحية
 
-### 3.8 مقاييس مراقبة Prometheus
+### 3.7 مقاييس مراقبة Prometheus
 
 ```
 GET /metrics
@@ -1657,7 +1604,6 @@ POST /admin/upload
 تفاصيل تحديد المعدل:
 - الحد العام الافتراضي: 60 مرة/دقيقة / IP+المسار
 - نقطة الدخول `/api/v1/auth/login`: 10 مرات/دقيقة
-- نقطة التسجيل `/api/v1/auth/register`: 5 مرات/دقيقة
 - استخدام خوارزمية نافذة منزلقة ذرّية في Redis (Lua ZSET) لتجنب سباق TOCTOU
 - عند تعذر الوصول إلى Redis يُفعَّل fail open (تمرير الطلبات)، دون حجب الطلبات
 
@@ -1667,14 +1613,13 @@ POST /admin/upload
 
 ```
 1. 客户端请求 POST /api/v1/captcha/generate
-   (请求头: API-Version: v1)
     ↓
    服务端返回: key + type(click|slider|rotate) + base64 图片 + extra(类型相关数据)
    
 2. 用户交互完成验证码操作（点击/拖拽/旋转），客户端收集答案
    
 3. 客户端请求 POST /api/v1/captcha/verify
-   (请求头: API-Version: v1, Content-Type: application/json)
+   (请求头: Content-Type: application/json)
    请求体: { key, type, clicks }
    - type=click:  clicks = [{x, y}, ...]        // 坐标数组
    - type=slider: clicks = 120                   // X 偏移量
@@ -1689,7 +1634,7 @@ POST /admin/upload
    服务端返回: { valid: true/false }
 
 4. 客户端请求 POST /api/v1/auth/login
-   (请求头: API-Version: v1, Content-Type: application/json)
+   (请求头: Content-Type: application/json)
    请求体: { username, password(加密), captcha_key }
     ↓
    服务端:
@@ -1765,7 +1710,6 @@ Cors（跨域预处理 + 响应头）
   → Locale（Accept-Language 语言检测 / ?lang=zh_CN|en）
   → SecurityFilter（HTTP方法限制/请求体大小/Content-Type校验/XSS/SQL注入/路径遍历/命令注入/CSRF 攻击拦截）
   → RateLimit（Redis 滑动窗口限流 + 账号锁定：5次登录失败锁定15分钟）
-  → ApiVersion（API 版本校验，/api 路由组）
   → AdminAuth（JWT 认证 + 黑名单，/admin 路由组）
   → AdminPermission（RBAC 鉴权 / Redis 60s 缓存，/admin 路由组）
   → OperationLog（POST/PUT/DELETE 自动记录，含来源端检测，/admin 路由组）

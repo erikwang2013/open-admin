@@ -12,7 +12,7 @@ open-admin is built on webman v2 and provides a RESTful JSON API. All admin endp
 - **API version**: embedded in the URL prefix (`/api/v1/...`, `/api/v2/...`); no request header is used
 - **Language**: switched via the `Accept-Language` header or the `?lang=zh_CN|en` parameter (default zh_CN), auto-detected by the Locale middleware
 
-> **Endpoint overview**: Auth (5) | Dashboard (1) | Users (7) | Roles (4) | Permissions (4) | Config (4) | Logs (1) | Profile (3) | Import/Export (3) | Upload (1) | Ops (4: health/metrics/docs/security.txt) | 37 endpoints in total
+> **Endpoint overview**: Auth (4) | Dashboard (1) | Users (7) | Roles (4) | Permissions (4) | Config (4) | Logs (1) | Profile (3) | Import/Export (3) | Upload (1) | Ops (4: health/metrics/docs/security.txt) | 36 endpoints in total
 - **Authentication**: `Authorization: Bearer <token>` (JWT)
 - **Response format**: `{ "code": 0, "message": "success", "data": {...} }`
 - **Docs endpoint**: `GET /api/docs` returns the OpenAPI 3.0 JSON specification
@@ -315,53 +315,7 @@ The public key is built into the frontend application and is never transmitted o
 - 403: Account has been disabled
 - 429: Account is locked, try again in 15 minutes (triggered by 5 consecutive login failures)
 
-### 3.6 Register
-
-```
-POST /api/v1/auth/register
-```
-
-- **Authentication**: none
-- **Rate limit**: 5/min (per IP + path)
-
-**Request body**:
-```json
-{
-  "username": "newuser",
-  "password": "djGYscnyS5V6mW6KyDFjB8vGwjBBnB3Odpyxu8LY...",
-  "real_name": "新用户",
-  "captcha_key": "abc123def456"
-}
-```
-
-| Field | Type | Required | Validation | Description |
-|------|------|------|---------|------|
-| username | string | Yes | min:3, max:50 | Username (unique) |
-| password | string | Yes | min:6, max:32 (plaintext) | AES-256-CBC-HMAC encrypted then Base64 encoded |
-| real_name | string | Yes | max:50 | Real name |
-| captcha_key | string | Yes | | Captcha key (must first pass `/api/v1/captcha/verify`) |
-
-**Example response**:
-```json
-{
-  "code": 0,
-  "message": "注册成功",
-  "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 7200,
-    "user": {
-      "id": "e5f6g7h8",
-      "username": "newuser",
-      "real_name": "新用户"
-    }
-  }
-}
-```
-
-A JWT token is returned immediately after successful registration; the user is enabled by default (status=1).
-
-### 3.7 Refresh Token
+### 3.6 Refresh Token
 
 ```
 POST /api/v1/auth/refresh
@@ -379,7 +333,7 @@ POST /api/v1/auth/refresh
 
 | Field | Type | Required | Description |
 |------|------|------|------|
-| refresh_token | string | Yes | The refresh_token obtained at login/registration |
+| refresh_token | string | Yes | The refresh_token obtained at login |
 
 **Example response**:
 ```json
@@ -400,7 +354,7 @@ A successful refresh returns new access_token and refresh_token, and the old tok
 - 422: Refresh token missing
 - 401: Refresh token invalid or expired
 
-### 3.8 Prometheus Metrics
+### 3.7 Prometheus Metrics
 
 ```
 GET /metrics
@@ -1650,7 +1604,6 @@ All endpoints (injected at the global middleware layer) include the following re
 Rate limit details:
 - Default global limit: 60/min per IP + path
 - Login endpoint `/api/v1/auth/login`: 10/min
-- Register endpoint `/api/v1/auth/register`: 5/min
 - Uses the Redis atomic sliding window algorithm (Lua ZSET) to avoid TOCTOU races
 - Fails open when Redis is unavailable (requests pass), never blocking traffic
 

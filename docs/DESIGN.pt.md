@@ -5,10 +5,12 @@
 # Painel de Administração Open Source — Documento de design
 
 > Para os diagramas Mermaid detalhados, consulte [ARCHITECTURE.pt.md](ARCHITECTURE.pt.md) (renderizados automaticamente no GitHub/GitLab/VS Code).
+>
+> Diagramas de design estáticos (SVG): [Arquitetura do sistema](diagrams/architecture.svg) · [Design de funcionalidades](diagrams/features.svg) · [Ciclo de vida](diagrams/lifecycle.svg)
 
 ## 1. Arquitetura do sistema
 
-> **Lista de funcionalidades**: autenticação(login/register/refresh/logout + bloqueio de conta + limite de sessões) | painel(cache Redis) | usuários CRUD+em massa+importação | papéis e permissões(RBAC) | configuração do sistema | auditoria de operações(origem de 8 plataformas) | arquivos(upload+exportação+mascaramento) | segurança(defesa em 18 camadas) | operações(health/metrics/docs/Docker/CI)
+> **Lista de funcionalidades**: autenticação(login/refresh/logout + bloqueio de conta + limite de sessões) | painel(cache Redis) | usuários CRUD+em massa+importação | papéis e permissões(RBAC) | configuração do sistema | auditoria de operações(origem de 8 plataformas) | arquivos(upload+exportação+mascaramento) | segurança(defesa em 18 camadas) | operações(health/metrics/docs/Docker/CI)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -62,7 +64,7 @@
 | Camada | Diretório | Responsabilidade |
 |---|------|------|
 | Rotas | `config/route.php` | Mapeamento de URL para controllers, vínculo de middlewares, rotas versionadas |
-| Middlewares | `app/middleware/` | Bloqueio de ataques (SecurityFilter), rate limit (RateLimit), autenticação (JWT), autorização (RBAC), versão da API (ApiVersion) |
+| Middlewares | `app/middleware/` | Bloqueio de ataques (SecurityFilter), rate limit (RateLimit), autenticação (JWT), autorização (RBAC) |
 | Controllers | 14: Dashboard/User/Role/Permission/Config/Log/Profile/Export/Import/Upload/Health/Docs (painel) + Captcha/Auth (API v1) | Validação de parâmetros da requisição, chamada de lógica de negócio, formatação de resposta |
 | Serviços de negócio | `app/service/` | Lógica de negócio reutilizável (reservado) |
 | Modelos de dados | `app/model/` | Mapeamento ORM, relacionamentos, criptografia/descriptografia de campos |
@@ -90,8 +92,9 @@ Cadeia de middlewares:
   RateLimit ───────────► Rate limit com janela deslizante do Redis
   │ (falha retorna 429 + cabeçalho Retry-After)
   ▼
-  ApiVersion ─────────► Validação do cabeçalho API-Version, injeta $request->apiVersion
-  │ (falha retorna 400)
+  Roteamento ─────────► O número da versão é refletido no prefixo da URL (/api/v1/..., /api/v2/...)
+  │                     Requisição /api/v1 → grupo de rotas registrado estaticamente, direto ao controller
+  │                     Requisição /admin → continua na cadeia de middlewares abaixo
   ▼
   AdminAuth ──────────► Validação JWT, injeta $request->adminId
   │ (falha retorna 401)
@@ -175,7 +178,7 @@ erik_system_config (configuração do sistema) — tabela independente
 
 ```
 Endpoints públicos:  /api/v1/captcha/{generate|verify}
-           /api/v1/auth/{login|register|refresh}
+           /api/v1/auth/{login|refresh}
 
 Painel:   /admin/{resource}[/{hashid}]
           /admin/export/{excel|pdf}
@@ -199,33 +202,25 @@ Saúde:     /health
 
 ### 4.2 Estratégia de versão da API
 
-A versão da API é controlada pelo cabeçalho da requisição e **não aparece no caminho da URL**:
-
-```http
-API-Version: v1
-```
+O número da versão da API é refletido no prefixo da URL (`/api/v1/...`, `/api/v2/...`), **sem uso de cabeçalho de requisição**. O `config/route.php` registra estaticamente o grupo de rotas de cada versão, ligado diretamente ao controller correspondente; a distribuição de versão não passa por nenhum middleware.
 
 | Mecanismo | Descrição |
 |------|------|
-| Versão padrão | Sem o cabeçalho `API-Version`, o padrão é `v1` |
-| Validação | O middleware `ApiVersion` valida; versões não suportadas retornam 400 |
-| Rotas | A função auxiliar `v()` resolve dinamicamente a classe do controller conforme a versão |
+| Prefixo de URL | O número da versão é fixo como o primeiro segmento do caminho da URL: `/api/v1/...`, `/api/v2/...` |
+| Rotas | Registro estático de `Route::group('/api/v1', ...)` em `config/route.php`, ligado diretamente aos controllers |
 | Diretório | Controllers organizados por versão: `app/api/{version}/controller/` |
+| Endpoints de operação | `/api/docs`, `/health`, `/metrics` etc. não levam prefixo de versão |
 
 Exemplo de extensão — adicionar a API v2:
 1. Crie `app/api/v2/controller/AuthController.php`
-2. Adicione `'v2'` à constante `SUPPORTED` do middleware `ApiVersion`
-3. As definições de rotas não precisam ser alteradas
+2. Registre o grupo de rotas `Route::group('/api/v2', ...)` em `config/route.php`
 
 ```bash
-# Usar v1
-curl /api/v1/auth/login
+# v1
+curl http://localhost:8787/api/v1/auth/login
 
-# Usar v2
-curl -H "API-Version: v2" /api/v1/auth/login
-
-# Sem o cabeçalho, padrão v1
-curl /api/v1/auth/login
+# v2 (após adicionar a versão)
+curl http://localhost:8787/api/v2/auth/login
 ```
 
 ### 4.3 Estratégia de rate limit
@@ -236,7 +231,6 @@ Baseada no algoritmo de janela deslizante com Redis Sorted Set, executada com sc
 |------|------|
 | Padrão | 60 requisições/minuto/IP/rota |
 | POST /api/v1/auth/login | 10 requisições/minuto |
-| POST /api/v1/auth/register | 5 requisições/minuto |
 
 Ao exceder o limite, retorna 429; os cabeçalhos de resposta incluem X-RateLimit-Limit / Remaining / Reset / Retry-After.
 
@@ -363,7 +357,7 @@ Fluxo de dados: Page ← DataService ← ApiService (JWT Bearer) ← HTTP ← we
 |------|------|
 | Restrição de métodos | Whitelist de métodos HTTP do SecurityFilter, apenas GET/POST/PUT/DELETE/OPTIONS/HEAD; métodos não padronizados retornam 405 |
 | Bloqueio de ataques | Middleware SecurityFilter, detecção e bloqueio de XSS/Injeção SQL/Path traversal/Injeção de comandos/CSRF |
-| Verificação humano-máquina | Captcha de clique (Click Captcha), validação obrigatória no login/registro |
+| Verificação humano-máquina | Captcha de clique (Click Captcha), validação obrigatória no login |
 | Bloqueio de conta | 5 falhas consecutivas de login bloqueiam a conta por 15 minutos; durante o bloqueio retorna 429 |
 | Limite de sessões | Máximo de 3 tokens concorrentes por usuário; o token mais antigo vai para a blacklist automaticamente quando o limite é excedido |
 | Rate limit | Middleware RateLimit, janela deslizante Redis, atômico com Lua |

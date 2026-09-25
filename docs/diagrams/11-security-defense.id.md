@@ -6,7 +6,7 @@
 
 ```mermaid
 flowchart TB
-    l1["Lapisan 1: Verifikasi manusia<br/>Captcha klik ClickCaptcha<br/>Validasi wajib login/registrasi"]
+    l1["Lapisan 1: Verifikasi manusia<br/>Captcha klik ClickCaptcha<br/>Validasi wajib login"]
     l2["Lapisan 2: Konfirmasi aksi<br/>Konfirmasi kata sandi dua kali<br/>Wajib untuk operasi DELETE"]
     l3["Lapisan 3: Keamanan transmisi<br/>HTTPS + JWT Bearer<br/>AES-256-CBC"]
     l4["Lapisan 4: Autentikasi identitas<br/>JWT HS256<br/>access_token 2h<br/>refresh_token 14d"]

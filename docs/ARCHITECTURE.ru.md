@@ -5,6 +5,8 @@
 > [中文](ARCHITECTURE.md) | [English](ARCHITECTURE.en.md) | [한국어](ARCHITECTURE.ko.md) | [Русский](ARCHITECTURE.ru.md) | [Deutsch](ARCHITECTURE.de.md) | [Français](ARCHITECTURE.fr.md) | [Español](ARCHITECTURE.es.md) | [Português](ARCHITECTURE.pt.md) | [हिन्दी](ARCHITECTURE.hi.md) | [العربية](ARCHITECTURE.ar.md) | [বাংলা](ARCHITECTURE.bn.md) | [Bahasa Indonesia](ARCHITECTURE.id.md) | [日本語](ARCHITECTURE.ja.md)
 
 > Диаграммы Mermaid ниже автоматически отображаются в GitHub / GitLab / VS Code. В других средах используйте [Mermaid Live Editor](https://mermaid.live/).
+>
+> Статические схемы, не требующие рендерера (SVG), см. в [разделе 14](#14-статические-схемы-svg).
 
 ---
 
@@ -22,11 +24,10 @@ flowchart TB
     end
 
     subgraph "Прикладной уровень (webman v2)"
-        C0["Middleware ApiVersion<br/>Проверка заголовка API-Version"]
         C1["Middleware AdminAuth<br/>Проверка JWT"]
         C2["Middleware AdminPermission<br/>Проверка прав RBAC"]
         C3["Контроллеры админки<br/>Dashboard / User / Role / Permission"]
-        C4["Публичные контроллеры v1<br/>Captcha / Auth"]
+        C4["Группа маршрутов /api/v1 → публичные контроллеры<br/>Captcha / Auth"]
         C5["Common Services<br/>Hashids / Snowflake / Encryption"]
     end
 
@@ -43,11 +44,10 @@ flowchart TB
 
     A1 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
     A2 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
-    B1 --> C0
-    C0 --> C1
+    B1 --> C1
+    B1 --> C4
     C1 --> C2
     C2 --> C3
-    C0 --> C4
     C3 --> C5
     C4 --> C5
     C3 --> D1
@@ -59,7 +59,6 @@ flowchart TB
     style A1 fill:#1677FF,color:#fff
     style A2 fill:#1677FF,color:#fff
     style B1 fill:#722ED1,color:#fff
-    style C0 fill:#EB2F96,color:#fff
     style C1 fill:#FA8C16,color:#fff
     style C2 fill:#FA8C16,color:#fff
     style C3 fill:#52C41A,color:#fff
@@ -83,7 +82,6 @@ flowchart TD
     subgraph "Слой промежуточного ПО Middleware Layer"
         M_RL["RateLimit<br/>Redis-лимит со скользящим окном<br/>Заголовки ответа X-RateLimit"]
         M_SF["SecurityFilter<br/>Перехват атак<br/>XSS/SQL-инъекции/обход путей/CSRF"]
-        M0["ApiVersion<br/>Проверка версии API<br/>Инъекция apiVersion"]
         M1["AdminAuth<br/>Проверка JWT Token<br/>Инъекция adminId"]
         M2["AdminPermission<br/>Авторизация RBAC<br/>Сопоставление method.path<br/>Кэш прав в Redis на 60s"]
     end
@@ -96,7 +94,7 @@ flowchart TD
         CT5["DashboardController<br/>статистика/тренды/распределение"]
         CT6["ExportController<br/>Экспорт Excel/PDF"]
         CT7["CaptchaController<br/>Генерация/проверка капчи"]
-        CT8["AuthController<br/>Вход/регистрация/обновление"]
+        CT8["AuthController<br/>Вход/обновление"]
     end
 
     subgraph "Слой сервисов Service Layer"
@@ -119,11 +117,11 @@ flowchart TD
         D3["Redis"]
     end
 
-    R1 --> M_SF --> M_RL --> M0
-    M0 --> M1
+    R1 --> M_SF --> M_RL
+    M_RL --> M1
+    M_RL --> CT7 & CT8
     M1 --> M2
     M2 --> CT2 & CT3 & CT4 & CT5 & CT6
-    M0 --> CT7 & CT8
     CT1 -.->|extends| CT2 & CT3 & CT4 & CT5 & CT6
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> S1 & S2 & S3
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> MD1 & MD2 & MD3 & MD4 & MD5
@@ -134,7 +132,6 @@ flowchart TD
     style R1 fill:#722ED1,color:#fff
     style M_SF fill:#FF4D4F,color:#fff
     style M_RL fill:#EB2F96,color:#fff
-    style M0 fill:#EB2F96,color:#fff
     style M1 fill:#FA8C16,color:#fff
     style M2 fill:#FA8C16,color:#fff
     style CT1 fill:#1677FF,color:#fff
@@ -151,7 +148,6 @@ sequenceDiagram
     participant MW_LOC as Locale
     participant MW_SF as SecurityFilter
     participant MW_RL as RateLimit
-    participant MW0 as ApiVersion
     participant MW1 as AdminAuth
     participant MW2 as AdminPermission
     participant CTL as Controller
@@ -160,7 +156,7 @@ sequenceDiagram
     participant DB as MySQL
     participant OPLOG as OperationLog
 
-    C->>N: HTTPS-запрос<br/>Header: API-Version: v1, Accept-Language: zh_CN
+    C->>N: HTTPS-запрос к эндпоинтам /admin<br/>Header: Accept-Language: zh_CN
     N->>MW_LOC: Передача
 
     MW_LOC->>MW_LOC: locale = zh_CN (Accept-Language / ?lang=)
@@ -182,13 +178,7 @@ sequenceDiagram
         MW_RL-->>C: 429 + Retry-After
     end
 
-    MW_RL->>MW0: Пропуск
-
-    alt неподдерживаемая версия
-        MW0-->>C: 400 неподдерживаемая версия API
-    else версия действительна
-        MW0->>MW0: $request->apiVersion = v1
-    end
+    MW_RL->>MW1: Пропуск
 
     alt Token отсутствует или недействителен
         MW1-->>C: 401 Unauthorized
@@ -607,7 +597,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph "Уровень 1: человек-машина"
-        L1["Капча по клику<br/>Click Captcha<br/>обязательна при входе/регистрации"]
+        L1["Капча по клику<br/>Click Captcha<br/>обязательна при входе"]
     end
 
     subgraph "Уровень 2: подтверждение операций"
@@ -692,3 +682,17 @@ flowchart TB
     style ES fill:#1890FF,color:#fff
     style REDIS fill:#1890FF,color:#fff
 ```
+
+---
+
+## 14. Статические схемы (SVG)
+
+Три схемы ниже — **рукописный SVG** (без скриптов, без внешних зависимостей, масштабируется бесконечно); для их просмотра не нужен рендерер Mermaid, их удобно вставлять прямо в документацию, презентации и README:
+
+| Схема | Содержание | Файл |
+|---|------|------|
+| Проектирование архитектуры системы | Четырёхуровневая топология: клиентский уровень → шлюзовый уровень → прикладной уровень webman → уровень хранения, включая защиту и наблюдаемость | [architecture.svg](diagrams/architecture.svg) |
+| Проектирование функциональности | 12 функциональных доменов → точки входа контроллеров → ключевые возможности, плюс цепочка выполнения промежуточного ПО и спецификация интерфейсов данных | [features.svg](diagrams/features.svg) |
+| Жизненный цикл | Установка → запуск → подключение → защита → аутентификация → обработка → персистентность → аудит ответа, включая ветви исключений и жизненный цикл токена | [lifecycle.svg](diagrams/lifecycle.svg) |
+
+> Материал талисмана проекта «Сяо Ань»: [`public/img/pet.svg`](../public/img/pet.svg) (чистый SVG, одновременно используется как главная страница сайта, мастер установки и иконка браузера)

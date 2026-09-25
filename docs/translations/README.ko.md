@@ -4,9 +4,48 @@
 
 # 오픈 관리 백엔드 (open-admin)
 
-webman v2 + Flutter 기반의 풀스택 관리 백엔드 시스템입니다.
+<p align="center">
+  <img src="public/img/pet.svg" width="150" height="200" alt="샤오안 — open-admin 프로젝트 펫">
+</p>
+
+**webman v2 + Flutter** 기반의 풀스택 관리 백엔드 시스템: 인증과 RBAC 권한, 18계층 심층 방어, Prometheus 관측성, 멀티 플랫폼 클라이언트 (Flutter Web / HarmonyOS).
+
+> 프로젝트 펫 「**샤오안**」은 방패형 수호 로봇으로, 미들웨어 체인의 「방어」와 「인증」 두 관문을 지킵니다.
+> 소재 [`public/img/pet.svg`](public/img/pet.svg): 순수 SVG (스크립트·외부 의존성 없음, 다크 배경과 `prefers-reduced-motion` 지원), 사이트 아이콘으로도 사용됩니다.
+>
+> 설계도: [시스템 아키텍처](docs/diagrams/architecture.svg) · [기능 설계](docs/diagrams/features.svg) · [수명 주기](docs/diagrams/lifecycle.svg)
 
 > [아키텍처 다이어그램](docs/ARCHITECTURE.ko.md) | [설계 문서](docs/DESIGN.ko.md) | [보안 아키텍처](docs/SECURITY.ko.md) | [API 참조](docs/API.ko.md)
+
+## 프로젝트 펫 · 샤오안
+
+<table>
+<tr>
+<td width="170"><img src="public/img/pet.svg" width="150" height="200" alt="샤오안"></td>
+<td>
+
+**샤오안**(Xiao An)은 open-admin의 프로젝트 펫으로, 「**안**전(安全)」과 「관리 백엔드(管理后台)」에서 이름을 딴 방패형 수호 로봇입니다.
+
+- **방패형 몸체** — 18계층 심층 방어에 대응하며, 상단 안테나는 항상 켜져 있어 서비스가 메모리에 상주함(webman/workerman)을 나타냅니다
+- **페이스 스크린의 두 눈** — 주기적으로 깜빡이며, 모든 요청과 미들웨어 체인을 지켜봅니다
+- **가슴의 검증 배지** — 체크 표시가 항상 켜져 있어 `method.path` 권한 검증 통과를 나타냅니다
+
+**어디에 나타나나요**
+
+| 위치 | 형태 |
+|------|------|
+| 사이트 첫 페이지 `GET /` | 메인 이미지 + 프로젝트 소개와 진입 내비게이션 ([`app/view/index/view.html`](app/view/index/view.html)) |
+| 설치 마법사 `/install` | 3단계 마법사의 페이지 헤더 이미지 (`InstallController::layout()`) |
+| 브라우저 탭 | 사이트 아이콘 `rel="icon" type="image/svg+xml"` |
+| 본 문서와 설계도 | 프로젝트 아바타 + 아키텍처 다이어그램 우측 하단의 펫 카드 |
+
+> 소재 단일 소스: [`public/img/pet.svg`](public/img/pet.svg). 이 파일을 수정하면 위 모든 위치가 동시에 갱신됩니다.
+
+</td>
+</tr>
+</table>
+
+**직접 그려보시겠어요?** 아이콘 규격: 주 색상 `#1677FF`, 웜 색상 안테나 `#FA8C16`, 검증 그린 `#52C41A`; 캔버스 `240 × 320`, 방패형 중앙 배치, 최소 사용 크기 48 px.
 
 ## 기능 목록
 
@@ -23,7 +62,7 @@ webman v2 + Flutter 기반의 풀스택 관리 백엔드 시스템입니다.
 | 📋 작업 감사 | 로그 조회 + 출처 단말 감지 | 8개 플랫폼 자동 인식 |
 | 📁 파일 관리 | 업로드/Excel 내보내기/PDF 내보내기 | 민감 데이터 자동 마스킹 |
 | 🛡 보안 방어 | 18계층 심층 방어 | XSS/SQL 주입/경로 탐색/명령 주입/CSRF/레이트 리밋/CSP... |
-| 🏥 운영 | 헬스 체크/metrics/API 문서/security.txt | Prometheus + OpenAPI 3.0 + hg/apidoc 대화형 문서 |
+| 🏥 운영 | 헬스 체크/metrics/API 문서/security.txt | Prometheus + OpenAPI 3.0 + erikwang2013/apidoc-php 대화형 문서 |
 | 🌐 국제화 | 중·영문 전환 | Accept-Language 헤더 / ?lang= 파라미터 |
 
 ## 기술 스택
@@ -72,7 +111,7 @@ open-admin/
 │   │   ├── DocsController.php      # OpenAPI 문서
 │   │   └── BaseController.php      # 기본 컨트롤러
 │   ├── api/
-│   │   └── v1/controller/          # API v1 컨트롤러 (버전은 요청 헤더 API-Version으로 제어)
+│   │   └── v1/controller/          # API v1 컨트롤러 (버전은 URL 접두사 /api/v1로 분배)
 │   │       ├── CaptchaController.php # 클릭 캡차
 │   │       └── AuthController.php    # 로그인/토큰 갱신
 │   ├── common/                 # 공용 유틸리티 클래스
@@ -83,11 +122,11 @@ open-admin/
 │   │   ├── Cors.php            # 크로스 도메인
 │   │   ├── SecurityFilter.php  # 공격 탐지 차단 (HTTP 메서드 제한/XSS/SQL 주입/경로 탐색/명령 주입/CSRF)
 │   │   ├── RateLimit.php       # Redis 레이트 리밋 (슬라이딩 윈도우 + 응답 헤더)
-│   │   ├── ApiVersion.php      # API 버전 검증
 │   │   ├── AdminAuth.php       # JWT 인증 + 블랙리스트
 │   │   ├── AdminPermission.php # RBAC 권한 검증
 │   │   └── OperationLog.php    # 작업 로그 자동 기록 (출처 단말 감지 포함)
-│   └── model/                  # 데이터 모델
+│   ├── model/                  # 데이터 모델
+│   └── view/index/view.html    # 사이트 첫 페이지 템플릿 (GET /, 프로젝트 펫 + 진입 내비게이션)
 ├── apps/
 │   ├── flutter/                # Flutter Web 관리 백엔드 (PC 스타일)
 │   │   └── lib/app/
@@ -100,10 +139,41 @@ open-admin/
 │   ├── middleware.php           # 전역 미들웨어 등록
 │   └── ...                     # 각 구성 요소 설정
 ├── database/install.sql        # SQL 설치 스크립트 (권한 시드 데이터 포함)
-├── public/                     # 공용 진입점
+├── docs/                       # 문서
+│   ├── ARCHITECTURE.md         # 아키텍처 설계도 (Mermaid)
+│   ├── DESIGN.md               # 설계 문서
+│   ├── SECURITY.md             # 보안 아키텍처 설계
+│   ├── API.md                  # API 참조 문서
+│   ├── diagrams/               # 다이어그램 디렉터리
+│   │   ├── architecture.svg    # 시스템 아키텍처 설계도 (SVG)
+│   │   ├── features.svg        # 기능 설계도 (SVG)
+│   │   ├── lifecycle.svg       # 수명 주기 도표 (SVG)
+│   │   └── 01..12-*.md         # 분해 다이어그램 (Mermaid, 12개 언어 번역본)
+│   └── translations/           # 다국어 문서 (12개 언어 × README/CLAUDE)
+├── public/                     # 공용 진입점 (Web 루트)
+│   ├── img/pet.svg             # 프로젝트 펫 「샤오안」 (SVG, 사이트 아이콘 겸용)
+│   └── favicon.ico             # 구형 브라우저용 .ico 폴백
 ├── runtime/                    # 런타임 파일
 └── vendor/                     # Composer 의존성
 ```
+
+## 아키텍처 설계와 다이어그램
+
+세 장의 이미지는 모두 **순수 손작성 SVG** (스크립트 없음, 외부 폰트 의존성 없음, 무한 확대 가능)이며, GitHub/브라우저에서 바로 볼 수 있고 PPT와 문서에 삽입할 수도 있습니다:
+
+| 이미지 | 내용 | 파일 |
+|---|------|------|
+| 시스템 아키텍처 설계 | 4계층 토폴로지: 클라이언트 계층 → 게이트웨이 계층 → webman 애플리케이션 계층 (미들웨어 체인 / 컨트롤러 / 공용 서비스) → 저장 계층, 우측에 보안과 관측성 포함 | [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg) |
+| 기능 설계 | 12개 기능 영역 → 컨트롤러 진입점 → 핵심 역량, 하단에 미들웨어 실행 체인과 데이터 인터페이스 규격 | [`docs/diagrams/features.svg`](docs/diagrams/features.svg) |
+| 수명 주기 | 설치 → 시작 → 접속 → 보호 → 인증 → 처리 → 영속화 → 응답 감사, 예외 분기와 토큰 수명 주기 포함 | [`docs/diagrams/lifecycle.svg`](docs/diagrams/lifecycle.svg) |
+
+<img src="docs/diagrams/architecture.svg" width="1100" alt="open-admin 시스템 아키텍처 설계도">
+
+<img src="docs/diagrams/features.svg" width="1100" alt="open-admin 기능 설계도">
+
+<img src="docs/diagrams/lifecycle.svg" width="1100" alt="open-admin 수명 주기 도표">
+
+> 편집 가능한 소스 수준 다이어그램이 필요하면 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.ko.md)와 [`docs/diagrams/`](docs/diagrams/)(Mermaid, [Mermaid Live](https://mermaid.live/)에 붙여넣어 편집 가능)를 참조하세요.
 
 ## 환경 요구 사항
 
@@ -222,7 +292,7 @@ docker-compose up -d
 
 - **통합 응답 형식**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0`은 성공을 의미
 - **오류 코드**: `400` 파라미터 오류 / `401` 미로그인 / `403` 권한 없음 / `404` 존재하지 않음 / `422` 검증 실패 / `429` 레이트 리밋 / `500` 서버 오류
-- **API 버전**: 요청 헤더 `API-Version: v1`로 제어 (미지정 시 기본 v1), URL에 나타나지 않음
+- **API 버전**: 버전 번호는 URL 접두사에 포함 (예: `/api/v1/...`), 요청 헤더는 사용하지 않음
 - **인증**: `Authorization: Bearer <token>`; access_token 유효기간 2시간, refresh_token 14일
 - **ID 처리**: 요청/응답의 ID는 hashids 암호화 문자열로, 실제 DB ID가 노출되지 않음
 

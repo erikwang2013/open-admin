@@ -20,13 +20,21 @@ use support\Response;
  */
 class InstallController
 {
-    public function __construct()
+    /**
+     * 已安装锁校验
+     *
+     * 注意: 不可在构造函数里 echo + exit —— webman 常驻进程下 exit 会直接终止当前
+     * workerman 工作进程（客户端收到空响应，进程被反复重启），必须由 action 返回 Response 短路。
+     */
+    private function guardInstalled(): ?Response
     {
-        if (is_file(runtime_path('install.lock'))) {
-            http_response_code(403);
-            echo '<h1>系统已安装</h1><p>如需重新安装，请删除 runtime/install.lock 文件。</p>';
-            exit;
+        if (!is_file(runtime_path('install.lock'))) {
+            return null;
         }
+        return response($this->layout('系统已安装', <<<HTML
+            <div class="info">系统已安装完成。如需重新安装，请先删除 <code>runtime/install.lock</code> 文件。</div>
+            <div class="actions"><a href="/" style="display:inline-block;padding:10px 36px;background:#1890ff;color:#fff;border-radius:6px;text-decoration:none;font-size:15px">返回首页</a></div>
+            HTML), 403);
     }
 
     /**
@@ -34,6 +42,7 @@ class InstallController
      */
     public function index(Request $request): Response
     {
+        if ($guard = $this->guardInstalled()) return $guard;
         return response($this->renderStep1());
     }
 
@@ -42,6 +51,7 @@ class InstallController
      */
     public function step2(Request $request): Response
     {
+        if ($guard = $this->guardInstalled()) return $guard;
         $db = $request->post();
         $errors = $this->validateDb($db);
         if ($errors) {
@@ -59,6 +69,7 @@ class InstallController
      */
     public function install(Request $request): Response
     {
+        if ($guard = $this->guardInstalled()) return $guard;
         $data = $request->post();
         $db = $data['db'] ?? [];
         $admin = $data['admin'] ?? [];
@@ -222,10 +233,12 @@ class InstallController
         <head>
             <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
             <title>{$title} — 开放管理后台</title>
+            <link rel="icon" type="image/svg+xml" href="/img/pet.svg">
             <style>
                 *{margin:0;padding:0;box-sizing:border-box}
                 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f0f2f5;color:#333;min-height:100vh;display:flex;align-items:center;justify-content:center}
                 .box{background:#fff;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.08);width:460px;max-width:95vw;padding:36px 40px}
+                .pet{display:block;width:76px;height:101px;margin:0 auto 10px}
                 h1{font-size:22px;text-align:center;margin-bottom:6px;color:#1a1a2e}
                 .sub{text-align:center;color:#999;font-size:13px;margin-bottom:20px}
                 .field{margin-bottom:16px}
@@ -244,6 +257,7 @@ class InstallController
         </head>
         <body>
             <div class="box">
+                <img class="pet" src="/img/pet.svg" alt="小安 — open-admin 项目宠物" width="76" height="101">
                 <h1>开放管理后台</h1>
                 <div class="sub">安装向导 · {$title}</div>
                 {$body}

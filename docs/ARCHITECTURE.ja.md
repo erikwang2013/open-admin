@@ -5,6 +5,8 @@
 > [中文](ARCHITECTURE.md) | [English](ARCHITECTURE.en.md) | [한국어](ARCHITECTURE.ko.md) | [Русский](ARCHITECTURE.ru.md) | [Deutsch](ARCHITECTURE.de.md) | [Français](ARCHITECTURE.fr.md) | [Español](ARCHITECTURE.es.md) | [Português](ARCHITECTURE.pt.md) | [हिन्दी](ARCHITECTURE.hi.md) | [العربية](ARCHITECTURE.ar.md) | [বাংলা](ARCHITECTURE.bn.md) | [Bahasa Indonesia](ARCHITECTURE.id.md) | [日本語](ARCHITECTURE.ja.md)
 
 > 以下の Mermaid 図は GitHub / GitLab / VS Code で自動レンダリングされます。その他の環境では [Mermaid Live Editor](https://mermaid.live/) で表示してください。
+>
+> レンダラー不要の静的な図（SVG）は[第 14 節](#14-静的設計図svg)を参照してください。
 
 ---
 
@@ -22,11 +24,10 @@ flowchart TB
     end
 
     subgraph "アプリケーション層 (webman v2)"
-        C0["ApiVersion ミドルウェア<br/>API-Version ヘッダー検証"]
         C1["AdminAuth ミドルウェア<br/>JWT 検証"]
         C2["AdminPermission ミドルウェア<br/>RBAC 権限検証"]
         C3["管理側 Controller<br/>Dashboard / User / Role / Permission"]
-        C4["公開 Controller v1<br/>Captcha / Auth"]
+        C4["/api/v1 ルートグループ直結の公開 Controller<br/>Captcha / Auth"]
         C5["Common Services<br/>Hashids / Snowflake / Encryption"]
     end
 
@@ -83,7 +84,6 @@ flowchart TD
     subgraph "ミドルウェア層 Middleware Layer"
         M_RL["RateLimit<br/>Redis スライディングウィンドウレート制限<br/>X-RateLimit レスポンスヘッダー"]
         M_SF["SecurityFilter<br/>攻撃検知ブロック<br/>XSS/SQLインジェクション/パストラバーサル/CSRF"]
-        M0["ApiVersion<br/>API バージョン検証<br/>apiVersion を注入"]
         M1["AdminAuth<br/>JWT Token 検証<br/>adminId を注入"]
         M2["AdminPermission<br/>RBAC 認可<br/>method.path マッチング<br/>Redis 60s 権限キャッシュ"]
     end
@@ -96,7 +96,7 @@ flowchart TD
         CT5["DashboardController<br/>統計/トレンド/分布"]
         CT6["ExportController<br/>Excel/PDF エクスポート"]
         CT7["CaptchaController<br/>キャプチャ生成/検証"]
-        CT8["AuthController<br/>ログイン/登録/更新"]
+        CT8["AuthController<br/>ログイン/更新"]
     end
 
     subgraph "サービス層 Service Layer"
@@ -151,7 +151,6 @@ sequenceDiagram
     participant MW_LOC as Locale
     participant MW_SF as SecurityFilter
     participant MW_RL as RateLimit
-    participant MW0 as ApiVersion
     participant MW1 as AdminAuth
     participant MW2 as AdminPermission
     participant CTL as Controller
@@ -160,7 +159,7 @@ sequenceDiagram
     participant DB as MySQL
     participant OPLOG as OperationLog
 
-    C->>N: HTTPS リクエスト<br/>Header: API-Version: v1, Accept-Language: zh_CN
+    C->>N: HTTPS リクエスト /admin インターフェース<br/>Header: Accept-Language: zh_CN
     N->>MW_LOC: 転送
 
     MW_LOC->>MW_LOC: locale = zh_CN (Accept-Language / ?lang=)
@@ -182,13 +181,7 @@ sequenceDiagram
         MW_RL-->>C: 429 + Retry-After
     end
 
-    MW_RL->>MW0: 通過
-
-    alt サポートされていないバージョン
-        MW0-->>C: 400 サポートされていないAPIバージョン
-    else バージョン有効
-        MW0->>MW0: $request->apiVersion = v1
-    end
+    MW_RL->>MW1: 通過
 
     alt Token 欠落または無効
         MW1-->>C: 401 Unauthorized
@@ -607,7 +600,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph "第1層: 人機認証"
-        L1["クリックキャプチャ<br/>Click Captcha<br/>ログイン/登録で強制"]
+        L1["クリックキャプチャ<br/>Click Captcha<br/>ログインで強制"]
     end
 
     subgraph "第2層: 操作確認"
@@ -692,3 +685,17 @@ flowchart TB
     style ES fill:#1890FF,color:#fff
     style REDIS fill:#1890FF,color:#fff
 ```
+
+---
+
+## 14. 静的設計図（SVG）
+
+以下の 3 つの図は**手書き SVG**（スクリプトなし、外部依存なし、無限に拡大縮小可能）で、Mermaid レンダラーなしで表示でき、ドキュメント・PPT・README にそのまま挿入するのに適しています：
+
+| 図 | 内容 | ファイル |
+|---|------|------|
+| システムアーキテクチャ設計 | 四層トポロジー：クライアント層 → ゲートウェイ層 → webman アプリケーション層 → ストレージ層、セキュリティ防御と可観測性を含む | [architecture.svg](diagrams/architecture.svg) |
+| 機能設計 | 12 の機能ドメイン → コントローラー入口 → 主要機能、ミドルウェア実行チェーンとデータインターフェース仕様を付記 | [features.svg](diagrams/features.svg) |
+| ライフサイクル | インストール → 起動 → 接続 → 防御 → 認証・認可 → 処理 → 永続化 → レスポンス監査、異常分岐とトークンライフサイクルを含む | [lifecycle.svg](diagrams/lifecycle.svg) |
+
+> プロジェクトペット「小安」の素材：[`public/img/pet.svg`](../public/img/pet.svg)（純粋な SVG、サイトトップページ・インストールウィザード・ブラウザアイコンを兼ねる）

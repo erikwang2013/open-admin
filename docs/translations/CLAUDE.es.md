@@ -18,7 +18,7 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
 | Dominio | Función |
 |----|------|
-| Autenticación | Inicio de sesión/registro/refresco/cierre de sesión + captcha + bloqueo de cuenta + límite de sesiones |
+| Autenticación | Inicio de sesión/renovación/cierre de sesión + captcha de clic + bloqueo de cuenta + límite de sesiones |
 | Panel de control | Estadísticas en tiempo real/tendencias/distribución/registros (caché Redis de 5 min) |
 | Usuarios | CRUD + borrado masivo/habilitar-deshabilitar + importación Excel |
 | Roles y permisos | CRUD + árbol de permisos + autorización RBAC method.path |
@@ -27,6 +27,18 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 | Archivos | Carga + exportación Excel/PDF (enmascarado de datos sensibles) |
 | Seguridad | Defensa en profundidad de 18 capas (XSS/inyección SQL/CSRF/límite de peticiones/CSP...) |
 | Operaciones | Comprobación de salud/métricas Prometheus/documentación API/security.txt + Docker + CI/CD |
+
+## Mascota del proyecto · Xiao An
+
+El robot guardián con forma de escudo «Xiao An» (小安) toma su nombre de «**安**全» (seguridad) y de «管理后**台**» (panel de administración), y monta guardia en los dos controles de «protección» y «autenticación» de la cadena de middleware.
+
+- **Fuente única de estilos**: `public/img/pet.svg` (SVG puro, sin scripts ni dependencias externas, con degradación `prefers-reduced-motion`). Modificar este archivo actualiza a la vez la página de inicio del sitio, el asistente de instalación y el icono del navegador; **no crear una segunda copia**.
+- **Puntos donde ya está integrado**:
+  - Página de inicio del sitio `GET /` → `app/view/index/view.html` (la ruta está al principio de `config/route.php`, sin autenticación)
+  - Las 4 páginas del asistente de instalación → inyectadas de forma unificada por `InstallController::layout()`
+  - Icono del sitio → `<link rel="icon" type="image/svg+xml" href="/img/pet.svg">` (página de inicio + asistente de instalación + `apps/flutter/web/index.html`)
+- **Especificación de colores**: color principal `#1677FF`, antena cálida `#FA8C16`, verde de validación `#52C41A`; lienzo `240 × 320`.
+- **Diagramas de diseño**: `docs/diagrams/architecture.svg` (arquitectura del sistema), `features.svg` (diseño de funciones), `lifecycle.svg` (ciclo de vida); también son SVG escritos a mano y comparten la misma paleta que la mascota, y se referencian directamente en el README y en la documentación.
 
 ## Stack tecnológico
 
@@ -67,7 +79,7 @@ open-admin/
 │   │   ├── HealthController.php    # Comprobación de salud
 │   │   ├── DocsController.php      # Documentación OpenAPI
 │   │   └── MetricsController.php   # Métricas de monitorización Prometheus
-│   ├── api/v1/controller/      # Controladores API v1 (control por cabecera de versión)
+│   ├── api/v1/controller/      # Controladores API v1 (distribución por prefijo de URL /api/v1)
 │   │   ├── CaptchaController.php
 │   │   └── AuthController.php
 │   ├── common/                 # Clase de utilidades comunes
@@ -75,15 +87,15 @@ open-admin/
 │   │   ├── SnowflakeService.php
 │   │   └── EncryptionService.php
 │   ├── common/                 # Definiciones comunes (incluye definiciones de Apidoc)
-│   ├── middleware/             # Middleware (8)
+│   ├── middleware/             # Middleware (7)
 │   │   ├── Cors.php            # CORS (global)
 │   │   └── (migrado al paquete erikwang2013/security-php)  # 31 tipos de detección de ataques
 │   │   ├── RateLimit.php       # Límite de peticiones Redis (global, atómico con Lua)
-│   │   ├── ApiVersion.php      # Validación de versión de API
 │   │   ├── AdminAuth.php       # Autenticación JWT + lista negra
 │   │   ├── AdminPermission.php # Validación de permisos RBAC (caché Redis 60s)
 │   │   └── OperationLog.php    # Registro automático de operaciones (incluye detección de origen)
 │   ├── model/                  # Modelos de datos
+│   ├── view/index/view.html    # Plantilla de la página de inicio del sitio (GET /, mascota del proyecto + navegación de entrada)
 │   ├── queue/                  # Tareas de cola
 │   └── process/                # Procesos (Http, Monitor)
 ├── apps/
@@ -115,17 +127,24 @@ open-admin/
 │   ├── SECURITY.md             # Diseño de arquitectura de seguridad
 │   ├── API.md                  # Documento de referencia de API
 │   ├── nginx-security.conf     # Configuración de referencia de seguridad de Nginx
-│   ├── diagrams/               # Diagramas de arquitectura desglosados
+│   ├── diagrams/               # Diagramas
+│   │   ├── architecture.svg    # Diagrama de arquitectura del sistema (SVG escrito a mano)
+│   │   ├── features.svg        # Diagrama de diseño de funciones (SVG escrito a mano)
+│   │   ├── lifecycle.svg       # Diagrama de ciclo de vida (SVG escrito a mano)
+│   │   └── 01..12-*.md         # Diagramas de arquitectura desglosados (Mermaid, 12 idiomas)
 │   └── superpowers/            # Especificaciones y planes
 │       ├── specs/              # Especificaciones de diseño
 │       └── plans/              # Planes de implementación
 ├── public/                     # Punto de entrada público
+│   └── img/pet.svg             # Mascota del proyecto «Xiao An» (SVG, también sirve como icono del sitio)
 ├── runtime/                    # Archivos en tiempo de ejecución
 ├── tests/                      # Pruebas
 ├── vendor/                     # Dependencias de Composer
 ├── CLAUDE.md                   # Este archivo
 ├── README.md                   # Documentación en chino
-├── README_EN.md                # Documentación en inglés
+├── docs/translations/          # Documentación multilingüe (12 idiomas × README/CLAUDE)
+│   ├── README.en.md            # Documentación en inglés
+│   └── README.ko.md ... README.ja.md  # Otras traducciones (coreano/ruso/alemán/francés/español/portugués/hindi/árabe/bengalí/indonesio/japonés)
 ├── .env                        # Variables de entorno (no incluidas en el control de versiones)
 ├── .env.example                # Plantilla de variables de entorno
 ├── .env.docker                 # Variables de entorno de Docker
@@ -142,7 +161,7 @@ open-admin/
 ```
 Global:  Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → {middleware de ruta}
 /admin: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
-/api:   Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → ApiVersion → Controller
+/api/v1: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller (la versión se refleja en el prefijo de URL)
 /health: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller
 ```
 
@@ -161,20 +180,21 @@ Global:  Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/se
 
 ## Política de versiones de API
 
-La versión se controla mediante la cabecera de petición `API-Version` (por defecto `v1`) y no aparece en la URL:
+El número de versión se refleja en el prefijo de la URL (`/api/v1/...`, `/api/v2/...`); no se usan cabeceras de petición:
 
 ```bash
 curl http://localhost:8787/api/v1/auth/login
 ```
 
-Para añadir una versión nueva solo hay que crear el directorio `app/api/{version}/controller/` y registrarlo en el middleware `ApiVersion`.
+Para añadir una versión nueva solo hay que crear el directorio `app/api/{version}/controller/` y registrar el grupo de rutas de esa versión en `config/route.php`.
 
 ## Política de límite de peticiones
 
 Ventana deslizante de Redis (atómica con Lua), por defecto 60 peticiones/minuto/IP/ruta:
-- Inicio de sesión: 10 por minuto
-- Registro: 5 por minuto
+- Inicio de sesión `/api/v1/auth/login`: 10 por minuto
 - Cabeceras de respuesta: `X-RateLimit-Limit/Remaining/Reset`; al superar el límite se añade `Retry-After`
+
+> Las claves de `RateLimit::$sensitive` deben coincidir con la **ruta completa** de `config/route.php` (incluido el prefijo de versión `/api/v{n}`); de lo contrario, las rutas sensibles vuelven silenciosamente al valor predeterminado de 60 por minuto.
 
 ## Normas de código
 

@@ -5,10 +5,12 @@
 # Offenes Admin-Panel — Design-Dokument
 
 > Detaillierte Mermaid-Architekturdiagramme finden Sie in [ARCHITECTURE.de.md](ARCHITECTURE.de.md) (wird in GitHub/GitLab/VS Code automatisch gerendert).
+>
+> Statische Design-Diagramme (SVG): [Systemarchitektur](diagrams/architecture.svg) · [Funktionsdesign](diagrams/features.svg) · [Lebenszyklus](diagrams/lifecycle.svg)
 
 ## 1. Systemarchitektur
 
-> **Funktionsübersicht**: Authentifizierung (login/register/refresh/logout + Kontosperrung + Sitzungsbegrenzung) | Dashboard (Redis-Cache) | Benutzer-CRUD + Massenoperationen + Import | Rollen & Berechtigungen (RBAC) | Systemkonfiguration | Aktions-Audit (8 Plattform-Quellen) | Dateien (Upload + Export + Maskierung) | Sicherheit (18-stufige Verteidigung) | Betrieb (health/metrics/docs/Docker/CI)
+> **Funktionsübersicht**: Authentifizierung (login/refresh/logout + Kontosperrung + Sitzungsbegrenzung) | Dashboard (Redis-Cache) | Benutzer-CRUD + Massenoperationen + Import | Rollen & Berechtigungen (RBAC) | Systemkonfiguration | Aktions-Audit (8 Plattform-Quellen) | Dateien (Upload + Export + Maskierung) | Sicherheit (18-stufige Verteidigung) | Betrieb (health/metrics/docs/Docker/CI)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -63,7 +65,7 @@
 | Ebene | Verzeichnis | Verantwortung |
 |---|------|------|
 | Routing | `config/route.php` | URL-zu-Controller-Zuordnung, Middleware-Bindung, versionierte Routen |
-| Middleware | `app/middleware/` | Angriffsblock (SecurityFilter), Rate-Limiting (RateLimit), Authentifizierung (JWT), Autorisierung (RBAC), API-Version (ApiVersion) |
+| Middleware | `app/middleware/` | Angriffsblock (SecurityFilter), Rate-Limiting (RateLimit), Authentifizierung (JWT), Autorisierung (RBAC) |
 | Controller | 14: Dashboard/User/Role/Permission/Config/Log/Profile/Export/Import/Upload/Health/Docs (Admin) + Captcha/Auth (API v1) | Request-Parametervalidierung, Geschäftslogik-Aufruf, Antwortformatierung |
 | Geschäftsservices | `app/service/` | Wiederverwendbare Geschäftslogik (vorgesehen) |
 | Datenmodelle | `app/model/` | ORM-Zuordnung, Beziehungen, Feldver-/entschlüsselung |
@@ -91,8 +93,9 @@ Middleware-Kette:
   RateLimit ───────────► Redis-Gleitfenster-Rate-Limiting
   │ (Fehler → 429 + Retry-After-Header)
   ▼
-  ApiVersion ─────────► API-Version-Header-Prüfung, injiziert $request->apiVersion
-  │ (Fehler → 400)
+  Routenverteilung ────► Versionsnummer im URL-Präfix (/api/v1/..., /api/v2/...)
+  │                     /api/v1-Anfragen → statisch registrierte Routengruppe direkt zum Controller
+  │                     /admin-Anfragen → weiter in der unten stehenden Middleware-Kette
   ▼
   AdminAuth ──────────► JWT-Validierung, injiziert $request->adminId
   │ (Fehler → 401)
@@ -176,7 +179,7 @@ erik_system_config (Systemkonfiguration) — eigenständige Tabelle
 
 ```
 Öffentliche Endpunkte:  /api/v1/captcha/{generate|verify}
-                        /api/v1/auth/{login|register|refresh}
+                        /api/v1/auth/{login|refresh}
 
 Admin-Endpunkte:       /admin/{resource}[/{hashid}]
                        /admin/export/{excel|pdf}
@@ -200,33 +203,25 @@ Health:               /health
 
 ### 4.2 API-Versionsstrategie
 
-Die API-Version wird über den Request-Header gesteuert und **erscheint nicht im URL-Pfad**:
-
-```http
-API-Version: v1
-```
+Die API-Versionsnummer erscheint im URL-Präfix (`/api/v1/...`, `/api/v2/...`) und **nicht in einem Request-Header**. `config/route.php` registriert die Routengruppen jeder Version statisch und direkt zum jeweiligen Controller; die Versionsverteilung durchläuft keine Middleware.
 
 | Mechanismus | Beschreibung |
 |------|------|
-| Standardversion | Ohne `API-Version`-Header standardmäßig `v1` |
-| Validierung | `ApiVersion`-Middleware validiert; nicht unterstützte Versionen liefern 400 |
-| Routing | Die Hilfsfunktion `v()` löst die Controller-Klasse dynamisch anhand der Version auf |
+| URL-Präfix | Die Versionsnummer ist fest der erste Pfadabschnitt der URL: `/api/v1/...`, `/api/v2/...` |
+| Routing | Statische Registrierung von `Route::group('/api/v1', ...)` in `config/route.php`, direkt zum Controller |
 | Verzeichnis | Controller werden nach Version organisiert: `app/api/{version}/controller/` |
+| Betriebs-Endpunkte | `/api/docs`, `/health`, `/metrics` usw. tragen kein Versionspräfix |
 
 Erweiterungsbeispiel — neue v2-API:
 1. `app/api/v2/controller/AuthController.php` erstellen
-2. In der `ApiVersion`-Middleware die Konstante `SUPPORTED` um `'v2'` erweitern
-3. Routendefinitionen müssen nicht geändert werden
+2. In `config/route.php` die Routengruppe `Route::group('/api/v2', ...)` registrieren
 
 ```bash
-# v1 verwenden
-curl /api/v1/auth/login
+# v1
+curl http://localhost:8787/api/v1/auth/login
 
-# v2 verwenden
-curl -H "API-Version: v2" /api/v1/auth/login
-
-# Nicht übergeben, Standard v1
-curl /api/v1/auth/login
+# v2 (nach Hinzufügen der Version)
+curl http://localhost:8787/api/v2/auth/login
 ```
 
 ### 4.3 Rate-Limiting-Strategie
@@ -237,7 +232,6 @@ Basiert auf dem Redis-Sorted-Set-Gleitfenster-Algorithmus, ausgeführt als atoma
 |------|------|
 | Standard | 60/Minute/IP/Route |
 | POST /api/v1/auth/login | 10/Minute |
-| POST /api/v1/auth/register | 5/Minute |
 
 Bei Überschreitung wird 429 zurückgegeben; die Response-Header enthalten X-RateLimit-Limit / Remaining / Reset / Retry-After.
 
@@ -364,7 +358,7 @@ Datenfluss: Page ← DataService ← ApiService (JWT Bearer) ← HTTP ← webman
 |------|------|
 | Methodenlimit | SecurityFilter-HTTP-Methoden-Whitelist, nur GET/POST/PUT/DELETE/OPTIONS/HEAD erlaubt, nicht standardkonforme Methoden → 405 |
 | Angriffsblock | SecurityFilter-Middleware, XSS/SQL-Injection/Pfad-Traversal/Befehlsinjektion/CSRF-Erkennung und -Block |
-| Mensch-Maschine-Verifizierung | Klick-Captcha (Click Captcha), Pflicht bei Login/Registrierung |
+| Mensch-Maschine-Verifizierung | Klick-Captcha (Click Captcha), Pflicht bei Login |
 | Kontosperrung | 5 aufeinanderfolgende Fehlversuche sperren das Konto für 15 Minuten; während der Sperrung 429 |
 | Sitzungsbegrenzung | Maximal 3 gleichzeitige Tokens pro Benutzer; bei Überschreitung wird das älteste Token automatisch geblacklistet |
 | Rate-Limiting | RateLimit-Middleware, Redis-Gleitfenster, atomar per Lua |

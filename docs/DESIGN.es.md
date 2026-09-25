@@ -5,10 +5,12 @@
 > [中文](DESIGN.md) | [English](DESIGN.en.md) | [한국어](DESIGN.ko.md) | [Русский](DESIGN.ru.md) | [Deutsch](DESIGN.de.md) | [Français](DESIGN.fr.md) | [Español](DESIGN.es.md) | [Português](DESIGN.pt.md) | [हिन्दी](DESIGN.hi.md) | [العربية](DESIGN.ar.md) | [বাংলা](DESIGN.bn.md) | [Bahasa Indonesia](DESIGN.id.md) | [日本語](DESIGN.ja.md)
 
 > Para los diagramas Mermaid detallados, consulte [ARCHITECTURE.es.md](ARCHITECTURE.es.md) (se renderizan automáticamente en GitHub/GitLab/VS Code).
+>
+> Diagramas de diseño estáticos (SVG): [Arquitectura del sistema](diagrams/architecture.svg) · [Diseño de funciones](diagrams/features.svg) · [Ciclo de vida](diagrams/lifecycle.svg)
 
 ## 1. Arquitectura del sistema
 
-> **Lista de funciones**: autenticación(login/register/refresh/logout + bloqueo de cuenta + límite de sesiones) | panel(caché Redis) | CRUD de usuarios + en lote + importación | roles y permisos(RBAC) | configuración del sistema | auditoría de operaciones(8 orígenes) | archivos(subida + exportación + enmascarado) | seguridad(18 capas de defensa) | operaciones(health/metrics/docs/Docker/CI)
+> **Lista de funciones**: autenticación(login/refresh/logout + bloqueo de cuenta + límite de sesiones) | panel(caché Redis) | CRUD de usuarios + en lote + importación | roles y permisos(RBAC) | configuración del sistema | auditoría de operaciones(8 orígenes) | archivos(subida + exportación + enmascarado) | seguridad(18 capas de defensa) | operaciones(health/metrics/docs/Docker/CI)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -62,7 +64,7 @@
 | Capa | Directorio | Responsabilidad |
 |---|------|------|
 | Rutas | `config/route.php` | Asignación de URLs a controllers, enlace de middleware, rutas versionadas |
-| Middleware | `app/middleware/` | Bloqueo de ataques(SecurityFilter), límite de peticiones(RateLimit), autenticación(JWT), autorización(RBAC), versión de API(ApiVersion) |
+| Middleware | `app/middleware/` | Bloqueo de ataques(SecurityFilter), límite de peticiones(RateLimit), autenticación(JWT), autorización(RBAC) |
 | Controllers | 14: Dashboard/User/Role/Permission/Config/Log/Profile/Export/Import/Upload/Health/Docs (panel de administración) + Captcha/Auth (API v1) | Validación de parámetros de petición, lógica de negocio, formateo de respuestas |
 | Servicios de negocio | `app/service/` | Lógica de negocio reutilizable (reservado) |
 | Modelos de datos | `app/model/` | Mapeo ORM, relaciones, cifrado/descifrado de campos |
@@ -90,8 +92,9 @@ Cadena de middleware:
   RateLimit ───────────► Límite de peticiones con ventana deslizante Redis
   │ (si falla devuelve 429 + cabecera Retry-After)
   ▼
-  ApiVersion ─────────► Validación de la cabecera API-Version, inyecta $request->apiVersion
-  │ (si falla devuelve 400)
+  Distribución ───────► El número de versión está en el prefijo de URL (/api/v1/..., /api/v2/...)
+  │                     Las peticiones /api/v1 → grupo de rutas registrado estáticamente, directo al controller
+  │                     Las peticiones /admin → continúan por la cadena de middleware de abajo
   ▼
   AdminAuth ──────────► Validación JWT, inyecta $request->adminId
   │ (si falla devuelve 401)
@@ -175,7 +178,7 @@ erik_system_config (configuración del sistema) — tabla independiente
 
 ```
 Interfaces públicas:  /api/v1/captcha/{generate|verify}
-                      /api/v1/auth/{login|register|refresh}
+                      /api/v1/auth/{login|refresh}
 
 Panel de administración:  /admin/{resource}[/{hashid}]
                           /admin/export/{excel|pdf}
@@ -199,33 +202,25 @@ Health:                     /health
 
 ### 4.2 Estrategia de versiones de la API
 
-La versión de la API se controla mediante una cabecera y **no aparece en la ruta de la URL**:
-
-```http
-API-Version: v1
-```
+El número de versión de la API está en el prefijo de URL (`/api/v1/...`, `/api/v2/...`); **no se usa ninguna cabecera de petición**. `config/route.php` registra estáticamente el grupo de rutas de cada versión, que conecta directamente con los controllers de esa versión; la distribución de versiones no pasa por ningún middleware.
 
 | Mecanismo | Descripción |
 |------|------|
-| Versión por defecto | Si no se envía la cabecera `API-Version`, por defecto es `v1` |
-| Validación | El middleware `ApiVersion` valida; las versiones no soportadas devuelven 400 |
-| Rutas | La función auxiliar `v()` resuelve dinámicamente la clase del controller según la versión |
+| Prefijo de URL | El número de versión es fijo como primer segmento de la ruta: `/api/v1/...`, `/api/v2/...` |
+| Rutas | `config/route.php` registra estáticamente `Route::group('/api/v1', ...)` que conecta directo con el controller |
 | Directorios | Los controllers se organizan por versión: `app/api/{version}/controller/` |
+| Endpoints de operaciones | `/api/docs`, `/health`, `/metrics`, etc. no llevan prefijo de versión |
 
 Ejemplo de ampliación — añadir una API v2:
 1. Crear `app/api/v2/controller/AuthController.php`
-2. Añadir `'v2'` a la constante `SUPPORTED` del middleware `ApiVersion`
-3. No es necesario modificar las definiciones de rutas
+2. Registrar el grupo de rutas `Route::group('/api/v2', ...)` en `config/route.php`
 
 ```bash
-# Usar v1
-curl /api/v1/auth/login
+# v1
+curl http://localhost:8787/api/v1/auth/login
 
-# Usar v2
-curl -H "API-Version: v2" /api/v1/auth/login
-
-# Sin cabecera, por defecto v1
-curl /api/v1/auth/login
+# v2 (tras añadir la nueva versión)
+curl http://localhost:8787/api/v2/auth/login
 ```
 
 ### 4.3 Estrategia de límite de peticiones
@@ -236,7 +231,6 @@ Basada en el algoritmo de ventana deslizante con Redis Sorted Set, ejecutada con
 |------|------|
 | Por defecto | 60 peticiones/minuto/IP/ruta |
 | POST /api/v1/auth/login | 10 peticiones/minuto |
-| POST /api/v1/auth/register | 5 peticiones/minuto |
 
 Al superar el límite se devuelve 429; las cabeceras de respuesta incluyen X-RateLimit-Limit / Remaining / Reset / Retry-After.
 
@@ -363,7 +357,7 @@ Flujo de datos: Page ← DataService ← ApiService (JWT Bearer) ← HTTP ← we
 |------|------|
 | Restricción de métodos | SecurityFilter con lista blanca de métodos HTTP; solo se permiten GET/POST/PUT/DELETE/OPTIONS/HEAD; los métodos no estándar devuelven 405 |
 | Bloqueo de ataques | Middleware SecurityFilter: detección y bloqueo de XSS/inyección SQL/traversal de rutas/inyección de comandos/CSRF |
-| Verificación humano-máquina | Captcha de clic (Click Captcha), validación obligatoria en login/registro |
+| Verificación humano-máquina | Captcha de clic (Click Captcha), validación obligatoria en login |
 | Bloqueo de cuenta | 5 inicios de sesión fallidos consecutivos bloquean la cuenta 15 minutos; durante el bloqueo se devuelve 429 |
 | Límite de sesiones | Un mismo usuario puede tener como máximo 3 tokens concurrentes; al superarse, el token más antiguo se añade automáticamente a la lista negra |
 | Límite de peticiones | Middleware RateLimit, ventana deslizante Redis, atómico con Lua |

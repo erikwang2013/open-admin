@@ -5,6 +5,8 @@
 > [中文](ARCHITECTURE.md) | [English](ARCHITECTURE.en.md) | [한국어](ARCHITECTURE.ko.md) | [Русский](ARCHITECTURE.ru.md) | [Deutsch](ARCHITECTURE.de.md) | [Français](ARCHITECTURE.fr.md) | [Español](ARCHITECTURE.es.md) | [Português](ARCHITECTURE.pt.md) | [हिन्दी](ARCHITECTURE.hi.md) | [العربية](ARCHITECTURE.ar.md) | [বাংলা](ARCHITECTURE.bn.md) | [Bahasa Indonesia](ARCHITECTURE.id.md) | [日本語](ARCHITECTURE.ja.md)
 
 > निम्न Mermaid चार्ट GitHub / GitLab / VS Code में स्वचालित रूप से रेंडर होते हैं। अन्य वातावरणों के लिए [Mermaid Live Editor](https://mermaid.live/) का उपयोग करें।
+>
+> बिना रेंडरर वाले स्थिर चित्र（SVG）चाहिए तो [अनुभाग 14](#14-स्थिर-डिज़ाइन-चित्रsvg) देखें।
 
 ---
 
@@ -22,11 +24,10 @@ flowchart TB
     end
 
     subgraph "एप्लिकेशन परत (webman v2)"
-        C0["ApiVersion मिडलवेयर<br/>API-Version हेडर सत्यापन"]
         C1["AdminAuth मिडलवेयर<br/>JWT सत्यापन"]
         C2["AdminPermission मिडलवेयर<br/>RBAC अनुमति सत्यापन"]
         C3["एडमिन कंट्रोलर<br/>Dashboard / User / Role / Permission"]
-        C4["सार्वजनिक कंट्रोलर v1<br/>Captcha / Auth"]
+        C4["/api/v1 रूट ग्रुप सीधे सार्वजनिक Controller<br/>Captcha / Auth"]
         C5["Common Services<br/>Hashids / Snowflake / Encryption"]
     end
 
@@ -43,11 +44,10 @@ flowchart TB
 
     A1 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
     A2 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
-    B1 --> C0
-    C0 --> C1
+    B1 --> C1
+    B1 --> C4
     C1 --> C2
     C2 --> C3
-    C0 --> C4
     C3 --> C5
     C4 --> C5
     C3 --> D1
@@ -59,7 +59,6 @@ flowchart TB
     style A1 fill:#1677FF,color:#fff
     style A2 fill:#1677FF,color:#fff
     style B1 fill:#722ED1,color:#fff
-    style C0 fill:#EB2F96,color:#fff
     style C1 fill:#FA8C16,color:#fff
     style C2 fill:#FA8C16,color:#fff
     style C3 fill:#52C41A,color:#fff
@@ -83,7 +82,6 @@ flowchart TD
     subgraph "मिडलवेयर परत Middleware Layer"
         M_RL["RateLimit<br/>Redis स्लाइडिंग विंडो रेट लिमिट<br/>X-RateLimit रिस्पॉन्स हेडर"]
         M_SF["SecurityFilter<br/>अटैक डिटेक्शन इंटरसेप्शन<br/>XSS/SQL इंजेक्शन/पाथ ट्रैवर्सल/CSRF"]
-        M0["ApiVersion<br/>API संस्करण सत्यापन<br/>apiVersion इंजेक्ट"]
         M1["AdminAuth<br/>JWT टोकन सत्यापन<br/>adminId इंजेक्ट"]
         M2["AdminPermission<br/>RBAC प्रमाणीकरण<br/>method.path मिलान<br/>Redis 60s कैश अनुमतियाँ"]
     end
@@ -96,7 +94,7 @@ flowchart TD
         CT5["DashboardController<br/>आँकड़े/ट्रेंड/वितरण"]
         CT6["ExportController<br/>Excel/PDF निर्यात"]
         CT7["CaptchaController<br/>कैप्चा जनरेशन/सत्यापन"]
-        CT8["AuthController<br/>लॉगिन/रजिस्ट्रेशन/रीफ़्रेश"]
+        CT8["AuthController<br/>लॉगिन/रीफ़्रेश"]
     end
 
     subgraph "सेवा परत Service Layer"
@@ -119,11 +117,11 @@ flowchart TD
         D3["Redis"]
     end
 
-    R1 --> M_SF --> M_RL --> M0
-    M0 --> M1
+    R1 --> M_SF --> M_RL
+    M_RL --> M1
+    M_RL --> CT7 & CT8
     M1 --> M2
     M2 --> CT2 & CT3 & CT4 & CT5 & CT6
-    M0 --> CT7 & CT8
     CT1 -.->|extends| CT2 & CT3 & CT4 & CT5 & CT6
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> S1 & S2 & S3
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> MD1 & MD2 & MD3 & MD4 & MD5
@@ -134,7 +132,6 @@ flowchart TD
     style R1 fill:#722ED1,color:#fff
     style M_SF fill:#FF4D4F,color:#fff
     style M_RL fill:#EB2F96,color:#fff
-    style M0 fill:#EB2F96,color:#fff
     style M1 fill:#FA8C16,color:#fff
     style M2 fill:#FA8C16,color:#fff
     style CT1 fill:#1677FF,color:#fff
@@ -151,7 +148,6 @@ sequenceDiagram
     participant MW_LOC as Locale
     participant MW_SF as SecurityFilter
     participant MW_RL as RateLimit
-    participant MW0 as ApiVersion
     participant MW1 as AdminAuth
     participant MW2 as AdminPermission
     participant CTL as Controller
@@ -160,7 +156,7 @@ sequenceDiagram
     participant DB as MySQL
     participant OPLOG as OperationLog
 
-    C->>N: HTTPS रिक्वेस्ट<br/>Header: API-Version: v1, Accept-Language: zh_CN
+    C->>N: HTTPS रिक्वेस्ट /admin इंटरफ़ेस<br/>Header: Accept-Language: zh_CN
     N->>MW_LOC: फॉरवर्ड
 
     MW_LOC->>MW_LOC: locale = zh_CN (Accept-Language / ?lang=)
@@ -182,13 +178,7 @@ sequenceDiagram
         MW_RL-->>C: 429 + Retry-After
     end
 
-    MW_RL->>MW0: पास
-
-    alt असमर्थित संस्करण
-        MW0-->>C: 400 असमर्थित API संस्करण
-    else संस्करण मान्य
-        MW0->>MW0: $request->apiVersion = v1
-    end
+    MW_RL->>MW1: पास
 
     alt टोकन अनुपस्थित या अमान्य
         MW1-->>C: 401 Unauthorized
@@ -607,7 +597,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph "परत 1: ह्यूमन-मशीन सत्यापन"
-        L1["क्लिक कैप्चा<br/>Click Captcha<br/>लॉगिन/रजिस्ट्रेशन अनिवार्य"]
+        L1["क्लिक कैप्चा<br/>Click Captcha<br/>लॉगिन अनिवार्य"]
     end
 
     subgraph "परत 2: ऑपरेशन पुष्टि"
@@ -692,3 +682,17 @@ flowchart TB
     style ES fill:#1890FF,color:#fff
     style REDIS fill:#1890FF,color:#fff
 ```
+
+---
+
+## 14. स्थिर डिज़ाइन चित्र（SVG）
+
+नीचे दिए गए तीनों चित्र **हस्तलिखित SVG** हैं（कोई स्क्रिप्ट नहीं, कोई बाहरी निर्भरता नहीं, असीम रूप से स्केलेबल）, इन्हें Mermaid रेंडरर के बिना भी देखा जा सकता है, और ये दस्तावेज़ों, PPT तथा README में सीधे डालने के लिए उपयुक्त हैं:
+
+| चित्र | सामग्री | फ़ाइल |
+|---|------|------|
+| सिस्टम आर्किटेक्चर डिज़ाइन | चार-परत टोपोलॉजी: क्लाइंट परत → गेटवे परत → webman एप्लिकेशन परत → स्टोरेज परत, सुरक्षा कवच और ऑब्ज़र्वेबिलिटी सहित | [architecture.svg](diagrams/architecture.svg) |
+| फ़ीचर डिज़ाइन | 12 फ़ीचर डोमेन → कंट्रोलर प्रवेश → मुख्य क्षमताएँ, साथ में मिडलवेयर निष्पादन चेन और डेटा इंटरफ़ेस मानक | [features.svg](diagrams/features.svg) |
+| लाइफसाइकल | इंस्टॉल → स्टार्टअप → एक्सेस → सुरक्षा → प्रमाणीकरण → प्रोसेसिंग → पर्सिस्टेंस → रिस्पॉन्स ऑडिट, अपवाद शाखाओं और टोकन लाइफसाइकल सहित | [lifecycle.svg](diagrams/lifecycle.svg) |
+
+> प्रोजेक्ट पेट「शियाओ आन」सामग्री: [`public/img/pet.svg`](../public/img/pet.svg)（शुद्ध SVG, साथ ही साइट होम पेज, इंस्टॉल विज़ार्ड और ब्राउज़र आइकन के रूप में उपयोग）

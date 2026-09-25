@@ -4,7 +4,16 @@
 
 # Open Admin (open-admin)
 
-Système de panneau d'administration full-stack basé sur webman v2 + Flutter.
+<p align="center">
+  <img src="public/img/pet.svg" width="150" height="200" alt="Xiao An — mascotte du projet open-admin">
+</p>
+
+Système de panneau d'administration full-stack basé sur **webman v2 + Flutter** : authentification et permissions RBAC, 18 couches de défense en profondeur, observabilité Prometheus, clients multi-plateformes (Flutter Web / HarmonyOS).
+
+> La mascotte du projet, « **Xiao An** », est un rover gardien en forme de bouclier, posté aux deux points de contrôle « protection » et « authentification » de la chaîne de middlewares.
+> Ressource [`public/img/pet.svg`](public/img/pet.svg) : SVG pur (sans script, sans dépendance externe, compatible fond sombre et `prefers-reduced-motion`), également utilisé comme icône du site.
+>
+> Diagrammes : [Architecture système](docs/diagrams/architecture.svg) · [Conception fonctionnelle](docs/diagrams/features.svg) · [Cycle de vie](docs/diagrams/lifecycle.svg)
 
 > [Diagrammes d'architecture](docs/ARCHITECTURE.fr.md) | [Document de conception](docs/DESIGN.fr.md) | [Architecture de sécurité](docs/SECURITY.fr.md) | [Référence API](docs/API.fr.md)
 
@@ -23,8 +32,38 @@ Système de panneau d'administration full-stack basé sur webman v2 + Flutter.
 | 📋 Audit des opérations | Consultation des journaux + détection de la source | Reconnaissance automatique de 8 plates-formes |
 | 📁 Gestion des fichiers | Upload / export Excel / export PDF | Masquage automatique des données sensibles |
 | 🛡 Protection de sécurité | 18 couches de défense en profondeur | XSS / injection SQL / traversée de chemin / injection de commandes / CSRF / limitation de débit / CSP... |
-| 🏥 Exploitation | Health check / metrics / documentation API / security.txt | Prometheus + OpenAPI 3.0 + documentation interactive hg/apidoc |
+| 🏥 Exploitation | Health check / metrics / documentation API / security.txt | Prometheus + OpenAPI 3.0 + documentation interactive erikwang2013/apidoc-php |
 | 🌐 Internationalisation | Bascule chinois / anglais | En-tête `Accept-Language` / paramètre `?lang=` |
+
+## Mascotte du projet · Xiao An
+
+<table>
+<tr>
+<td width="170"><img src="public/img/pet.svg" width="150" height="200" alt="Xiao An"></td>
+<td>
+
+**Xiao An** (小安) est la mascotte du projet open-admin, tirée de « **安**全 » (sécurité) et de « 管理后**台** » (panneau d'administration) — un rover gardien en forme de bouclier.
+
+- **Corps en bouclier** — correspond aux 18 couches de défense en profondeur ; l'antenne sommitale reste allumée, symbolisant le service résident en mémoire (webman/workerman)
+- **Double pupille à l'écran** — cligne des yeux à intervalle régulier ; elle surveille chaque requête, et surveille aussi la chaîne de middlewares
+- **Badge de validation sur la poitrine** — la coche reste allumée, représentant la validation de permission `method.path` réussie
+
+**Où apparaît-elle**
+
+| Emplacement | Forme |
+|------|------|
+| Page d'accueil `GET /` | Image principale + présentation du projet et navigation des entrées ([`app/view/index/view.html`](app/view/index/view.html)) |
+| Assistant d'installation `/install` | Image d'en-tête de l'assistant en trois étapes (`InstallController::layout()`) |
+| Onglet du navigateur | Icône du site `rel="icon" type="image/svg+xml"` |
+| Cette documentation et les diagrammes | Avatar du projet + carte de la mascotte en bas à droite des diagrammes d'architecture |
+
+> Source unique de la ressource : [`public/img/pet.svg`](public/img/pet.svg). La modifier met simultanément à jour tous les emplacements ci-dessus.
+
+</td>
+</tr>
+</table>
+
+**Envie de la dessiner vous-même ?** Spécifications de l'icône : couleur principale `#1677FF`, antenne chaude `#FA8C16`, vert de validation `#52C41A` ; toile `240 × 320`, bouclier centré, taille minimale utilisable 48 px.
 
 ## Pile technique
 
@@ -72,7 +111,7 @@ open-admin/
 │   │   ├── DocsController.php      # Documentation OpenAPI
 │   │   └── BaseController.php      # Contrôleur de base
 │   ├── api/
-│   │   └── v1/controller/          # Contrôleurs API v1 (version contrôlée par l'en-tête API-Version)
+│   │   └── v1/controller/          # Contrôleurs API v1 (la version est portée par le préfixe d'URL /api/v1)
 │   │       ├── CaptchaController.php # Captcha à clic
 │   │       └── AuthController.php    # Connexion / rafraîchissement du jeton
 │   ├── common/                 # Classes d'outils communes
@@ -81,29 +120,67 @@ open-admin/
 │   │   └── EncryptionService.php # Chiffrement/déchiffrement des données + masquage
 │   ├── middleware/             # Middleware
 │   │   ├── Cors.php            # CORS
-│   │   ├── SecurityFilter.php  # Blocage de la détection d'attaques (limitation des méthodes HTTP/XSS/injection SQL/traversée de chemin/injection de commandes/CSRF)
 │   │   ├── RateLimit.php       # Limitation de débit Redis (fenêtre glissante + en-têtes de réponse)
-│   │   ├── ApiVersion.php      # Validation de la version API
 │   │   ├── AdminAuth.php       # Authentification JWT + liste noire
 │   │   ├── AdminPermission.php # Validation des permissions RBAC
 │   │   └── OperationLog.php    # Enregistrement automatique des journaux d'opérations (avec détection de la source)
-│   └── model/                  # Modèles de données
+│   ├── model/                  # Modèles de données
+│   ├── view/index/view.html    # Modèle de la page d'accueil du site (GET /, mascotte + navigation)
+│   ├── queue/                  # Tâches de file d'attente
+│   └── process/                # Processus (Http, Monitor)
 ├── apps/
 │   ├── flutter/                # Panneau d'administration Web Flutter (style PC)
-│   │   └── lib/app/
-│   │       ├── pages/          # 5 pages complètes (tableau de bord/utilisateurs/rôles/config/journaux/espace personnel)
-│   │       ├── services/       # ApiService (intercepteur JWT) + AuthService (persistance du jeton)
-│   │       └── layouts/        # Mise en page responsive du panneau d'administration (barre latérale + barre supérieure + zone de contenu)
+│   │   ├── lib/app/
+│   │   │   ├── pages/          # 6 pages complètes (tableau de bord/utilisateurs/rôles/config/journaux/espace personnel)
+│   │   │   ├── services/       # ApiService (intercepteur JWT) + AuthService (persistance du jeton)
+│   │   │   ├── layouts/        # Mise en page responsive du panneau d'administration (barre latérale + barre supérieure + zone de contenu)
+│   │   │   └── theme/          # Double thème Material 3
+│   │   └── web/index.html      # Entrée Web (titre/description/icône du site)
 │   └── harmonyos/              # Client natif HarmonyOS (rafraîchissement transparent du jeton)
 ├── config/                     # Fichiers de configuration (avec commentaires en chinois)
 │   ├── route.php               # Routage + stratégie de version API
-│   ├── middleware.php           # Enregistrement des middlewares globaux
+│   ├── middleware.php          # Enregistrement des middlewares globaux
 │   └── ...                     # Configurations des composants
-├── database/install.sql        # Script d'installation SQL (avec données de permissions initiales)
-├── public/                     # Point d'entrée public
+├── database/                   # Scripts de base de données
+│   ├── install.sql             # Script d'installation complet (avec données de permissions initiales)
+│   └── backup/                 # Scripts de sauvegarde et de restauration
+├── docs/                       # Documentation
+│   ├── ARCHITECTURE.md         # Diagrammes d'architecture (Mermaid)
+│   ├── DESIGN.md               # Document de conception
+│   ├── SECURITY.md             # Conception de l'architecture de sécurité
+│   ├── API.md                  # Référence de l'API
+│   ├── diagrams/               # Répertoire des diagrammes
+│   │   ├── architecture.svg    # Conception de l'architecture système (SVG)
+│   │   ├── features.svg        # Conception fonctionnelle (SVG)
+│   │   ├── lifecycle.svg       # Cycle de vie (SVG)
+│   │   └── 01..12-*.md         # Diagrammes décomposés (Mermaid, traduits en 12 langues)
+│   └── translations/           # Documentation multilingue (12 langues × README/CLAUDE)
+├── public/                     # Point d'entrée public (racine Web)
+│   ├── img/pet.svg             # Mascotte du projet « Xiao An » (SVG, également icône du site)
+│   └── favicon.ico             # Repli .ico pour les navigateurs anciens
+├── resource/translations/      # Paquets de langue à l'exécution (zh_CN / en)
+├── tests/                      # Tests PHPUnit
 ├── runtime/                    # Fichiers d'exécution
 └── vendor/                     # Dépendances Composer
 ```
+
+## Conception de l'architecture et diagrammes
+
+Les trois diagrammes sont des **SVG entièrement écrits à la main** (sans script, sans dépendance à une police externe, zoom infini) : consultables directement dans GitHub / un navigateur, et insérables dans des diapositives ou de la documentation :
+
+| Diagramme | Contenu | Fichier |
+|---|------|------|
+| Conception de l'architecture système | Topologie à quatre couches : couche client → couche passerelle → couche application webman (chaîne de middlewares / contrôleurs / services communs) → couche de stockage, avec sécurité et observabilité sur la droite | [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg) |
+| Conception fonctionnelle | 12 domaines fonctionnels → points d'entrée des contrôleurs → capacités clés, en bas la chaîne d'exécution des middlewares et les spécifications d'interface de données | [`docs/diagrams/features.svg`](docs/diagrams/features.svg) |
+| Cycle de vie | Installation → démarrage → accès → protection → authentification → traitement → persistance → audit de la réponse, avec les branches d'exception et le cycle de vie des jetons | [`docs/diagrams/lifecycle.svg`](docs/diagrams/lifecycle.svg) |
+
+<img src="docs/diagrams/architecture.svg" width="1100" alt="Diagramme de conception de l'architecture système open-admin">
+
+<img src="docs/diagrams/features.svg" width="1100" alt="Diagramme de conception fonctionnelle open-admin">
+
+<img src="docs/diagrams/lifecycle.svg" width="1100" alt="Diagramme du cycle de vie open-admin">
+
+> Pour des diagrammes éditables au niveau source, voir [`docs/ARCHITECTURE.fr.md`](docs/ARCHITECTURE.fr.md) et [`docs/diagrams/`](docs/diagrams/) (Mermaid, à coller dans [Mermaid Live](https://mermaid.live/) pour édition).
 
 ## Prérequis
 
@@ -222,7 +299,7 @@ La référence API complète (format de réponse unifié, codes d'erreur, détai
 
 - **Format de réponse unifié** : `{ "code": 0, "message": "success", "data": {...} }`, `code=0` signifie succès
 - **Codes d'erreur** : `400` erreur de paramètre / `401` non connecté / `403` accès refusé / `404` introuvable / `422` échec de validation / `429` limitation de débit / `500` erreur serveur
-- **Version API** : contrôlée par l'en-tête `API-Version: v1` (v1 par défaut si absent), non visible dans l'URL
+- **Version API** : le numéro de version est porté par le préfixe d'URL (par exemple `/api/v1/...`), et non par un en-tête de requête
 - **Authentification** : `Authorization: Bearer <token>` ; access_token valide 2 heures, refresh_token 14 jours
 - **Traitement des ID** : les ID des requêtes/réponses sont des chaînes chiffrées hashids, les ID réels de la base de données ne sont jamais exposés
 

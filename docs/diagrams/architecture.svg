@@ -1,0 +1,223 @@
+<!--
+  Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+  open-admin · 系统架构设计图（分层拓扑）
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 940" width="1240" height="940"
+     role="img" aria-label="open-admin 系统架构设计图">
+  <defs>
+    <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#A9B8CD"/>
+    </marker>
+    <marker id="arwBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1677FF"/>
+    </marker>
+    <linearGradient id="shieldGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6FB4FF"/>
+      <stop offset="0.42" stop-color="#1677FF"/>
+      <stop offset="1" stop-color="#0B3E9E"/>
+    </linearGradient>
+    <style>
+      text { font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Segoe UI", sans-serif; }
+      .t1 { font-size: 27px; font-weight: 700; fill: #16233A; }
+      .t2 { font-size: 13.5px; fill: #6B7B93; }
+      .bandName { font-size: 14px; font-weight: 700; fill: #16233A; }
+      .bandHint { font-size: 11.5px; fill: #9AA9BF; }
+      .nTitle { font-size: 13.5px; font-weight: 600; fill: #16233A; }
+      .nSub { font-size: 11px; fill: #6B7B93; }
+      .chipT { font-size: 12px; font-weight: 600; fill: #16233A; }
+      .chipS { font-size: 10.5px; fill: #6B7B93; }
+      .railT { font-size: 13px; font-weight: 700; fill: #16233A; }
+      .railI { font-size: 11.5px; fill: #5A6B84; }
+      .flow { font-size: 11px; fill: #8697AE; }
+      .band { fill: #FFFFFF; stroke: #E1E7F0; stroke-width: 1.5; }
+      .railCard { fill: #FFFFFF; stroke: #E1E7F0; stroke-width: 1.5; }
+      .node { stroke-width: 1.4; }
+      .ctr { text-anchor: middle; }
+    </style>
+  </defs>
+
+  <rect width="1240" height="940" fill="#F6F8FC"/>
+
+  <!-- 标题 -->
+  <text class="t1" x="40" y="56">open-admin · 系统架构设计</text>
+  <text class="t2" x="40" y="82">Flutter Web / HarmonyOS → Nginx → webman v2 中间件链 → 控制器 → MySQL / Redis / Elasticsearch</text>
+
+  <g font-size="11.5" font-weight="600">
+    <rect x="944" y="38" width="76" height="26" rx="13" fill="#EAF2FF" stroke="#BEDAFF"/>
+    <text x="982" y="55" class="ctr" fill="#1677FF">webman v2</text>
+    <rect x="1028" y="38" width="70" height="26" rx="13" fill="#F2ECFF" stroke="#D9C7FF"/>
+    <text x="1063" y="55" class="ctr" fill="#722ED1">PHP 8.3+</text>
+    <rect x="1106" y="38" width="94" height="26" rx="13" fill="#EAF7E8" stroke="#C6E8BE"/>
+    <text x="1153" y="55" class="ctr" fill="#389E0D">erik_ 表前缀</text>
+  </g>
+
+  <!-- ========== 客户端层 ========== -->
+  <rect class="band" x="40" y="112" width="880" height="104" rx="16"/>
+  <rect x="40" y="140" width="4" height="20" rx="2" fill="#1677FF"/>
+  <text class="bandName" x="56" y="156">客户端层</text>
+  <text class="bandHint" x="148" y="156">多端同源 · 统一 HTTP + JSON + JWT</text>
+
+  <rect class="node" x="64" y="168" width="396" height="36" rx="10" fill="#EAF2FF" stroke="#BEDAFF"/>
+  <text class="nTitle" x="84" y="184">Flutter Web 管理后台</text>
+  <text class="nSub" x="84" y="199">PC 风格 · 侧边栏 + 顶栏 + 内容区 · GetX + Dio</text>
+
+  <rect class="node" x="484" y="168" width="396" height="36" rx="10" fill="#EAF2FF" stroke="#BEDAFF"/>
+  <text class="nTitle" x="504" y="184">HarmonyOS ArkTS 客户端</text>
+  <text class="nSub" x="504" y="199">手机 / 平板 / 2in1 · 401 无感刷新 Token</text>
+
+  <!-- 箭头：客户端 → 网关 -->
+  <path d="M 480 216 L 480 246" stroke="#A9B8CD" stroke-width="2" fill="none" marker-end="url(#arw)"/>
+  <text class="flow" x="496" y="237">HTTPS / JSON · Authorization: Bearer &lt;JWT&gt;</text>
+
+  <!-- ========== 网关层 ========== -->
+  <rect class="band" x="40" y="248" width="880" height="96" rx="16"/>
+  <rect x="40" y="274" width="4" height="20" rx="2" fill="#722ED1"/>
+  <text class="bandName" x="56" y="290">网关层</text>
+  <text class="bandHint" x="120" y="290">TLS 终止 · 反向代理 · 静态资源</text>
+
+  <rect class="node" x="64" y="302" width="816" height="30" rx="10" fill="#F4EEFF" stroke="#D9C7FF"/>
+  <text class="nTitle" x="84" y="313" fill="#531DAB" font-size="12.5">Nginx</text>
+  <text class="nSub" x="84" y="327">nginx:alpine · 80 / 443 · HTTPS · Gzip · 安全响应头加固（docs/nginx-security.conf）</text>
+
+  <!-- 箭头：网关 → 应用 -->
+  <path d="M 480 344 L 480 374" stroke="#1677FF" stroke-width="2" fill="none" marker-end="url(#arwBlue)"/>
+  <text class="flow" x="496" y="364">路由匹配 config/route.php</text>
+
+  <!-- ========== 应用层 ========== -->
+  <rect class="band" x="40" y="376" width="880" height="364" rx="16" stroke="#BEDAFF"/>
+  <rect x="40" y="402" width="4" height="20" rx="2" fill="#52C41A"/>
+  <text class="bandName" x="56" y="418" fill="#1677FF">应用层 · webman v2</text>
+  <text class="bandHint" x="212" y="418">workerman 常驻内存进程 · 无 FPM 冷启动</text>
+
+  <!-- Row A 全局中间件链 -->
+  <text class="chipS" x="64" y="440" font-size="11">全局中间件链</text>
+  <rect class="node" x="64" y="448" width="192" height="46" rx="10" fill="#F7F9FC" stroke="#DCE4EF"/>
+  <text class="chipT ctr" x="160" y="468">Cors</text>
+  <text class="chipS ctr" x="160" y="484">跨域白名单 + 预检</text>
+  <rect class="node" x="272" y="448" width="192" height="46" rx="10" fill="#F7F9FC" stroke="#DCE4EF"/>
+  <text class="chipT ctr" x="368" y="468">Locale</text>
+  <text class="chipS ctr" x="368" y="484">Accept-Language / ?lang=</text>
+  <rect class="node" x="480" y="448" width="192" height="46" rx="10" fill="#FFF7E6" stroke="#FFD591"/>
+  <text class="chipT ctr" x="576" y="468" fill="#AD4E00">SecurityFilter</text>
+  <text class="chipS ctr" x="576" y="484">31 种攻击检测器</text>
+  <rect class="node" x="688" y="448" width="192" height="46" rx="10" fill="#FFF7E6" stroke="#FFD591"/>
+  <text class="chipT ctr" x="784" y="468" fill="#AD4E00">RateLimit</text>
+  <text class="chipS ctr" x="784" y="484">Redis Lua 滑动窗口</text>
+  <path d="M 256 471 L 270 471" stroke="#C4D0E0" stroke-width="2" marker-end="url(#arw)"/>
+  <path d="M 464 471 L 478 471" stroke="#C4D0E0" stroke-width="2" marker-end="url(#arw)"/>
+  <path d="M 672 471 L 686 471" stroke="#C4D0E0" stroke-width="2" marker-end="url(#arw)"/>
+
+  <!-- Row B 鉴权链 -->
+  <text class="chipS" x="64" y="516" font-size="11">/admin 路由组鉴权链</text>
+  <rect class="node" x="64" y="524" width="261" height="46" rx="10" fill="#FFF2E8" stroke="#FFBB96"/>
+  <text class="chipT ctr" x="194" y="544" fill="#AD4E00">AdminAuth</text>
+  <text class="chipS ctr" x="194" y="560">JWT 验签 + Token 黑名单</text>
+  <rect class="node" x="341" y="524" width="261" height="46" rx="10" fill="#FFF2E8" stroke="#FFBB96"/>
+  <text class="chipT ctr" x="471" y="544" fill="#AD4E00">AdminPermission</text>
+  <text class="chipS ctr" x="471" y="560">RBAC method.path · Redis 60s 缓存</text>
+  <rect class="node" x="618" y="524" width="262" height="46" rx="10" fill="#FFF2E8" stroke="#FFBB96"/>
+  <text class="chipT ctr" x="749" y="544" fill="#AD4E00">OperationLog</text>
+  <text class="chipS ctr" x="749" y="560">8 平台来源端自动检测</text>
+  <path d="M 327 547 L 339 547" stroke="#C4D0E0" stroke-width="2" marker-end="url(#arw)"/>
+  <path d="M 604 547 L 616 547" stroke="#C4D0E0" stroke-width="2" marker-end="url(#arw)"/>
+
+  <!-- Row C 控制器 -->
+  <rect class="node" x="64" y="586" width="524" height="78" rx="12" fill="#F6FFED" stroke="#B7EB8F"/>
+  <text class="chipT" x="82" y="608" fill="#389E0D">管理端控制器 × 15 · app/admin/controller</text>
+  <text class="chipS" x="82" y="628">Dashboard · User · Role · Permission · Config · Log · Profile · Install</text>
+  <text class="chipS" x="82" y="646">Export · Import · Upload · Health · Docs · Metrics · Base</text>
+  <rect class="node" x="604" y="586" width="276" height="78" rx="12" fill="#F6FFED" stroke="#B7EB8F"/>
+  <text class="chipT" x="622" y="608" fill="#389E0D">API v1 · app/api/v1</text>
+  <text class="chipS" x="622" y="628">CaptchaController — 点击验证码</text>
+  <text class="chipS" x="622" y="646">AuthController — 登录 / 注册 / 刷新</text>
+
+  <!-- Row D 公共服务 -->
+  <line x1="64" y1="682" x2="880" y2="682" stroke="#E1E7F0" stroke-width="1"/>
+  <text class="chipS" x="64" y="702" font-size="11">公共服务 · app/common</text>
+  <rect class="node" x="64" y="710" width="192" height="30" rx="8" fill="#F7F9FC" stroke="#DCE4EF"/>
+  <text class="chipS ctr" x="160" y="722" font-size="11.5" fill="#16233A" font-weight="600">HashidsService</text>
+  <text class="chipS ctr" x="160" y="735">API 层 ID 加解密</text>
+  <rect class="node" x="272" y="710" width="192" height="30" rx="8" fill="#F7F9FC" stroke="#DCE4EF"/>
+  <text class="chipS ctr" x="368" y="722" font-size="11.5" fill="#16233A" font-weight="600">SnowflakeService</text>
+  <text class="chipS ctr" x="368" y="735">BIGINT 分布式主键</text>
+  <rect class="node" x="480" y="710" width="192" height="30" rx="8" fill="#F7F9FC" stroke="#DCE4EF"/>
+  <text class="chipS ctr" x="576" y="722" font-size="11.5" fill="#16233A" font-weight="600">EncryptionService</text>
+  <text class="chipS ctr" x="576" y="735">传输加密 + 数据脱敏</text>
+  <rect class="node" x="688" y="710" width="192" height="30" rx="8" fill="#F7F9FC" stroke="#DCE4EF"/>
+  <text class="chipS ctr" x="784" y="722" font-size="11.5" fill="#16233A" font-weight="600">encryptable · scout</text>
+  <text class="chipS ctr" x="784" y="735">字段加解密 · ES 同步</text>
+
+  <!-- 箭头：应用 → 存储 -->
+  <path d="M 480 740 L 480 770" stroke="#1677FF" stroke-width="2" fill="none" marker-end="url(#arwBlue)"/>
+  <text class="flow" x="496" y="760">Model 层 · 读写</text>
+
+  <!-- ========== 存储层 ========== -->
+  <rect class="band" x="40" y="772" width="880" height="128" rx="16"/>
+  <rect x="40" y="798" width="4" height="20" rx="2" fill="#1890FF"/>
+  <text class="bandName" x="56" y="814">存储层</text>
+  <text class="bandHint" x="120" y="814">三处存储各司其职 · 主键统一由 Snowflake 生成</text>
+
+  <rect class="node" x="64" y="830" width="256" height="52" rx="12" fill="#E6F4FF" stroke="#91CAFF"/>
+  <text class="chipT" x="84" y="851">MySQL 8.0 · 主存储</text>
+  <text class="chipS" x="84" y="869">erik_ 前缀 · BIGINT 非自增 · 软删除</text>
+  <rect class="node" x="344" y="830" width="256" height="52" rx="12" fill="#E6F4FF" stroke="#91CAFF"/>
+  <text class="chipT" x="364" y="851">Redis 7 · 缓存与会话</text>
+  <text class="chipS" x="364" y="869">限流 · 验证码 · 权限缓存 · 黑名单</text>
+  <rect class="node" x="624" y="830" width="256" height="52" rx="12" fill="#E6F4FF" stroke="#91CAFF"/>
+  <text class="chipT" x="644" y="851">Elasticsearch 8 · 检索</text>
+  <text class="chipS" x="644" y="869">webman-scout 同步与全文查询</text>
+
+  <!-- ========== 右栏 ========== -->
+  <rect class="railCard" x="948" y="112" width="252" height="190" rx="16"/>
+  <text class="railT" x="968" y="142">安全防护 · 18 层纵深</text>
+  <g class="railI">
+    <text x="968" y="170">· 31 种攻击检测器（XSS / SQLi / SSRF…）</text>
+    <text x="968" y="192">· CSP + 安全响应头注入</text>
+    <text x="968" y="214">· 账号锁定：5 次失败锁 15 分钟</text>
+    <text x="968" y="236">· 并发会话上限 3，超出踢最旧</text>
+    <text x="968" y="258">· 限流默认 60 次/分钟/IP/路由</text>
+    <text x="968" y="280">· security.txt（RFC 9116）</text>
+  </g>
+
+  <rect class="railCard" x="948" y="318" width="252" height="190" rx="16"/>
+  <text class="railT" x="968" y="348">可观测与部署</text>
+  <g class="railI">
+    <text x="968" y="376">· GET /health 健康检查</text>
+    <text x="968" y="398">· GET /metrics Prometheus 指标 ×5</text>
+    <text x="968" y="420">· GET /api/docs OpenAPI 文档</text>
+    <text x="968" y="442">· Docker Compose：5 个服务</text>
+    <text x="968" y="464">· GitHub Actions：php -l / PHPUnit</text>
+    <text x="968" y="486">· 备份：mysqldump + gzip（30 天）</text>
+  </g>
+
+  <!-- 项目宠物 -->
+  <rect class="railCard" x="948" y="524" width="252" height="376" rx="16" stroke="#BEDAFF"/>
+  <text class="railT" x="968" y="554">项目宠物 · 小安</text>
+  <g transform="translate(1002 568.4) scale(0.6)">
+    <circle cx="120" cy="28" r="7" fill="#FA8C16"/>
+    <line x1="120" y1="48" x2="120" y2="30" stroke="#1677FF" stroke-width="5" stroke-linecap="round"/>
+    <rect x="12" y="158" width="38" height="70" rx="19" fill="url(#shieldGrad)"/>
+    <rect x="190" y="158" width="38" height="70" rx="19" fill="url(#shieldGrad)"/>
+    <path d="M 60 46 H 180 A 26 26 0 0 1 206 72 V 160 C 206 210 170 244 120 272
+             C 70 244 34 210 34 160 V 72 A 26 26 0 0 1 60 46 Z"
+          fill="url(#shieldGrad)"/>
+    <rect x="68" y="104" width="104" height="80" rx="24" fill="#0A1B3D"/>
+    <rect x="93" y="132" width="16" height="24" rx="8" fill="#7CD4FF"/>
+    <rect x="131" y="132" width="16" height="24" rx="8" fill="#7CD4FF"/>
+    <path d="M 106 160 Q 120 171 134 160" fill="none" stroke="#4C9AFF" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="120" cy="216" r="23" fill="#52C41A"/>
+    <path d="M 109 216 l 8 8 l 15 -16" fill="none" stroke="#FFFFFF" stroke-width="5"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="1074" y="756" class="ctr" font-size="16" font-weight="700" fill="#16233A">小安</text>
+  <text x="1074" y="776" class="ctr" font-size="11" fill="#6B7B93">open-admin 项目宠物</text>
+  <text x="968" y="806" font-size="11" fill="#5A6B84">盾形守卫机器人，胸前校验徽章常亮。</text>
+  <text x="968" y="826" font-size="11" fill="#5A6B84">它守着中间件链，你只管写业务。</text>
+  <text x="968" y="856" font-size="10.5" fill="#9AA9BF">点击验证码由它把门 · 18 层防御由它值班</text>
+  <text x="968" y="878" font-size="10.5" fill="#9AA9BF">素材：public/img/pet.svg</text>
+
+  <!-- 页脚 -->
+  <text class="t2" x="40" y="926" font-size="11.5">
+    守护者：小安 · 项目宠物 ｜ Copyright (c) 2026 erik &lt;erik@erik.xyz&gt; — https://erik.xyz
+  </text>
+</svg>

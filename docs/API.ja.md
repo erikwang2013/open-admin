@@ -6,13 +6,13 @@
 
 ## 1. 概要
 
-开放管理后台 (open-admin) は webman v2 をベースに構築された RESTful JSON API を提供します。すべての管理側インターフェースには JWT 認証と RBAC 権限検証が必要で、公開インターフェースは API バージョンヘッダーによってバージョン化されたコントローラーにルーティングされます。
+开放管理后台 (open-admin) は webman v2 をベースに構築された RESTful JSON API を提供します。すべての管理側インターフェースには JWT 認証と RBAC 権限検証が必要で、公開インターフェースのバージョン番号は URL プレフィックスに含まれ（例 `/api/v1/auth/login`）、対応するバージョン化コントローラーにルーティングされます。
 
 - **ベース URL**: `http://localhost:8787`
-- **API バージョン**: リクエストヘッダー `API-Version: v1` で制御（未指定時はデフォルト v1）
+- **API バージョン**: バージョン番号は URL プレフィックスに含まれます（`/api/v1/...`、`/api/v2/...`）、リクエストヘッダーは使用しません
 - **言語**: `Accept-Language` ヘッダーまたは `?lang=zh_CN|en` パラメータで切り替え（デフォルト zh_CN）、Locale ミドルウェアが自動検出
 
-> **エンドポイント一覧**: 認証(5) | ダッシュボード(1) | ユーザー(7) | ロール(4) | 権限(4) | 設定(4) | ログ(1) | 個人センター(3) | インポート・エクスポート(3) | アップロード(1) | 運用(4: health/metrics/docs/security.txt) | 全 37 エンドポイント
+> **エンドポイント一覧**: 認証(4) | ダッシュボード(1) | ユーザー(7) | ロール(4) | 権限(4) | 設定(4) | ログ(1) | 個人センター(3) | インポート・エクスポート(3) | アップロード(1) | 運用(4: health/metrics/docs/security.txt) | 全 36 エンドポイント
 - **認証**: `Authorization: Bearer <token>`（JWT）
 - **レスポンス形式**: `{ "code": 0, "message": "success", "data": {...} }`
 - **ドキュメントエンドポイント**: `GET /api/docs` が OpenAPI 3.0 JSON 仕様を返す
@@ -44,7 +44,6 @@
 
 ## 3. 公開エンドポイント
 
-すべての公開エンドポイントは `/api` グループにマウントされ、`ApiVersion` ミドルウェアが `API-Version` ヘッダーに応じて対応するバージョン化コントローラー（例: `app\api\v1\controller\AuthController`）へ振り分けます。
 
 ### 3.1 ヘルスチェック
 
@@ -91,7 +90,6 @@ POST /api/v1/captcha/generate
 ```
 
 - **認証**: 不要
-- **リクエストヘッダー**: `API-Version: v1`（必須）
 - **レート制限**: グローバルデフォルト (60回/分)
 
 **リクエストボディ**:
@@ -184,7 +182,6 @@ POST /api/v1/captcha/verify
 ```
 
 - **認証**: 不要
-- **リクエストヘッダー**: `API-Version: v1`（必須）
 - **レート制限**: グローバルデフォルト (60回/分)
 
 **リクエストボディ** — クリック型 (`type: "click"`):
@@ -250,7 +247,6 @@ POST /api/v1/auth/login
 ```
 
 - **認証**: 不要
-- **リクエストヘッダー**: `API-Version: v1`（必須）
 - **レート制限**: 10 回/分（IP + パス単位）
 
 **リクエストボディ**:
@@ -320,61 +316,13 @@ POST /api/v1/auth/login
 - 403: アカウントが無効化されている
 - 429: アカウントがロックされています。15分後に再試行してください（連続5回のログイン失敗で発動）
 
-### 3.6 登録
-
-```
-POST /api/v1/auth/register
-```
-
-- **認証**: 不要
-- **リクエストヘッダー**: `API-Version: v1`（必須）
-- **レート制限**: 5 回/分（IP + パス単位）
-
-**リクエストボディ**:
-```json
-{
-  "username": "newuser",
-  "password": "djGYscnyS5V6mW6KyDFjB8vGwjBBnB3Odpyxu8LY...",
-  "real_name": "新用户",
-  "captcha_key": "abc123def456"
-}
-```
-
-| フィールド | 型 | 必須 | 検証ルール | 説明 |
-|------|------|------|---------|------|
-| username | string | はい | min:3, max:50 | ユーザー名（一意） |
-| password | string | はい | min:6, max:32 (平文) | AES-256-CBC-HMAC 暗号化後 Base64 エンコード |
-| real_name | string | はい | max:50 | 氏名 |
-| captcha_key | string | はい | | キャプチャ key（事前に `/api/v1/captcha/verify` で検証が必要） |
-
-**レスポンス例**:
-```json
-{
-  "code": 0,
-  "message": "注册成功",
-  "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 7200,
-    "user": {
-      "id": "e5f6g7h8",
-      "username": "newuser",
-      "real_name": "新用户"
-    }
-  }
-}
-```
-
-登録成功後、直接 JWT トークンが返され、ユーザー状態はデフォルトで有効（status=1）です。
-
-### 3.7 トークン更新
+### 3.6 トークン更新
 
 ```
 POST /api/v1/auth/refresh
 ```
 
 - **認証**: 不要
-- **リクエストヘッダー**: `API-Version: v1`（必須）
 - **レート制限**: グローバルデフォルト (60回/分)
 
 **リクエストボディ**:
@@ -386,7 +334,7 @@ POST /api/v1/auth/refresh
 
 | フィールド | 型 | 必須 | 説明 |
 |------|------|------|------|
-| refresh_token | string | はい | ログイン/登録時に取得した refresh_token |
+| refresh_token | string | はい | ログイン時に取得した refresh_token |
 
 **レスポンス例**:
 ```json
@@ -407,7 +355,7 @@ POST /api/v1/auth/refresh
 - 422: リフレッシュトークンがありません
 - 401: リフレッシュトークンが無効または期限切れ
 
-### 3.8 Prometheus 監視メトリクス
+### 3.7 Prometheus 監視メトリクス
 
 ```
 GET /metrics
@@ -1657,7 +1605,6 @@ POST /admin/upload
 レート制限の詳細:
 - デフォルトのグローバル制限: 60 回/分 / IP+パス
 - ログインエンドポイント `/api/v1/auth/login`: 10 回/分
-- 登録エンドポイント `/api/v1/auth/register`: 5 回/分
 - Redis の原子化スライディングウィンドウアルゴリズム（Lua ZSET）を使用し、TOCTOU 競合を回避
 - Redis が利用できない場合は fail open（通過させる）、リクエストをブロックしない
 
@@ -1667,14 +1614,12 @@ POST /admin/upload
 
 ```
 1. 客户端请求 POST /api/v1/captcha/generate
-   (请求头: API-Version: v1)
     ↓
    服务端返回: key + type(click|slider|rotate) + base64 图片 + extra(类型相关数据)
    
 2. 用户交互完成验证码操作（点击/拖拽/旋转），客户端收集答案
    
 3. 客户端请求 POST /api/v1/captcha/verify
-   (请求头: API-Version: v1, Content-Type: application/json)
    请求体: { key, type, clicks }
    - type=click:  clicks = [{x, y}, ...]        // 坐标数组
    - type=slider: clicks = 120                   // X 偏移量
@@ -1689,7 +1634,6 @@ POST /admin/upload
    服务端返回: { valid: true/false }
 
 4. 客户端请求 POST /api/v1/auth/login
-   (请求头: API-Version: v1, Content-Type: application/json)
    请求体: { username, password(加密), captcha_key }
     ↓
    服务端:
@@ -1765,7 +1709,6 @@ Cors（跨域预处理 + 响应头）
   → Locale（Accept-Language 语言检测 / ?lang=zh_CN|en）
   → SecurityFilter（HTTP方法限制/请求体大小/Content-Type校验/XSS/SQL注入/路径遍历/命令注入/CSRF 攻击拦截）
   → RateLimit（Redis 滑动窗口限流 + 账号锁定：5次登录失败锁定15分钟）
-  → ApiVersion（API 版本校验，/api 路由组）
   → AdminAuth（JWT 认证 + 黑名单，/admin 路由组）
   → AdminPermission（RBAC 鉴权 / Redis 60s 缓存，/admin 路由组）
   → OperationLog（POST/PUT/DELETE 自动记录，含来源端检测，/admin 路由组）

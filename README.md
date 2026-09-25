@@ -1,8 +1,47 @@
 # 开放管理后台 (open-admin)
 
-基于 webman v2 + Flutter 的全栈管理后台系统。
+<p align="center">
+  <img src="public/img/pet.svg" width="150" height="200" alt="小安 — open-admin 项目宠物">
+</p>
+
+基于 **webman v2 + Flutter** 的全栈管理后台系统：认证与 RBAC 权限、18 层纵深防御、Prometheus 可观测、多端客户端（Flutter Web / HarmonyOS）。
+
+> 项目宠物「**小安**」是一只盾形守卫机器人，守在中间件链的「防护」与「鉴权」两道关卡上。
+> 素材 [`public/img/pet.svg`](public/img/pet.svg)：纯 SVG（无脚本、无外部依赖、支持深色底与 `prefers-reduced-motion`），同时用作站点图标。
+>
+> 设计图：[系统架构](docs/diagrams/architecture.svg) · [功能设计](docs/diagrams/features.svg) · [生命周期](docs/diagrams/lifecycle.svg)
 
 > [English](docs/translations/README.en.md) | [한국어](docs/translations/README.ko.md) | [Русский](docs/translations/README.ru.md) | [Deutsch](docs/translations/README.de.md) | [Français](docs/translations/README.fr.md) | [Español](docs/translations/README.es.md) | [Português](docs/translations/README.pt.md) | [हिन्दी](docs/translations/README.hi.md) | [العربية](docs/translations/README.ar.md) | [বাংলা](docs/translations/README.bn.md) | [Bahasa Indonesia](docs/translations/README.id.md) | [日本語](docs/translations/README.ja.md) | [架构设计图](docs/ARCHITECTURE.md) | [设计文档](docs/DESIGN.md) | [安全架构](docs/SECURITY.md) | [API 参考](docs/API.md)
+
+## 项目宠物 · 小安
+
+<table>
+<tr>
+<td width="170"><img src="public/img/pet.svg" width="150" height="200" alt="小安"></td>
+<td>
+
+**小安**（Xiao An）是 open-admin 的项目宠物，取自「**安**全」与「管理后**台**」——一只盾形守卫机器人。
+
+- **盾形身体** — 对应 18 层纵深防御；顶部天线常亮，代表服务常驻内存（webman/workerman）
+- **面屏双瞳** — 会定时眨眼；它盯着每一次请求，也盯着中间件链
+- **胸前校验徽章** — 对勾常亮，代表 `method.path` 权限校验通过
+
+**它出现在哪里**
+
+| 位置 | 形式 |
+|------|------|
+| 站点首页 `GET /` | 主形象 + 项目简介与入口导航（[`app/view/index/view.html`](app/view/index/view.html)） |
+| 安装向导 `/install` | 三步向导的页头形象（`InstallController::layout()`） |
+| 浏览器标签页 | 站点图标 `rel="icon" type="image/svg+xml"` |
+| 本文档与设计图 | 项目头像 + 架构图右下角的宠物卡片 |
+
+> 素材单一来源：[`public/img/pet.svg`](public/img/pet.svg)。修改它即同时更新以上全部位置。
+
+</td>
+</tr>
+</table>
+
+**自己画一个？** 图标规范：主色 `#1677FF`、暖色天线 `#FA8C16`、校验绿 `#52C41A`；画布 `240 × 320`，盾形居中，最小可用尺寸 48 px。
 
 ## 功能清单
 
@@ -82,23 +121,63 @@ open-admin/
 │   │   ├── AdminAuth.php       # JWT 认证 + 黑名单
 │   │   ├── AdminPermission.php # RBAC 权限校验
 │   │   └── OperationLog.php    # 操作日志自动记录（含来源端检测）
-│   └── model/                  # 数据模型
+│   ├── model/                  # 数据模型
+│   ├── view/index/view.html    # 站点首页模板（GET /，含项目宠物与入口导航）
+│   ├── queue/                  # 队列任务
+│   └── process/                # 进程 (Http, Monitor)
 ├── apps/
 │   ├── flutter/                # Flutter Web 管理后台（PC 风格）
-│   │   └── lib/app/
-│   │       ├── pages/          # 5 个完整页面（仪表盘/用户/角色/配置/日志/个人中心）
-│   │       ├── services/       # ApiService（JWT 拦截器）+ AuthService（Token 持久化）
-│   │       └── layouts/        # 响应式管理后台布局（侧边栏+顶栏+内容区）
+│   │   ├── lib/app/
+│   │   │   ├── pages/          # 6 个完整页面（仪表盘/用户/角色/配置/日志/个人中心）
+│   │   │   ├── services/       # ApiService（JWT 拦截器）+ AuthService（Token 持久化）
+│   │   │   ├── layouts/        # 响应式管理后台布局（侧边栏+顶栏+内容区）
+│   │   │   └── theme/          # Material 3 双主题
+│   │   └── web/index.html      # Web 入口（标题/描述/站点图标）
 │   └── harmonyos/              # HarmonyOS 原生客户端（Token 无感刷新）
 ├── config/                     # 配置文件（含中文注释）
 │   ├── route.php               # 路由 + API 版本策略
-│   ├── middleware.php           # 全局中间件注册
+│   ├── middleware.php          # 全局中间件注册
 │   └── ...                     # 各组件配置
-├── database/install.sql        # SQL 安装脚本（含权限种子数据）
-├── public/                     # 公共入口
+├── database/                   # 数据库脚本
+│   ├── install.sql             # 全量安装脚本（含权限种子数据）
+│   └── backup/                 # 备份与恢复脚本
+├── docs/                       # 文档
+│   ├── ARCHITECTURE.md         # 架构设计图（Mermaid）
+│   ├── DESIGN.md               # 设计文档
+│   ├── SECURITY.md             # 安全架构设计
+│   ├── API.md                  # API 参考文档
+│   ├── diagrams/               # 图表目录
+│   │   ├── architecture.svg    # 系统架构设计图（SVG）
+│   │   ├── features.svg        # 功能设计图（SVG）
+│   │   ├── lifecycle.svg       # 生命周期图（SVG）
+│   │   └── 01..12-*.md         # 分解图（Mermaid，12 种语言译本）
+│   └── translations/           # 多语言文档（12 种语言 × README/CLAUDE）
+├── public/                     # 公共入口（Web 根目录）
+│   ├── img/pet.svg             # 项目宠物「小安」（SVG，兼作站点图标）
+│   └── favicon.ico             # 兼容旧浏览器的 .ico 兜底
+├── resource/translations/      # 运行时语言包（zh_CN / en）
+├── tests/                      # PHPUnit 测试
 ├── runtime/                    # 运行时文件
 └── vendor/                     # Composer 依赖
 ```
+
+## 架构设计与图表
+
+三张图均为**纯手写 SVG**（无脚本、无外部字体依赖、可无限缩放），可直接在 GitHub / 浏览器中查看，也可插入 PPT 与文档：
+
+| 图 | 内容 | 文件 |
+|---|------|------|
+| 系统架构设计 | 四层拓扑：客户端层 → 网关层 → webman 应用层（中间件链 / 控制器 / 公共服务）→ 存储层，右侧含安全与可观测性 | [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg) |
+| 功能设计 | 12 个功能域 → 控制器入口 → 关键能力，底部为中间件执行链与数据接口规范 | [`docs/diagrams/features.svg`](docs/diagrams/features.svg) |
+| 生命周期 | 安装 → 启动 → 接入 → 防护 → 鉴权 → 处理 → 持久化 → 响应审计，含异常分支与令牌生命周期 | [`docs/diagrams/lifecycle.svg`](docs/diagrams/lifecycle.svg) |
+
+<img src="docs/diagrams/architecture.svg" width="1100" alt="open-admin 系统架构设计图">
+
+<img src="docs/diagrams/features.svg" width="1100" alt="open-admin 功能设计图">
+
+<img src="docs/diagrams/lifecycle.svg" width="1100" alt="open-admin 生命周期图">
+
+> 需要可编辑的源码级图表时，见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) 与 [`docs/diagrams/`](docs/diagrams/)（Mermaid，可粘贴到 [Mermaid Live](https://mermaid.live/) 编辑）。
 
 ## 环境要求
 

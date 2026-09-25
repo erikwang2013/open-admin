@@ -5,6 +5,8 @@
 # Architecture and Business Logic Diagrams
 
 > The Mermaid diagrams below render automatically on GitHub / GitLab / VS Code. In other environments, view them with the [Mermaid Live Editor](https://mermaid.live/).
+>
+> For static diagrams (SVG) that require no renderer, see [Section 14](#14-static-design-diagrams-svg).
 
 ---
 
@@ -92,7 +94,7 @@ flowchart TD
         CT5["DashboardController<br/>Stats / Trends / Distribution"]
         CT6["ExportController<br/>Excel/PDF Export"]
         CT7["CaptchaController<br/>Captcha Generate/Verify"]
-        CT8["AuthController<br/>Login / Register / Refresh"]
+        CT8["AuthController<br/>Login / Refresh"]
     end
 
     subgraph "Service Layer"
@@ -595,7 +597,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph "Layer 1: Human Verification"
-        L1["Click Captcha<br/>Mandatory for Login/Register"]
+        L1["Click Captcha<br/>Mandatory for Login"]
     end
 
     subgraph "Layer 2: Operation Confirmation"
@@ -680,3 +682,17 @@ flowchart TB
     style ES fill:#1890FF,color:#fff
     style REDIS fill:#1890FF,color:#fff
 ```
+
+---
+
+## 14. Static Design Diagrams (SVG)
+
+The three diagrams below are **hand-written SVG** (no scripts, no external dependencies, infinitely scalable). They can be viewed without a Mermaid renderer and are ready to be inserted directly into documents, slides, and the README:
+
+| Diagram | Content | File |
+|---|------|------|
+| System Architecture | Four-layer topology: client layer → gateway layer → webman application layer → storage layer, including security protection and observability | [architecture.svg](diagrams/architecture.svg) |
+| Feature Design | 12 feature domains → controller entry points → key capabilities, with the middleware execution chain and data interface conventions | [features.svg](diagrams/features.svg) |
+| Lifecycle | Install → startup → request intake → protection → authentication → processing → persistence → response audit, including exception branches and token lifecycle | [lifecycle.svg](diagrams/lifecycle.svg) |
+
+> Project pet "Xiao An" asset: [`public/img/pet.svg`](../public/img/pet.svg) (pure SVG, also used as the site home page, the install wizard, and the browser icon)

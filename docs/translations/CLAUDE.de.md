@@ -18,7 +18,7 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
 | Bereich | Funktion |
 |----|------|
-| Authentifizierung | Login/Registrierung/Erneuerung/Logout + Captcha + Kontosperrung + Sitzungsbegrenzung |
+| Authentifizierung | Login/Erneuerung/Logout + Klick-Captcha + Kontosperrung + Sitzungsbegrenzung |
 | Dashboard | Echtzeit-Statistiken/Trends/Verteilung/Protokoll (Redis-5m-Cache) |
 | Benutzer | CRUD + Massenlöschung/Aktivieren-Deaktivieren + Excel-Import |
 | Rollen & Berechtigungen | CRUD + Berechtigungsbaum + RBAC-method.path-Autorisierung |
@@ -27,6 +27,18 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 | Dateien | Upload + Excel/PDF-Export (Maskierung sensibler Daten) |
 | Sicherheit | 18-stufige Tiefenverteidigung (XSS/SQL-Injection/CSRF/Rate-Limiting/CSP...) |
 | Betrieb | Health Check/Prometheus-Metriken/API-Dokumentation/security.txt + Docker + CI/CD |
+
+## Projekt-Maskottchen · Xiao An
+
+Der schildförmige Wachroboter „Xiao An" (小安), abgeleitet aus „**安**全" (Sicherheit) und „管理后**台**" (Admin-Panel), bewacht die beiden Stationen „Schutz" und „Authentifizierung" der Middleware-Kette.
+
+- **Einzige Stilquelle**: `public/img/pet.svg` (reines SVG, keine Skripte/keine externen Abhängigkeiten, inkl. `prefers-reduced-motion`-Fallback). Eine Änderung an dieser Datei aktualisiert gleichzeitig die Startseite, den Installationsassistenten und das Browser-Icon — **keine zweite Kopie anlegen**.
+- **Bereits eingebundene Stellen**:
+  - Startseite `GET /` → `app/view/index/view.html` (Route oben in `config/route.php`, ohne Authentifizierung)
+  - 4 Seiten des Installationsassistenten → einheitlich injiziert über `InstallController::layout()`
+  - Site-Icon → `<link rel="icon" type="image/svg+xml" href="/img/pet.svg">` (Startseite + Installationsassistent + `apps/flutter/web/index.html`)
+- **Farbschema**: Hauptfarbe `#1677FF`, warme Antenne `#FA8C16`, Prüfgrün `#52C41A`; Zeichenfläche `240 × 320`.
+- **Design-Diagramme**: `docs/diagrams/architecture.svg` (Systemarchitektur), `features.svg` (Funktionsdesign), `lifecycle.svg` (Lebenszyklus) — ebenfalls handgeschriebene SVGs im selben Farbschema wie das Maskottchen; werden in README und Dokumentation direkt referenziert.
 
 ## Technologie-Stack
 
@@ -67,7 +79,7 @@ open-admin/
 │   │   ├── HealthController.php    # Health Check
 │   │   ├── DocsController.php      # OpenAPI-Dokumentation
 │   │   └── MetricsController.php   # Prometheus-Monitoring-Metriken
-│   ├── api/v1/controller/      # API-v1-Controller (Versionsheader-Steuerung)
+│   ├── api/v1/controller/      # API-v1-Controller (Verteilung über URL-Präfix /api/v1)
 │   │   ├── CaptchaController.php
 │   │   └── AuthController.php
 │   ├── common/                 # Gemeinsame Werkzeugklassen
@@ -75,15 +87,15 @@ open-admin/
 │   │   ├── SnowflakeService.php
 │   │   └── EncryptionService.php
 │   ├── common/                 # Gemeinsame Definitionen (inkl. Apidoc Definitions)
-│   ├── middleware/             # Middleware (8)
+│   ├── middleware/             # Middleware (7)
 │   │   ├── Cors.php            # Cross-Origin (global)
 │   │   └── (migriert in das Paket erikwang2013/security-php)  # 31 Angriffserkennungen
 │   │   ├── RateLimit.php       # Redis-Rate-Limiting (global, atomar per Lua)
-│   │   ├── ApiVersion.php      # API-Versionsprüfung
 │   │   ├── AdminAuth.php       # JWT-Authentifizierung + Blacklist
 │   │   ├── AdminPermission.php # RBAC-Berechtigungsprüfung (Redis-60s-Cache)
 │   │   └── OperationLog.php    # Automatische Aktionsprotokoll-Aufzeichnung (inkl. Quellenerkennung)
 │   ├── model/                  # Datenmodelle
+│   ├── view/index/view.html    # Startseiten-Template (GET /, Projekt-Maskottchen + Einstiegsnavigation)
 │   ├── queue/                  # Queue-Tasks
 │   └── process/                # Prozesse (Http, Monitor)
 ├── apps/
@@ -115,18 +127,24 @@ open-admin/
 │   ├── SECURITY.md             # Sicherheitsarchitektur-Design
 │   ├── API.md                  # API-Referenzdokumentation
 │   ├── nginx-security.conf     # Nginx-Sicherheitsreferenz
-│   ├── diagrams/               # Zerlegte Architekturdiagramme
+│   ├── diagrams/               # Diagramme
+│   │   ├── architecture.svg    # Systemarchitektur-Design (handgeschriebenes SVG)
+│   │   ├── features.svg        # Funktionsdesign (handgeschriebenes SVG)
+│   │   ├── lifecycle.svg       # Lebenszyklusdiagramm (handgeschriebenes SVG)
+│   │   └── 01..12-*.md         # Zerlegte Architekturdiagramme (Mermaid, 12 Sprachen)
 │   └── superpowers/            # Konventionen & Pläne
 │       ├── specs/              # Design-Spezifikationen
 │       └── plans/              # Implementierungspläne
 ├── public/                     # Öffentlicher Einstiegspunkt
+│   └── img/pet.svg             # Projekt-Maskottchen „Xiao An" (SVG, dient zugleich als Site-Icon)
 ├── runtime/                    # Laufzeitdateien
 ├── tests/                      # Tests
 ├── vendor/                     # Composer-Abhängigkeiten
 ├── CLAUDE.md                   # Diese Datei
 ├── README.md                   # Chinesische Anleitung
-├── README.en.md                # Englische Anleitung
-├── README.ko.md ... README.ja.md  # Mehrsprachige Anleitungen (Kor/Russ/Deutsch/Franz/Span/Portug/Hindi/Arabisch/Bengali/Indonesisch/Japanisch)
+├── docs/translations/          # Mehrsprachige Dokumentation (12 Sprachen × README/CLAUDE)
+│   ├── README.en.md            # Englische Anleitung
+│   └── README.ko.md ... README.ja.md  # Weitere Anleitungen (Kor/Russ/Deutsch/Franz/Span/Portug/Hindi/Arabisch/Bengali/Indonesisch/Japanisch)
 ├── .env                        # Umgebungsvariablen (nicht versioniert)
 ├── .env.example                # Umgebungsvariablen-Vorlage
 ├── .env.docker                 # Docker-Umgebungsvariablen
@@ -143,7 +161,7 @@ open-admin/
 ```
 Global:  Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → {Routen-Middleware}
 /admin: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
-/api:   Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → ApiVersion → Controller
+/api/v1: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller (Version im URL-Präfix)
 /health: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller
 ```
 
@@ -162,20 +180,21 @@ Global:  Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/se
 
 ## API-Versionsstrategie
 
-Die Version wird über den Request-Header `API-Version` gesteuert (Standard `v1`) und erscheint nicht in der URL:
+Die Versionsnummer erscheint im URL-Präfix (`/api/v1/...`, `/api/v2/...`), nicht in einem Request-Header:
 
 ```bash
 curl http://localhost:8787/api/v1/auth/login
 ```
 
-Eine neue Version erfordert lediglich die Erstellung des Verzeichnisses `app/api/{version}/controller/` und die Registrierung in der `ApiVersion`-Middleware.
+Für eine neue Version muss lediglich das Verzeichnis `app/api/{version}/controller/` erstellt und die entsprechende Routengruppe in `config/route.php` registriert werden.
 
 ## Rate-Limiting-Strategie
 
 Redis-Gleitfenster (atomar per Lua), Standard 60/Minute/IP/Route:
-- Login: 10/Minute
-- Registrierung: 5/Minute
+- Login `/api/v1/auth/login`: 10/Minute
 - Response-Header: `X-RateLimit-Limit/Remaining/Reset`, bei Überschreitung zusätzlich `Retry-After`
+
+> Die Keys in `RateLimit::$sensitive` müssen mit den **vollständigen Pfaden** in `config/route.php` übereinstimmen (inkl. Versionspräfix `/api/v{n}`), sonst fallen sensible Routen stillschweigend auf die Standardgrenze von 60/Minute zurück.
 
 ## Code-Konventionen
 

@@ -9,10 +9,10 @@
 O Painel de Administração Open Source (open-admin) é construído sobre webman v2 e fornece uma API JSON RESTful. Todos os endpoints do painel administrativo exigem autenticação JWT e verificação de permissões RBAC; os endpoints públicos são roteados para controladores versionados por meio do cabeçalho de versão da API.
 
 - **URL base**: `http://localhost:8787`
-- **Versão da API**: controlada pelo cabeçalho `API-Version: v1` (padrão v1 quando ausente)
+- **Versão da API**: o número da versão é refletido no prefixo da URL (`/api/v1/...`, `/api/v2/...`), sem uso de cabeçalho de requisição
 - **Idioma**: alterna via cabeçalho `Accept-Language` ou parâmetro `?lang=zh_CN|en` (padrão zh_CN), detectado automaticamente pelo middleware Locale
 
-> **Visão geral dos endpoints**: autenticação(5) | painel(1) | usuários(7) | papéis(4) | permissões(4) | configuração(4) | logs(1) | central do usuário(3) | importação/exportação(3) | upload(1) | operações(4: health/metrics/docs/security.txt) | total de 37 endpoints
+> **Visão geral dos endpoints**: autenticação(4) | painel(1) | usuários(7) | papéis(4) | permissões(4) | configuração(4) | logs(1) | central do usuário(3) | importação/exportação(3) | upload(1) | operações(4: health/metrics/docs/security.txt) | total de 36 endpoints
 - **Autenticação**: `Authorization: Bearer <token>` (JWT)
 - **Formato de resposta**: `{ "code": 0, "message": "success", "data": {...} }`
 - **Endpoint de documentação**: `GET /api/docs` retorna a especificação JSON OpenAPI 3.0
@@ -44,7 +44,7 @@ O Painel de Administração Open Source (open-admin) é construído sobre webman
 
 ## 3. Endpoints públicos
 
-Todos os endpoints públicos estão no grupo `/api` e são distribuídos pelo middleware `ApiVersion` para os controladores versionados correspondentes com base no cabeçalho `API-Version` (por exemplo, `app\api\v1\controller\AuthController`).
+Os endpoints públicos ficam no grupo de rotas `/api/v1`; o número da versão é refletido no prefixo da URL, sem uso de cabeçalho de requisição.
 
 ### 3.1 Health check
 
@@ -91,7 +91,6 @@ POST /api/v1/captcha/generate
 ```
 
 - **Autenticação**: não necessária
-- **Cabeçalho**: `API-Version: v1` (obrigatório)
 - **Rate limit**: padrão global (60 requisições/minuto)
 
 **Corpo da requisição**:
@@ -184,7 +183,6 @@ POST /api/v1/captcha/verify
 ```
 
 - **Autenticação**: não necessária
-- **Cabeçalho**: `API-Version: v1` (obrigatório)
 - **Rate limit**: padrão global (60 requisições/minuto)
 
 **Corpo da requisição** — tipo clique (`type: "click"`):
@@ -250,7 +248,6 @@ POST /api/v1/auth/login
 ```
 
 - **Autenticação**: não necessária
-- **Cabeçalho**: `API-Version: v1` (obrigatório)
 - **Rate limit**: 10 requisições/minuto (por IP + caminho)
 
 **Corpo da requisição**:
@@ -320,61 +317,13 @@ A chave pública está embutida no aplicativo frontend e não precisa ser transm
 - 403: conta desabilitada
 - 429: conta bloqueada, tente novamente em 15 minutos (acionado por 5 falhas consecutivas de login)
 
-### 3.6 Registro
-
-```
-POST /api/v1/auth/register
-```
-
-- **Autenticação**: não necessária
-- **Cabeçalho**: `API-Version: v1` (obrigatório)
-- **Rate limit**: 5 requisições/minuto (por IP + caminho)
-
-**Corpo da requisição**:
-```json
-{
-  "username": "newuser",
-  "password": "djGYscnyS5V6mW6KyDFjB8vGwjBBnB3Odpyxu8LY...",
-  "real_name": "新用户",
-  "captcha_key": "abc123def456"
-}
-```
-
-| Campo | Tipo | Obrigatório | Regras de validação | Descrição |
-|------|------|------|---------|------|
-| username | string | sim | min:3, max:50 | Nome de usuário (exclusivo) |
-| password | string | sim | min:6, max:32 (texto puro) | Criptografado com AES-256-CBC-HMAC e codificado em Base64 |
-| real_name | string | sim | max:50 | Nome real |
-| captcha_key | string | sim | | Chave do captcha (é necessário passar pela validação de `/api/v1/captcha/verify` primeiro) |
-
-**Exemplo de resposta**:
-```json
-{
-  "code": 0,
-  "message": "注册成功",
-  "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 7200,
-    "user": {
-      "id": "e5f6g7h8",
-      "username": "newuser",
-      "real_name": "新用户"
-    }
-  }
-}
-```
-
-Após o registro bem-sucedido, o token JWT é retornado diretamente e o status do usuário fica habilitado por padrão (status=1).
-
-### 3.7 Atualizar token
+### 3.6 Atualizar token
 
 ```
 POST /api/v1/auth/refresh
 ```
 
 - **Autenticação**: não necessária
-- **Cabeçalho**: `API-Version: v1` (obrigatório)
 - **Rate limit**: padrão global (60 requisições/minuto)
 
 **Corpo da requisição**:
@@ -386,7 +335,7 @@ POST /api/v1/auth/refresh
 
 | Campo | Tipo | Obrigatório | Descrição |
 |------|------|------|------|
-| refresh_token | string | sim | refresh_token obtido no login/registro |
+| refresh_token | string | sim | refresh_token obtido no login |
 
 **Exemplo de resposta**:
 ```json
@@ -407,7 +356,7 @@ Uma atualização bem-sucedida retorna um novo access_token e refresh_token, e o
 - 422: token de atualização ausente
 - 401: token de atualização inválido ou expirado
 
-### 3.8 Métricas de monitoramento Prometheus
+### 3.7 Métricas de monitoramento Prometheus
 
 ```
 GET /metrics
@@ -1657,7 +1606,6 @@ Todas as APIs (injetadas na camada de middleware global) incluem os seguintes ca
 Detalhes do rate limit:
 - Limite global padrão: 60 requisições/minuto / IP+caminho
 - Endpoint de login `/api/v1/auth/login`: 10 requisições/minuto
-- Endpoint de registro `/api/v1/auth/register`: 5 requisições/minuto
 - Usa algoritmo de janela deslizante atômica do Redis (Lua ZSET), evitando corrida TOCTOU
 - Quando o Redis está indisponível, fail open (libera), sem bloquear requisições
 
@@ -1667,14 +1615,12 @@ Sequência completa de autenticação:
 
 ```
 1. O cliente solicita POST /api/v1/captcha/generate
-   (cabeçalho: API-Version: v1)
     ↓
    O servidor retorna: key + type(click|slider|rotate) + imagem base64 + extra(dados relacionados ao tipo)
    
 2. O usuário interage e conclui a operação do captcha (clique/arraste/rotação), e o cliente coleta as respostas
    
 3. O cliente solicita POST /api/v1/captcha/verify
-   (cabeçalho: API-Version: v1, Content-Type: application/json)
    corpo da requisição: { key, type, clicks }
    - type=click:  clicks = [{x, y}, ...]        // array de coordenadas
    - type=slider: clicks = 120                   // deslocamento no eixo X
@@ -1689,7 +1635,6 @@ Sequência completa de autenticação:
    O servidor retorna: { valid: true/false }
 
 4. O cliente solicita POST /api/v1/auth/login
-   (cabeçalho: API-Version: v1, Content-Type: application/json)
    corpo da requisição: { username, password(criptografada), captcha_key }
     ↓
    Servidor:
@@ -1765,7 +1710,6 @@ Cors (pré-processamento de cross-origin + cabeçalhos de resposta)
   → Locale (detecção de idioma via Accept-Language / ?lang=zh_CN|en)
   → SecurityFilter (restrição de método HTTP/tamanho do corpo/validação de Content-Type/XSS/Injeção SQL/Path traversal/Injeção de comandos/bloqueio de ataques CSRF)
   → RateLimit (rate limit com janela deslizante do Redis + bloqueio de conta: 5 falhas de login bloqueiam por 15 minutos)
-  → ApiVersion (validação de versão da API, grupo de rotas /api)
   → AdminAuth (autenticação JWT + blacklist, grupo de rotas /admin)
   → AdminPermission (autorização RBAC / cache Redis de 60s, grupo de rotas /admin)
   → OperationLog (registro automático de POST/PUT/DELETE, inclui detecção de origem, grupo de rotas /admin)

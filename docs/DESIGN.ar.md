@@ -5,10 +5,11 @@
 > [中文](DESIGN.md) | [English](DESIGN.en.md) | [한국어](DESIGN.ko.md) | [Русский](DESIGN.ru.md) | [Deutsch](DESIGN.de.md) | [Français](DESIGN.fr.md) | [Español](DESIGN.es.md) | [Português](DESIGN.pt.md) | [हिन्दी](DESIGN.hi.md) | [العربية](DESIGN.ar.md) | [বাংলা](DESIGN.bn.md) | [Bahasa Indonesia](DESIGN.id.md) | [日本語](DESIGN.ja.md)
 
 > للحصول على رسوم Mermaid البيانية المفصلة راجع [ARCHITECTURE.ar.md](ARCHITECTURE.ar.md) (تُعرض تلقائيًا في GitHub/GitLab/VS Code).
+> رسوم التصميم الثابتة (SVG): [عمارة النظام](diagrams/architecture.svg) · [التصميم الوظيفي](diagrams/features.svg) · [دورة الحياة](diagrams/lifecycle.svg)
 
 ## 1. بنية النظام
 
-> **قائمة الميزات**: المصادقة(login/register/refresh/logout + قفل الحساب + حد الجلسات) | لوحة التحكم(ذاكرة Redis المؤقتة) | CRUD المستخدمين+العمليات الجماعية+الاستيراد | الأدوار والصلاحيات(RBAC) | إعدادات النظام | تدقيق العمليات(جهة مصدر 8 منصات) | الملفات(رفع+تصدير+إخفاء) | الأمان(دفاع من 18 طبقة) | التشغيل(health/metrics/docs/Docker/CI)
+> **قائمة الميزات**: المصادقة(login/refresh/logout + قفل الحساب + حد الجلسات) | لوحة التحكم(ذاكرة Redis المؤقتة) | CRUD المستخدمين+العمليات الجماعية+الاستيراد | الأدوار والصلاحيات(RBAC) | إعدادات النظام | تدقيق العمليات(جهة مصدر 8 منصات) | الملفات(رفع+تصدير+إخفاء) | الأمان(دفاع من 18 طبقة) | التشغيل(health/metrics/docs/Docker/CI)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -62,7 +63,7 @@
 | الطبقة | الدليل | المسؤولية |
 |---|------|------|
 | المسارات | `config/route.php` | تعيين URL إلى وحدات التحكم، ربط الوسائط، المسارات حسب الإصدار |
-| الوسائط | `app/middleware/` | اعتراض الهجمات (SecurityFilter)، تحديد المعدل (RateLimit)، المصادقة (JWT)، التفويض (RBAC)، إصدار API (ApiVersion) |
+| الوسائط | `app/middleware/` | اعتراض الهجمات (SecurityFilter)، تحديد المعدل (RateLimit)، المصادقة (JWT)، التفويض (RBAC) |
 | وحدات التحكم | 14 وحدة: Dashboard/User/Role/Permission/Config/Log/Profile/Export/Import/Upload/Health/Docs (الإدارة) + Captcha/Auth (API v1) | التحقق من معاملات الطلب، استدعاء منطق الأعمال، تنسيق الاستجابات |
 | خدمات الأعمال | `app/service/` | منطق الأعمال القابل لإعادة الاستخدام (محجوز) |
 | نماذج البيانات | `app/model/` | تعيين ORM، العلاقات، تشفير وفك تشفير الحقول |
@@ -90,8 +91,9 @@ Route 匹配
   RateLimit ───────────► Redis 滑动窗口限流
   │ (失败返回 429 + Retry-After 头)
   ▼
-  ApiVersion ─────────► API-Version 头校验，注入 $request->apiVersion
-  │ (失败返回 400)
+  路由分发 ───────────► 版本号体现在 URL 前缀（/api/v1/...、/api/v2/...）
+  │                     /api/v1 请求 → 静态注册路由组直连控制器
+  │                     /admin 请求 → 继续下方中间件链
   ▼
   AdminAuth ──────────► JWT 验证，注入 $request->adminId
   │ (失败返回 401)
@@ -175,7 +177,7 @@ erik_system_config (系统配置) — 独立表
 
 ```
 公开接口:  /api/v1/captcha/{generate|verify}
-           /api/v1/auth/{login|register|refresh}
+           /api/v1/auth/{login|refresh}
 
 管理端:   /admin/{resource}[/{hashid}]
           /admin/export/{excel|pdf}
@@ -199,33 +201,25 @@ erik_system_config (系统配置) — 独立表
 
 ### 4.2 استراتيجية إصدار API
 
-يُتحكم في إصدار API عبر ترويسة الطلب، **ولا يظهر في مسار URL**:
-
-```http
-API-Version: v1
-```
+يظهر رقم إصدار API في بادئة URL (`/api/v1/...`، `/api/v2/...`)، **ولا يُستخدم ترويسة الطلب**. تُسجَّل في `config/route.php` مجموعات مسارات ثابتة لكل إصدار تتصل مباشرة بوحدات التحكم الخاصة به، ولا يمر توزيع الإصدار عبر أي وسيط.
 
 | الآلية | الوصف |
 |------|------|
-| الإصدار الافتراضي | عند عدم حمل ترويسة `API-Version` يكون الافتراضي `v1` |
-| التحقق | يتحقق وسيط `ApiVersion`، وتُرجع الإصدارات غير المدعومة 400 |
-| المسارات | تحلل الدالة المساعدة `v()` فئة وحدة التحكم ديناميكيًا حسب الإصدار |
+| بادئة URL | رقم الإصدار هو المقطع الأول الثابت من المسار: `/api/v1/...`، `/api/v2/...` |
+| المسارات | تُسجَّل في `config/route.php` مجموعة مسارات ثابتة `Route::group('/api/v1', ...)` تتصل مباشرة بوحدات التحكم |
 | الدليل | تُنظم وحدات التحكم حسب الإصدار: `app/api/{version}/controller/` |
+| نقاط التشغيل | نقاط مثل `/api/docs` و`/health` و`/metrics` بلا بادئة إصدار |
 
 مثال على التوسعة — إضافة API v2:
 1. أنشئ `app/api/v2/controller/AuthController.php`
-2. أضف `'v2'` إلى ثابت `SUPPORTED` في وسيط `ApiVersion`
-3. لا حاجة لتعديل تعريفات المسارات
+2. سجّل مجموعة مسارات `Route::group('/api/v2', ...)` في `config/route.php`
 
 ```bash
 # استخدام v1
-curl /api/v1/auth/login
+curl http://localhost:8787/api/v1/auth/login
 
-# استخدام v2
-curl -H "API-Version: v2" /api/v1/auth/login
-
-# بدون إرسال، الافتراضي v1
-curl /api/v1/auth/login
+# v2 (بعد إضافة الإصدار الجديد)
+curl http://localhost:8787/api/v2/auth/login
 ```
 
 ### 4.3 استراتيجية تحديد المعدل
@@ -236,7 +230,6 @@ curl /api/v1/auth/login
 |------|------|
 | الافتراضي | 60 مرة/دقيقة/IP/المسار |
 | POST /api/v1/auth/login | 10 مرات/دقيقة |
-| POST /api/v1/auth/register | 5 مرات/دقيقة |
 
 عند تجاوز الحد يُرجع 429، وتتضمن ترويسات الاستجابة X-RateLimit-Limit / Remaining / Reset / Retry-After.
 
@@ -362,7 +355,7 @@ curl /api/v1/auth/login
 |------|------|
 | تقييد الطرق | SecurityFilter بقائمة بيضاء لطرق HTTP، يُسمح فقط بـ GET/POST/PUT/DELETE/OPTIONS/HEAD، والطرق غير القياسية تُرجع 405 |
 | اعتراض الهجمات | وسيط SecurityFilter، كشف واعتراض XSS/حقن SQL/اجتياز المسار/حقن الأوامر/CSRF |
-| التحقق بين الإنسان والآلة | كود تحقق بالنقر (Click Captcha)، تحقق إلزامي عند الدخول/التسجيل |
+| التحقق بين الإنسان والآلة | كود تحقق بالنقر (Click Captcha)، تحقق إلزامي عند الدخول |
 | قفل الحساب | 5 محاولات دخول فاشلة متتالية تقفل الحساب 15 دقيقة، وتُرجع 429 خلال فترة القفل |
 | حد الجلسات | 3 رموز متزامنة كحد أقصى لنفس المستخدم، وعند التجاوز يُضاف أقدم رمز تلقائيًا إلى القائمة السوداء |
 | تحديد المعدل | وسيط RateLimit، نافذة منزلقة في Redis، Lua ذرّي |

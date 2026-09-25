@@ -18,7 +18,7 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
 | Домен | Функция |
 |----|------|
-| Аутентификация | Вход/регистрация/обновление/выход + капча + блокировка учётной записи + ограничение сессий |
+| Аутентификация | Вход/обновление/выход + капча по клику + блокировка учётной записи + ограничение сессий |
 | Дашборд | Реальная статистика/тренды/распределение/журнал (кэш Redis 5m) |
 | Пользователи | CRUD + массовое удаление/включение и отключение + импорт Excel |
 | Роли и права | CRUD + дерево прав + авторизация RBAC method.path |
@@ -27,6 +27,18 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 | Файлы | Загрузка + экспорт Excel/PDF (маскирование чувствительных данных) |
 | Безопасность | 18 уровней эшелонированной обороны (XSS/SQL-инъекции/CSRF/лимиты/CSP...) |
 | Эксплуатация | Health check/метрики Prometheus/документация API/security.txt + Docker + CI/CD |
+
+## Талисман проекта · Сяо Ань
+
+Робот-страж в форме щита «Сяо Ань» (Xiao An) — имя взято от слов «**безопас**ность» и «админ-**панель**»; он стоит на двух рубежах цепочки промежуточного ПО: «защита» и «аутентификация».
+
+- **Единый источник стиля**: `public/img/pet.svg` (чистый SVG, без скриптов и внешних зависимостей, с деградацией по `prefers-reduced-motion`). Изменение этого файла одновременно обновляет главную страницу сайта, мастер установки и иконку браузера — **не создавайте вторую копию**.
+- **Где уже подключён**:
+  - Главная страница `GET /` → `app/view/index/view.html` (маршрут в начале `config/route.php`, без аутентификации)
+  - 4 страницы мастера установки → единая инъекция через `InstallController::layout()`
+  - Иконка сайта → `<link rel="icon" type="image/svg+xml" href="/img/pet.svg">` (главная + мастер установки + `apps/flutter/web/index.html`)
+- **Цветовая спецификация**: основной цвет `#1677FF`, тёплая антенна `#FA8C16`, зелёный «проверено» `#52C41A`; холст `240 × 320`.
+- **Схемы**: `docs/diagrams/architecture.svg` (архитектура системы), `features.svg` (функциональное проектирование), `lifecycle.svg` (жизненный цикл) — тоже рукописный SVG в той же палитре, что и талисман; на них напрямую ссылаются README и документация.
 
 ## Технологический стек
 
@@ -67,7 +79,7 @@ open-admin/
 │   │   ├── HealthController.php    # Проверка работоспособности
 │   │   ├── DocsController.php      # OpenAPI-документация
 │   │   └── MetricsController.php   # Метрики Prometheus
-│   ├── api/v1/controller/      # Контроллеры API v1 (управление версией заголовком)
+│   ├── api/v1/controller/      # Контроллеры API v1 (версия в префиксе URL /api/v1)
 │   │   ├── CaptchaController.php
 │   │   └── AuthController.php
 │   ├── common/                 # Общие утилиты
@@ -75,15 +87,15 @@ open-admin/
 │   │   ├── SnowflakeService.php
 │   │   └── EncryptionService.php
 │   ├── common/                 # Общие определения (включая Apidoc Definitions)
-│   ├── middleware/             # Промежуточное ПО (8)
+│   ├── middleware/             # Промежуточное ПО (7)
 │   │   ├── Cors.php            # CORS (глобально)
 │   │   └── (перенесено в пакет erikwang2013/security-php)  # 31 детектор атак
 │   │   ├── RateLimit.php       # Redis-лимит (глобально, атомарный Lua)
-│   │   ├── ApiVersion.php      # Проверка версии API
 │   │   ├── AdminAuth.php       # Аутентификация JWT + чёрный список
 │   │   ├── AdminPermission.php # Проверка прав RBAC (кэш Redis 60s)
 │   │   └── OperationLog.php    # Автоматическая запись журнала операций (с определением источника)
 │   ├── model/                  # Модели данных
+│   ├── view/index/view.html    # Шаблон главной страницы сайта (GET /, талисман проекта + навигация)
 │   ├── queue/                  # Задачи очередей
 │   └── process/                # Процессы (Http, Monitor)
 ├── apps/
@@ -115,11 +127,16 @@ open-admin/
 │   ├── SECURITY.md             # Дизайн архитектуры безопасности
 │   ├── API.md                  # Справочник API
 │   ├── nginx-security.conf     # Справочная безопасная конфигурация Nginx
-│   ├── diagrams/               # Декомпозированные схемы архитектуры
+│   ├── diagrams/               # Схемы
+│   │   ├── architecture.svg    # Схема архитектуры системы (рукописный SVG)
+│   │   ├── features.svg        # Схема функционального проектирования (рукописный SVG)
+│   │   ├── lifecycle.svg       # Схема жизненного цикла (рукописный SVG)
+│   │   └── 01..12-*.md         # Декомпозированные схемы архитектуры (Mermaid, 12 языков)
 │   └── superpowers/            # Спецификации и планы
 │       ├── specs/              # Спецификации дизайна
 │       └── plans/              # Планы реализации
 ├── public/                     # Точка входа
+│   └── img/pet.svg             # Талисман проекта «Сяо Ань» (SVG, одновременно служит иконкой сайта)
 ├── runtime/                    # Файлы времени выполнения
 ├── tests/                      # Тесты
 ├── vendor/                     # Зависимости Composer
@@ -143,7 +160,7 @@ open-admin/
 ```
 全局:  Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → {路由中间件}
 /admin: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
-/api:   Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → ApiVersion → Controller
+/api/v1: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller（版本体现在 URL 前缀中）
 /health: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller
 ```
 
@@ -162,20 +179,21 @@ open-admin/
 
 ## Стратегия версий API
 
-Версия задаётся заголовком `API-Version` (по умолчанию `v1`) и не отражается в URL:
+Номер версии отражается в префиксе URL (`/api/v1/...`, `/api/v2/...`), заголовки не используются:
 
 ```bash
 curl http://localhost:8787/api/v1/auth/login
 ```
 
-Для новой версии достаточно создать каталог `app/api/{version}/controller/` и зарегистрировать его в middleware `ApiVersion`.
+Для новой версии достаточно создать каталог `app/api/{version}/controller/` и зарегистрировать группу маршрутов соответствующей версии в `config/route.php`.
 
 ## Политика лимитов запросов
 
 Скользящее окно Redis (атомарный Lua), по умолчанию 60 раз/мин/IP/маршрут:
-- Вход: 10 раз/мин
-- Регистрация: 5 раз/мин
+- Вход `/api/v1/auth/login`: 10 раз/мин
 - Заголовки ответа: `X-RateLimit-Limit/Remaining/Reset`, при превышении добавляется `Retry-After`
+
+> Ключи `RateLimit::$sensitive` обязаны совпадать с **полным путём** в `config/route.php` (включая префикс версии `/api/v{n}`), иначе чувствительные маршруты молча вернутся к стандартным 60 раз/мин.
 
 ## Правила написания кода
 

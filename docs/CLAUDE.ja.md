@@ -12,7 +12,7 @@ webman v2 + Flutter をベースにしたフルスタック管理バックエン
 
 | ドメイン | 機能 |
 |----|------|
-| 認証 | ログイン/登録/リフレッシュ/ログアウト + 認証コード + アカウントロック + セッション制限 |
+| 認証 | ログイン/トークン更新/ログアウト + クリック型 CAPTCHA + アカウントロック + セッション制限 |
 | ダッシュボード | リアルタイム統計/トレンド/分布/ログ（Redis 5 分キャッシュ）|
 | ユーザー | CRUD + 一括削除/有効・無効化 + Excel インポート |
 | ロール・権限 | CRUD + 権限ツリー + RBAC method.path 認可 |
@@ -21,6 +21,18 @@ webman v2 + Flutter をベースにしたフルスタック管理バックエン
 | ファイル | アップロード + Excel/PDF エクスポート（機密データのマスキング）|
 | セキュリティ | 18 層の多層防御（XSS/SQL インジェクション/CSRF/レート制限/CSP...）|
 | 運用 | ヘルスチェック/Prometheus メトリクス/API ドキュメント/security.txt + Docker + CI/CD |
+
+## プロジェクトペット · 小安
+
+盾形のガードロボット「小安」（Xiao An）は、「**安**全」と「管理後**台**」に由来し、ミドルウェアチェーンの「防御」と「認可」の二つの関門を守っています。
+
+- **スタイルの単一ソース**：`public/img/pet.svg`（純粋な SVG、スクリプト/外部依存なし、`prefers-reduced-motion` フォールバックあり）。このファイルを変更すればサイトトップページ、インストールウィザード、ブラウザアイコンが同時に更新されるため、**2 つ目のコピーを作らないでください**。
+- **導入済みの箇所**：
+  - `GET /` サイトトップページ → `app/view/index/view.html`（ルートは `config/route.php` の先頭、認証不要）
+  - インストールウィザードの 4 ページ → `InstallController::layout()` が一括注入
+  - サイトアイコン → `<link rel="icon" type="image/svg+xml" href="/img/pet.svg">`（トップページ + インストールウィザード + `apps/flutter/web/index.html`）
+- **配色規約**：メインカラー `#1677FF`、暖色アンテナ `#FA8C16`、検証グリーン `#52C41A`、キャンバス `240 × 320`。
+- **設計図**：`docs/diagrams/architecture.svg`（システムアーキテクチャ）、`features.svg`（機能設計）、`lifecycle.svg`（ライフサイクル）——いずれも手書き SVG で、ペットと同じ配色を保っています。README とドキュメントから直接参照。
 
 ## 技術スタック
 
@@ -61,7 +73,7 @@ open-admin/
 │   │   ├── HealthController.php    # ヘルスチェック
 │   │   ├── DocsController.php      # OpenAPI ドキュメント
 │   │   └── MetricsController.php   # Prometheus 監視メトリクス
-│   ├── api/v1/controller/      # API v1 コントローラー（バージョンヘッダー制御）
+│   ├── api/v1/controller/      # API v1 コントローラー（URL プレフィックス /api/v1 で振り分け）
 │   │   ├── CaptchaController.php
 │   │   └── AuthController.php
 │   ├── common/                 # 共通ユーティリティクラス
@@ -69,15 +81,15 @@ open-admin/
 │   │   ├── SnowflakeService.php
 │   │   └── EncryptionService.php
 │   ├── common/                 # 共通定義（Apidoc Definitions 含む）
-│   ├── middleware/             # ミドルウェア（8 個）
+│   ├── middleware/             # ミドルウェア（7 個）
 │   │   ├── Cors.php            # クロスドメイン（グローバル）
-│   │   ├── SecurityFilter.php  # 攻撃ブロック（グローバル：XSS/SQL インジェクション/パストラバーサル/コマンドインジェクション/CSRF）
+│   │   └── (erikwang2013/security-php パッケージへ移行済み)  # 31 種の攻撃検知
 │   │   ├── RateLimit.php       # Redis レート制限（グローバル、Lua アトミック）
-│   │   ├── ApiVersion.php      # API バージョン検証
 │   │   ├── AdminAuth.php       # JWT 認証 + ブラックリスト
 │   │   ├── AdminPermission.php # RBAC 権限検証（Redis 60 秒キャッシュ）
 │   │   └── OperationLog.php    # 操作ログ自動記録（クライアント検出含む）
 │   ├── model/                  # データモデル
+│   ├── view/index/view.html    # サイトトップページテンプレート（GET /、プロジェクトペット + エントリナビゲーション）
 │   ├── queue/                  # キュータスク
 │   └── process/                # プロセス (Http, Monitor)
 ├── apps/
@@ -109,18 +121,24 @@ open-admin/
 │   ├── SECURITY.md             # セキュリティアーキテクチャ設計
 │   ├── API.md                  # API リファレンスドキュメント
 │   ├── nginx-security.conf     # Nginx セキュリティ参考設定
-│   ├── diagrams/               # 分解アーキテクチャ図
+│   ├── diagrams/               # 図表
+│   │   ├── architecture.svg    # システムアーキテクチャ設計図（手書き SVG）
+│   │   ├── features.svg        # 機能設計図（手書き SVG）
+│   │   ├── lifecycle.svg       # ライフサイクル図（手書き SVG）
+│   │   └── 01..12-*.md         # 分解アーキテクチャ図（Mermaid、12 言語）
 │   └── superpowers/            # 仕様と計画
 │       ├── specs/              # 設計仕様
 │       └── plans/              # 実装計画
 ├── public/                     # パブリックエントリ
+│   └── img/pet.svg             # プロジェクトペット「小安」（SVG、サイトアイコン兼用）
 ├── runtime/                    # ランタイムファイル
 ├── tests/                      # テスト
 ├── vendor/                     # Composer 依存
 ├── CLAUDE.md                   # 本ファイル
 ├── README.md                   # 中国語説明
-├── docs/translations/README.en.md                # 英語説明
-├── docs/translations/README.ko.md ... README.ja.md  # 多言語説明（韓/露/独/仏/西/葡/ヒンディー/アラビア/ベンガル/インドネシア/日）
+├── docs/translations/          # 多言語ドキュメント（12 言語 × README/CLAUDE）
+│   ├── README.en.md            # 英語説明
+│   └── README.ko.md ... README.ja.md  # その他の言語説明（韓/露/独/仏/西/葡/ヒンディー/アラビア/ベンガル/インドネシア/日）
 ├── .env                        # 環境変数（バージョン管理外）
 ├── .env.example                # 環境変数テンプレート
 ├── .env.docker                 # Docker 環境変数
@@ -135,15 +153,19 @@ open-admin/
 ## ミドルウェア実行チェーン
 
 ```
-全局:  Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → {路由中间件}
-/admin: Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
-/api:   Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → ApiVersion → Controller
-/health: Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → Controller
+全局:  Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → {路由中间件}
+/admin: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
+/api/v1: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller（版本体现在 URL 前缀中）
+/health: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller
 ```
+
+> **注意**: 権限チェックが不要な管理端 API（個人センターの閲覧など）は `/admin` グループ外に個別登録し、`AdminAuth` ミドルウェアのみを付与してください。グループ内のルートは `AdminPermission` が `method.path` 形式の権限識別子を検証します。
+
+> **Redis プレフィックス**: すべてのキーに自動で `open-admin:` プレフィックスが付与され、`.env` の `REDIS_PREFIX` でカスタマイズできます。
 
 ## セキュリティ強化
 
-- **HTTP メソッド制限**：SecurityFilter は GET/POST/PUT/DELETE/OPTIONS/HEAD のみ許可し、非標準メソッドは 405 を返す
+- **攻撃検知**：erikwang2013/security-php パッケージ（31 種の検知器：XSS/SQL インジェクション/コマンドインジェクション/パストラバーサル/SSRF/XXE/JNDI/デシリアライゼーション/JWT 攻撃/CSRF/機密データ漏洩など + HTTP メソッド検証/リクエストボディサイズ制限/Content-Type 検証 + IP 攻撃によるブラックリスト昇格）
 - **CSP ヘッダー**：Content-Security-Policy + X-Permitted-Cross-Domain-Policies をすべてのレスポンスに注入
 - **アカウントロック**：ログインに 5 回連続失敗すると、アカウントを 15 分間ロック
 - **同時セッション制限**：同一ユーザーの有効な Token は最大 3 つまで。超過時は最古の Token をブラックリストに追加
@@ -152,20 +174,21 @@ open-admin/
 
 ## API バージョン戦略
 
-バージョンはリクエストヘッダー `API-Version` で制御（デフォルト `v1`）、URL には表れません：
+バージョン番号は URL プレフィックスに含まれます（`/api/v1/...`、`/api/v2/...`）。リクエストヘッダーは使用しません：
 
 ```bash
 curl http://localhost:8787/api/v1/auth/login
 ```
 
-新しいバージョンを追加するには、`app/api/{version}/controller/` ディレクトリを作成し、`ApiVersion` ミドルウェアに登録するだけです。
+新しいバージョンを追加するには、`app/api/{version}/controller/` ディレクトリを作成し、`config/route.php` に対応バージョンのルートグループを登録するだけです。
 
 ## レート制限戦略
 
 Redis スライディングウィンドウ（Lua アトミック）、デフォルト 60 回/分/IP/ルート：
-- ログイン: 10 回/分
-- 登録: 5 回/分
+- ログイン `/api/v1/auth/login`: 10 回/分
 - レスポンスヘッダー: `X-RateLimit-Limit/Remaining/Reset`、超過時は `Retry-After` を付与
+
+> `RateLimit::$sensitive` のキーは `config/route.php` 内の**完全なパス**（`/api/v{n}` バージョンプレフィックスを含む）と一致しなければなりません。一致しない場合、機密ルートは静かにデフォルトの 60 回/分に戻ります。
 
 ## コード規約
 
@@ -173,6 +196,11 @@ Redis スライディングウィンドウ（Lua アトミック）、デフォ�
 - グローバル関数/クラス参照に前置 `\` を付けず、`use` でインポートする
 - 設定ファイルには各設定項目の意味を説明する中国語コメントを必ず含める
 - 新規作成するすべての `.php` ファイルのヘッダーに著作権声明を含める
+- **Redis は `support\Redis` ユーティリティクラス経由でアクセス**（シングルトン接続プール、`REDIS_HOST/PORT/PASSWORD/DB` 環境変数を自動読み込み）、すべてのキーに自動でプレフィックスを付与（デフォルト `open-admin:`、`REDIS_PREFIX` 環境変数で設定可能）
+- **ルート権限**: `/admin` グループ内のルートには `method.path` 形式の権限が必要（例: `get.admin/dashboard`）。権限チェックが不要なルートはグループ外に置き、`AdminAuth` ミドルウェアのみ付与する
+- **CORS**: 新しいリクエストヘッダーを追加する際は、`Cors.php` ミドルウェアと `route.php` フォールバックの `Access-Control-Allow-Headers` を同期して更新する
+- **スーパー管理者保護**: `RoleController` の `update`/`destroy` メソッドでは `slug == 'super_admin'` のロールを操作禁止
+- webman は PHP Warning を例外に変換するため、未定義のプロパティ/変数は 500 エラーを引き起こす
 
 ### データベース
 - テーブルプレフィックス: `erik_`
@@ -182,9 +210,13 @@ Redis スライディングウィンドウ（Lua アトミック）、デフォ�
 
 ### Flutter
 - Web 端のレイアウトは PC 管理バックエンドスタイル（サイドバー + トップバー + コンテンツ領域）
-- GetX 状態管理を使用、`ApiService` シングルトン（Dio + JWT インターセプター）
+- GetX 状態管理を使用。**すべての API リクエストは `ApiService` シングルトンを経由**（Dio + JWT インターセプター）。独立した Dio インスタンスの作成や baseUrl のハードコードは禁止
 - Token の永続化は `shared_preferences`
 - レスポンシブブレークポイント: モバイル (< 768px) とデスクトップ (>= 768px)
+- **ページヘッダーの Row は `Wrap` を使用**、サイドバー展開時のオーバーフローを防止。フィルターの ChoiceChip は `Obx` 内にラップしないとレスポンシブ更新されない
+- **DataTable は `SingleChildScrollView(scrollDirection: Axis.horizontal)` でラップ**、列のオーバーフローを防止
+- 独立ページ（ProfilePage など）には `Scaffold` を含める必要がある。ない場合、`TextField` などの Material コンポーネントが "No Material widget found" エラーを出す
+- サイドバー展開/収納時は `_showCollapsedContent` でコンテンツ切り替えを遅延させ、アニメーション中の RenderFlex オーバーフローを回避
 
 ### HarmonyOS
 - `@ohos.net.http` ネイティブ HTTP クライアントを使用

@@ -17,9 +17,11 @@ class RateLimit implements MiddlewareInterface
     private int $defaultLimit = 60;
     private int $defaultWindow = 60;
 
+    /**
+     * 敏感路由独立限流（键必须与 config/route.php 中的完整路径一致，含 /api/v{n} 版本前缀）
+     */
     private array $sensitive = [
-        '/api/auth/login'    => ['limit' => 10, 'window' => 60],
-        '/api/auth/register' => ['limit' => 5,  'window' => 60],
+        '/api/v1/auth/login' => ['limit' => 10, 'window' => 60],
     ];
 
     public function process(Request $request, callable $handler): Response

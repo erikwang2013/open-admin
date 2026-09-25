@@ -111,10 +111,28 @@ class BackendEnhancementTest extends TestCase
 
         $refSensitive = $reflection->getProperty('sensitive');
         $sensitive = $refSensitive->getDefaultValue();
-        $this->assertArrayHasKey('/api/auth/login', $sensitive);
-        $this->assertEquals(10, $sensitive['/api/auth/login']['limit']);
-        $this->assertArrayHasKey('/api/auth/register', $sensitive);
-        $this->assertEquals(5, $sensitive['/api/auth/register']['limit']);
+        // 键必须与 config/route.php 中的完整路径一致（含 /api/v1 版本前缀），否则限流不生效
+        $this->assertArrayHasKey('/api/v1/auth/login', $sensitive);
+        $this->assertEquals(10, $sensitive['/api/v1/auth/login']['limit']);
+    }
+
+    /**
+     * 敏感路由限流键必须指向真实注册的路由，防止版本前缀迁移后静默失效
+     */
+    public function test_rate_limit_sensitive_paths_exist_in_routes(): void
+    {
+        $reflection = new \ReflectionClass(\app\middleware\RateLimit::class);
+        $sensitive = $reflection->getProperty('sensitive')->getDefaultValue();
+        $routes = file_get_contents(__DIR__ . '/../config/route.php');
+
+        foreach (array_keys($sensitive) as $path) {
+            // 形如 /api/v1/auth/login：路由分组前缀取前两段，其余为组内路径
+            $segments = explode('/', trim($path, '/'));
+            $group = "'/" . implode('/', array_slice($segments, 0, 2)) . "'";
+            $inner = "'/" . implode('/', array_slice($segments, 2)) . "'";
+            $this->assertStringContainsString($group, $routes, "限流路径 {$path} 的分组 {$group} 未在 config/route.php 中注册");
+            $this->assertStringContainsString($inner, $routes, "限流路径 {$path} 的组内路径 {$inner} 未在 config/route.php 中注册");
+        }
     }
 
     public function test_rate_limit_has_lua_script_for_atomicity(): void

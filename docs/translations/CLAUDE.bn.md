@@ -18,7 +18,7 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
 | ডোমেইন | ফিচার |
 |----|------|
-| অথেনটিকেশন | লগইন/রেজিস্ট্রেশন/রিফ্রেশ/লগআউট + ক্যাপচা + অ্যাকাউন্ট লক + সেশন সীমাবদ্ধতা |
+| অথেনটিকেশন | লগইন/রিফ্রেশ/লগআউট + ক্লিক ক্যাপচা + অ্যাকাউন্ট লক + সেশন সীমাবদ্ধতা |
 | ড্যাশবোর্ড | রিয়েল-টাইম পরিসংখ্যান/ট্রেন্ড/ডিস্ট্রিবিউশন/লগ (Redis 5m ক্যাশ) |
 | ইউজার | CRUD + ব্যাচ ডিলিট/সক্রিয়-নিষ্ক্রিয় + Excel ইমপোর্ট |
 | রোল পারমিশন | CRUD + পারমিশন ট্রি + RBAC method.path অথরাইজেশন |
@@ -27,6 +27,18 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 | ফাইল | আপলোড + Excel/PDF এক্সপোর্ট (সংবেদনশীল ডেটা মাস্কিং) |
 | সিকিউরিটি | 18 লেয়ার ডিফেন্স-ইন-ডেপথ (XSS/SQL ইনজেকশন/CSRF/রেট লিমিট/CSP...) |
 | অপারেশন | হেলথ চেক/Prometheus মেট্রিক্স/API ডকুমেন্টেশন/security.txt + Docker + CI/CD |
+
+## প্রকল্প পেট · 小安
+
+ঢাল-আকৃতির গার্ড রোবট「小安」（Xiao An），নামটি নেওয়া হয়েছে「**安**全」（নিরাপত্তা）ও「管理后**台**」（অ্যাডমিন ব্যাকএন্ড）থেকে，সে মিডলওয়্যার চেইনের「প্রতিরক্ষা」ও「অথেনটিকেশন」এই দুটি চেকপয়েন্টে পাহারা দেয়।
+
+- **স্টাইলের একমাত্র সোর্স**: `public/img/pet.svg`（বিশুদ্ধ SVG，কোনো স্ক্রিপ্ট/বাহ্যিক নির্ভরতা নেই，`prefers-reduced-motion` ফলব্যাকসহ）。এই ফাইলটি পরিবর্তন করলেই সাইট হোমপেজ, ইনস্টলেশন উইজার্ড ও ব্রাউজার আইকন একসাথে আপডেট হয়，**আর দ্বিতীয় একটি কপি তৈরি করবেন না**。
+- **যেসব জায়গায় যুক্ত করা হয়েছে**:
+  - `GET /` সাইট হোমপেজ → `app/view/index/view.html`（রাউট `config/route.php`-এর শীর্ষে，অথেনটিকেশন ছাড়া）
+  - ইনস্টলেশন উইজার্ডের 4টি পৃষ্ঠা → `InstallController::layout()` দ্বারা একত্রে ইনজেক্ট করা
+  - সাইট আইকন → `<link rel="icon" type="image/svg+xml" href="/img/pet.svg">`（হোমপেজ + ইনস্টলেশন উইজার্ড + `apps/flutter/web/index.html`）
+- **রঙের স্পেসিফিকেশন**: প্রধান রঙ `#1677FF`、উষ্ণ অ্যান্টেনা `#FA8C16`、ভেরিফিকেশন সবুজ `#52C41A`；ক্যানভাস `240 × 320`。
+- **ডিজাইন ডায়াগ্রাম**: `docs/diagrams/architecture.svg`（সিস্টেম আর্কিটেকচার）、`features.svg`（ফিচার ডিজাইন）、`lifecycle.svg`（লাইফসাইকেল）——এগুলোও হাতে আঁকা SVG，পেটের সাথে একই রঙের সেট ব্যবহার করে；README ও ডকুমেন্টেশনে সরাসরি উদ্ধৃত।
 
 ## টেকনোলজি স্ট্যাক
 
@@ -67,7 +79,7 @@ open-admin/
 │   │   ├── HealthController.php    # হেলথ চেক
 │   │   ├── DocsController.php      # OpenAPI ডকুমেন্টেশন
 │   │   └── MetricsController.php   # Prometheus মনিটরিং মেট্রিক্স
-│   ├── api/v1/controller/      # API v1 কন্ট্রোলার（ভার্সন হেডার নিয়ন্ত্রণ）
+│   ├── api/v1/controller/      # API v1 কন্ট্রোলার（URL প্রিফিক্স /api/v1 দিয়ে ডিসপ্যাচ）
 │   │   ├── CaptchaController.php
 │   │   └── AuthController.php
 │   ├── common/                 # সাধারণ ইউটিলিটি ক্লাস
@@ -75,15 +87,15 @@ open-admin/
 │   │   ├── SnowflakeService.php
 │   │   └── EncryptionService.php
 │   ├── common/                 # সাধারণ ডেফিনিশন（Apidoc Definitions সহ）
-│   ├── middleware/             # মিডলওয়্যার（8 个）
+│   ├── middleware/             # মিডলওয়্যার（7 个）
 │   │   ├── Cors.php            # ক্রস-অরিজিন（গ্লোবাল）
 │   │   └── (erikwang2013/security-php প্যাকেজে স্থানান্তরিত)  # 31 种攻击检测
 │   │   ├── RateLimit.php       # Redis রেট লিমিট（গ্লোবাল，Lua অ্যাটমিক）
-│   │   ├── ApiVersion.php      # API ভার্সন ভ্যালিডেশন
 │   │   ├── AdminAuth.php       # JWT অথেনটিকেশন + ব্ল্যাকলিস্ট
 │   │   ├── AdminPermission.php # RBAC পারমিশন ভ্যালিডেশন（Redis 60s ক্যাশ）
 │   │   └── OperationLog.php    # অপারেশন লগ অটো রেকর্ডিং（সোর্স ডিটেকশন সহ）
 │   ├── model/                  # ডেটা মডেল
+│   ├── view/index/view.html    # সাইট হোমপেজ টেমপ্লেট（GET /，প্রজেক্ট পেট + এন্ট্রি নেভিগেশন）
 │   ├── queue/                  # কিউ টাস্ক
 │   └── process/                # প্রসেস (Http, Monitor)
 ├── apps/
@@ -115,18 +127,24 @@ open-admin/
 │   ├── SECURITY.md             # সিকিউরিটি আর্কিটেকচার ডিজাইন
 │   ├── API.md                  # API রেফারেন্স ডকুমেন্টেশন
 │   ├── nginx-security.conf     # Nginx সিকিউরিটি রেফারেন্স কনফিগ
-│   ├── diagrams/               # বিভক্ত আর্কিটেকচার ডায়াগ্রাম
+│   ├── diagrams/               # ডায়াগ্রাম
+│   │   ├── architecture.svg    # সিস্টেম আর্কিটেকচার ডিজাইন ডায়াগ্রাম（হাতে আঁকা SVG）
+│   │   ├── features.svg        # ফিচার ডিজাইন ডায়াগ্রাম（হাতে আঁকা SVG）
+│   │   ├── lifecycle.svg       # লাইফসাইকেল ডায়াগ্রাম（হাতে আঁকা SVG）
+│   │   └── 01..12-*.md         # বিভক্ত আর্কিটেকচার ডায়াগ্রাম（Mermaid，12 种语言）
 │   └── superpowers/            # স্পেসিফিকেশন ও প্ল্যান
 │       ├── specs/              # ডিজাইন স্পেসিফিকেশন
 │       └── plans/              # ইমপ্লিমেন্টেশন প্ল্যান
 ├── public/                     # পাবলিক এন্ট্রি
+│   └── img/pet.svg             # প্রজেক্ট পেট「小安」（SVG，সাইট আইকন হিসেবেও ব্যবহৃত）
 ├── runtime/                    # রানটাইম ফাইল
 ├── tests/                      # টেস্ট
 ├── vendor/                     # Composer ডিপেন্ডেন্সি
 ├── CLAUDE.md                   # এই ফাইল
 ├── README.md                   # চাইনিজ ডকুমেন্টেশন
-├── README.en.md                # ইংরেজি ডকুমেন্টেশন
-├── README.ko.md ... README.ja.md  # মাল্টি-ল্যাঙ্গুয়েজ ডকুমেন্টেশন（কোরিয়ান/রুশ/জার্মান/ফরাসি/স্প্যানিশ/পর্তুগিজ/হিন্দি/আরবি/বাংলা/ইন্দোনেশিয়ান/জাপানি）
+├── docs/translations/          # মাল্টি-ল্যাঙ্গুয়েজ ডকুমেন্টেশন（12 种语言 × README/CLAUDE）
+│   ├── README.en.md            # ইংরেজি ডকুমেন্টেশন
+│   └── README.ko.md ... README.ja.md  # অন্যান্য ভাষার ডকুমেন্টেশন（কোরিয়ান/রুশ/জার্মান/ফরাসি/স্প্যানিশ/পর্তুগিজ/হিন্দি/আরবি/বাংলা/ইন্দোনেশিয়ান/জাপানি）
 ├── .env                        # এনভায়রনমেন্ট ভেরিয়েবল（ভার্সন কন্ট্রোলে অন্তর্ভুক্ত নয়）
 ├── .env.example                # এনভায়রনমেন্ট ভেরিয়েবল টেমপ্লেট
 ├── .env.docker                 # Docker এনভায়রনমেন্ট ভেরিয়েবল
@@ -143,7 +161,7 @@ open-admin/
 ```
 全局:  Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → {路由中间件}
 /admin: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
-/api:   Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → ApiVersion → Controller
+/api/v1: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller（版本体现在 URL 前缀中）
 /health: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller
 ```
 
@@ -162,20 +180,21 @@ open-admin/
 
 ## API ভার্সন পলিসি
 
-ভার্সন রিকোয়েস্ট হেডার `API-Version` দিয়ে নিয়ন্ত্রিত হয়（ডিফল্ট `v1`），URL এ প্রকাশ করা হয় না：
+ভার্সন নম্বর URL প্রিফিক্সে প্রকাশ করা হয়（`/api/v1/...`、`/api/v2/...`），রিকোয়েস্ট হেডার ব্যবহার করা হয় না：
 
 ```bash
 curl http://localhost:8787/api/v1/auth/login
 ```
 
-নতুন ভার্সন যোগ করতে শুধু `app/api/{version}/controller/` ডিরেক্টরি তৈরি করে `ApiVersion` মিডলওয়্যারে রেজিস্টার করুন।
+নতুন ভার্সন যোগ করতে শুধু `app/api/{version}/controller/` ডিরেক্টরি তৈরি করুন এবং `config/route.php`-এ সংশ্লিষ্ট ভার্সনের রাউট গ্রুপ রেজিস্টার করুন।
 
 ## রেট লিমিট পলিসি
 
 Redis স্লাইডিং উইন্ডো（Lua অ্যাটমিক），ডিফল্ট 60 次/分钟/IP/রাউট：
-- লগইন: 10 次/分钟
-- রেজিস্ট্রেশন: 5 次/分钟
+- লগইন `/api/v1/auth/login`: 10 次/分钟
 - রেসপন্স হেডার: `X-RateLimit-Limit/Remaining/Reset`，সীমা অতিক্রম করলে `Retry-After` যুক্ত হয়
+
+> `RateLimit::$sensitive` এর key অবশ্যই `config/route.php`-এ থাকা **সম্পূর্ণ পাথ**ের সাথে মিলতে হবে（`/api/v{n}` ভার্সন প্রিফিক্সসহ），নইলে সংবেদনশীল রাউট নীরবে ডিফল্ট 60 次/分钟-এ ফিরে যাবে।
 
 ## কোড কনভেনশন
 

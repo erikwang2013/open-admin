@@ -5,6 +5,7 @@
 > [中文](ARCHITECTURE.md) | [English](ARCHITECTURE.en.md) | [한국어](ARCHITECTURE.ko.md) | [Русский](ARCHITECTURE.ru.md) | [Deutsch](ARCHITECTURE.de.md) | [Français](ARCHITECTURE.fr.md) | [Español](ARCHITECTURE.es.md) | [Português](ARCHITECTURE.pt.md) | [हिन्दी](ARCHITECTURE.hi.md) | [العربية](ARCHITECTURE.ar.md) | [বাংলা](ARCHITECTURE.bn.md) | [Bahasa Indonesia](ARCHITECTURE.id.md) | [日本語](ARCHITECTURE.ja.md)
 
 > تُعرض رسوم Mermaid البيانية أدناه تلقائيًا في GitHub / GitLab / VS Code. للبيئات الأخرى استخدم [Mermaid Live Editor](https://mermaid.live/) لعرضها.
+> للحصول على رسوم ثابتة (SVG) لا تحتاج إلى مُصيّر، راجع [القسم 14](#14-رسوم-التصميم-الثابتة-svg).
 
 ---
 
@@ -22,7 +23,6 @@ flowchart TB
     end
 
     subgraph "طبقة التطبيق (webman v2)"
-        C0["وسيط ApiVersion<br/>التحقق من ترويسة API-Version"]
         C1["وسيط AdminAuth<br/>التحقق من JWT"]
         C2["وسيط AdminPermission<br/>التحقق من صلاحيات RBAC"]
         C3["وحدات تحكم الإدارة<br/>Dashboard / User / Role / Permission"]
@@ -43,11 +43,10 @@ flowchart TB
 
     A1 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
     A2 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
-    B1 --> C0
-    C0 --> C1
+    B1 --> C1
+    B1 --> C4
     C1 --> C2
     C2 --> C3
-    C0 --> C4
     C3 --> C5
     C4 --> C5
     C3 --> D1
@@ -59,7 +58,6 @@ flowchart TB
     style A1 fill:#1677FF,color:#fff
     style A2 fill:#1677FF,color:#fff
     style B1 fill:#722ED1,color:#fff
-    style C0 fill:#EB2F96,color:#fff
     style C1 fill:#FA8C16,color:#fff
     style C2 fill:#FA8C16,color:#fff
     style C3 fill:#52C41A,color:#fff
@@ -83,7 +81,6 @@ flowchart TD
     subgraph "طبقة الوسائط Middleware Layer"
         M_RL["RateLimit<br/>تحديد معدل Redis بنافذة منزلقة<br/>ترويسات استجابة X-RateLimit"]
         M_SF["SecurityFilter<br/>اعتراض هجمات الكشف<br/>XSS/حقن SQL/اجتياز المسار/CSRF"]
-        M0["ApiVersion<br/>التحقق من إصدار API<br/>حقن apiVersion"]
         M1["AdminAuth<br/>التحقق من رمز JWT<br/>حقن adminId"]
         M2["AdminPermission<br/>تحقق RBAC<br/>مطابقة method.path<br/>ذاكرة Redis مؤقتة للصلاحيات 60s"]
     end
@@ -96,7 +93,7 @@ flowchart TD
         CT5["DashboardController<br/>إحصائيات/اتجاهات/توزيعات"]
         CT6["ExportController<br/>تصدير Excel/PDF"]
         CT7["CaptchaController<br/>توليد/تحقق كود التحقق"]
-        CT8["AuthController<br/>دخول/تسجيل/تحديث"]
+        CT8["AuthController<br/>دخول/تحديث"]
     end
 
     subgraph "طبقة الخدمات Service Layer"
@@ -119,11 +116,11 @@ flowchart TD
         D3["Redis"]
     end
 
-    R1 --> M_SF --> M_RL --> M0
-    M0 --> M1
+    R1 --> M_SF --> M_RL
+    M_RL --> M1
+    M_RL --> CT7 & CT8
     M1 --> M2
     M2 --> CT2 & CT3 & CT4 & CT5 & CT6
-    M0 --> CT7 & CT8
     CT1 -.->|extends| CT2 & CT3 & CT4 & CT5 & CT6
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> S1 & S2 & S3
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> MD1 & MD2 & MD3 & MD4 & MD5
@@ -134,7 +131,6 @@ flowchart TD
     style R1 fill:#722ED1,color:#fff
     style M_SF fill:#FF4D4F,color:#fff
     style M_RL fill:#EB2F96,color:#fff
-    style M0 fill:#EB2F96,color:#fff
     style M1 fill:#FA8C16,color:#fff
     style M2 fill:#FA8C16,color:#fff
     style CT1 fill:#1677FF,color:#fff
@@ -151,7 +147,6 @@ sequenceDiagram
     participant MW_LOC as Locale
     participant MW_SF as SecurityFilter
     participant MW_RL as RateLimit
-    participant MW0 as ApiVersion
     participant MW1 as AdminAuth
     participant MW2 as AdminPermission
     participant CTL as Controller
@@ -160,7 +155,7 @@ sequenceDiagram
     participant DB as MySQL
     participant OPLOG as OperationLog
 
-    C->>N: طلب HTTPS<br/>Header: API-Version: v1, Accept-Language: zh_CN
+    C->>N: طلب HTTPS إلى نقاط النهاية /admin<br/>Header: Accept-Language: zh_CN
     N->>MW_LOC: إعادة توجيه
 
     MW_LOC->>MW_LOC: locale = zh_CN (Accept-Language / ?lang=)
@@ -182,13 +177,7 @@ sequenceDiagram
         MW_RL-->>C: 429 + Retry-After
     end
 
-    MW_RL->>MW0: تمرير
-
-    alt إصدار غير مدعوم
-        MW0-->>C: 400 إصدار API غير مدعوم
-    else الإصدار صالح
-        MW0->>MW0: $request->apiVersion = v1
-    end
+    MW_RL->>MW1: تمرير
 
     alt الرمز مفقود أو غير صالح
         MW1-->>C: 401 Unauthorized
@@ -607,7 +596,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph "الطبقة 1: التحقق بين الإنسان والآلة"
-        L1["كود تحقق بالنقر<br/>Click Captcha<br/>إلزامي للدخول/التسجيل"]
+        L1["كود تحقق بالنقر<br/>Click Captcha<br/>إلزامي للدخول"]
     end
 
     subgraph "الطبقة 2: تأكيد العملية"
@@ -692,3 +681,17 @@ flowchart TB
     style ES fill:#1890FF,color:#fff
     style REDIS fill:#1890FF,color:#fff
 ```
+
+---
+
+## 14. رسوم التصميم الثابتة (SVG)
+
+الرسوم الثلاثة التالية **مكتوبة يدويًا بصيغة SVG** (بلا سكربتات، بلا اعتماديات خارجية، قابلة للتحجيم بلا حدود)، ويمكن عرضها دون الحاجة إلى مُصيّر Mermaid، وتصلح للإدراج المباشر في الوثائق وعروض PPT وملفات README:
+
+| الرسم | المحتوى | الملف |
+|---|------|------|
+| تصميم عمارة النظام | طوبولوجيا من أربع طبقات: طبقة العملاء → طبقة البوابة → طبقة تطبيق webman → طبقة التخزين، مع الحماية الأمنية وإمكانية المراقبة | [architecture.svg](diagrams/architecture.svg) |
+| التصميم الوظيفي | 12 مجالًا وظيفيًا → مداخل وحدات التحكم → القدرات الرئيسية، مع سلسلة تنفيذ الوسائط ومواصفات واجهات البيانات | [features.svg](diagrams/features.svg) |
+| دورة الحياة | التثبيت → الإقلاع → الاتصال → الحماية → التحقق من الهوية → المعالجة → الاستمرارية → تدقيق الاستجابة، مع الفروع الاستثنائية ودورة حياة الرمز | [lifecycle.svg](diagrams/lifecycle.svg) |
+
+> مواد حيوان المشروع «شياو آن»: [`public/img/pet.svg`](../public/img/pet.svg) (SVG خالص، ويُستخدم أيضًا كأيقونة الصفحة الرئيسية ومعالج التثبيت وأيقونة المتصفح)

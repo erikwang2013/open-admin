@@ -6,13 +6,13 @@
 
 ## 1. Vue d'ensemble
 
-Open Admin (open-admin) est construit sur webman v2 et fournit une API RESTful JSON. Toutes les interfaces du panneau d'administration nécessitent une authentification JWT et une validation des permissions RBAC ; les interfaces publiques sont routées vers des contrôleurs versionnés via l'en-tête de version API.
+Open Admin (open-admin) est construit sur webman v2 et fournit une API RESTful JSON. Toutes les interfaces du panneau d'administration nécessitent une authentification JWT et une validation des permissions RBAC ; les points de terminaison publics portent le numéro de version dans le préfixe d'URL (par exemple `/api/v1/auth/login`) et sont routés directement vers les contrôleurs versionnés correspondants.
 
 - **URL de base** : `http://localhost:8787`
-- **Version API** : contrôlée par l'en-tête `API-Version: v1` (v1 par défaut si absent)
+- **Version API** : portée par le préfixe d'URL (`/api/v1/...`, `/api/v2/...`), aucun en-tête de requête n'est utilisé
 - **Langue** : bascule via l'en-tête `Accept-Language` ou le paramètre `?lang=zh_CN|en` (zh_CN par défaut), détection automatique par le middleware Locale
 
-> **Vue d'ensemble des points de terminaison** : authentification (5) | tableau de bord (1) | utilisateurs (7) | rôles (4) | permissions (4) | configuration (4) | journaux (1) | espace personnel (3) | import/export (3) | upload (1) | exploitation (4 : health/metrics/docs/security.txt) | 37 points de terminaison au total
+> **Vue d'ensemble des points de terminaison** : authentification (4) | tableau de bord (1) | utilisateurs (7) | rôles (4) | permissions (4) | configuration (4) | journaux (1) | espace personnel (3) | import/export (3) | upload (1) | exploitation (4 : health/metrics/docs/security.txt) | 36 points de terminaison au total
 - **Authentification** : `Authorization: Bearer <token>` (JWT)
 - **Format de réponse** : `{ "code": 0, "message": "success", "data": {...} }`
 - **Point de terminaison de documentation** : `GET /api/docs` renvoie la spécification OpenAPI 3.0 JSON
@@ -43,8 +43,6 @@ Open Admin (open-admin) est construit sur webman v2 et fournit une API RESTful J
 | 500 | Erreur interne du serveur | |
 
 ## 3. Points de terminaison publics
-
-Tous les points de terminaison publics sont montés sous le groupe `/api` et sont distribués par le middleware `ApiVersion` aux contrôleurs versionnés correspondants selon l'en-tête `API-Version` (par exemple `app\api\v1\controller\AuthController`).
 
 ### 3.1 Health check
 
@@ -91,7 +89,6 @@ POST /api/v1/captcha/generate
 ```
 
 - **Authentification** : aucune
-- **En-tête de requête** : `API-Version: v1` (obligatoire)
 - **Limitation de débit** : défaut global (60 requêtes/minute)
 
 **Corps de requête** :
@@ -184,7 +181,6 @@ POST /api/v1/captcha/verify
 ```
 
 - **Authentification** : aucune
-- **En-tête de requête** : `API-Version: v1` (obligatoire)
 - **Limitation de débit** : défaut global (60 requêtes/minute)
 
 **Corps de requête** — type clic (`type: "click"`) :
@@ -250,7 +246,6 @@ POST /api/v1/auth/login
 ```
 
 - **Authentification** : aucune
-- **En-tête de requête** : `API-Version: v1` (obligatoire)
 - **Limitation de débit** : 10 requêtes/minute (par IP + chemin)
 
 **Corps de requête** :
@@ -320,61 +315,13 @@ La clé publique est intégrée dans l'application frontend et n'a pas besoin d'
 - 403 : compte désactivé
 - 429 : compte verrouillé, réessayez dans 15 minutes (déclenché par 5 échecs de connexion consécutifs)
 
-### 3.6 Inscription
-
-```
-POST /api/v1/auth/register
-```
-
-- **Authentification** : aucune
-- **En-tête de requête** : `API-Version: v1` (obligatoire)
-- **Limitation de débit** : 5 requêtes/minute (par IP + chemin)
-
-**Corps de requête** :
-```json
-{
-  "username": "newuser",
-  "password": "djGYscnyS5V6mW6KyDFjB8vGwjBBnB3Odpyxu8LY...",
-  "real_name": "新用户",
-  "captcha_key": "abc123def456"
-}
-```
-
-| Champ | Type | Obligatoire | Règle de validation | Description |
-|------|------|------|---------|------|
-| username | string | Oui | min:3, max:50 | Nom d'utilisateur (unique) |
-| password | string | Oui | min:6, max:32 (en clair) | Chiffré AES-256-CBC-HMAC puis encodé en Base64 |
-| real_name | string | Oui | max:50 | Nom réel |
-| captcha_key | string | Oui | | Clé du captcha (doit d'abord être validée via `/api/v1/captcha/verify`) |
-
-**Exemple de réponse** :
-```json
-{
-  "code": 0,
-  "message": "注册成功",
-  "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 7200,
-    "user": {
-      "id": "e5f6g7h8",
-      "username": "newuser",
-      "real_name": "新用户"
-    }
-  }
-}
-```
-
-Après inscription réussie, les jetons JWT sont directement renvoyés ; le compte est activé par défaut (status=1).
-
-### 3.7 Rafraîchissement du jeton
+### 3.6 Rafraîchissement du jeton
 
 ```
 POST /api/v1/auth/refresh
 ```
 
 - **Authentification** : aucune
-- **En-tête de requête** : `API-Version: v1` (obligatoire)
 - **Limitation de débit** : défaut global (60 requêtes/minute)
 
 **Corps de requête** :
@@ -386,7 +333,7 @@ POST /api/v1/auth/refresh
 
 | Champ | Type | Obligatoire | Description |
 |------|------|------|------|
-| refresh_token | string | Oui | refresh_token obtenu à la connexion/inscription |
+| refresh_token | string | Oui | refresh_token obtenu à la connexion |
 
 **Exemple de réponse** :
 ```json
@@ -407,7 +354,7 @@ Un rafraîchissement réussi renvoie simultanément un nouveau access_token et u
 - 422 : jeton de rafraîchissement manquant
 - 401 : jeton de rafraîchissement invalide ou expiré
 
-### 3.8 Métriques de surveillance Prometheus
+### 3.7 Métriques de surveillance Prometheus
 
 ```
 GET /metrics
@@ -1657,7 +1604,6 @@ Toutes les interfaces (injectés au niveau des middlewares globaux) incluent les
 Détails de la limitation de débit :
 - Limite globale par défaut : 60 requêtes/minute / IP+chemin
 - Point de terminaison de connexion `/api/v1/auth/login` : 10 requêtes/minute
-- Point de terminaison d'inscription `/api/v1/auth/register` : 5 requêtes/minute
 - Algorithme de fenêtre glissante atomique Redis (Lua ZSET), éliminant la course TOCTOU
 - Si Redis est indisponible, fail-open (laisse passer), sans bloquer les requêtes
 
@@ -1667,14 +1613,12 @@ Séquence d'authentification complète :
 
 ```
 1. Le client demande POST /api/v1/captcha/generate
-   (en-tête : API-Version: v1)
     ↓
    Le serveur renvoie : key + type(click|slider|rotate) + image base64 + extra(données liées au type)
    
 2. L'utilisateur interagit pour résoudre le captcha (clic/glisser/tourner), le client collecte la réponse
    
 3. Le client demande POST /api/v1/captcha/verify
-   (en-tête : API-Version: v1, Content-Type: application/json)
    Corps de requête : { key, type, clicks }
    - type=click:  clicks = [{x, y}, ...]        // tableau de coordonnées
    - type=slider: clicks = 120                   // décalage X
@@ -1689,7 +1633,6 @@ Séquence d'authentification complète :
    Le serveur renvoie : { valid: true/false }
 
 4. Le client demande POST /api/v1/auth/login
-   (en-tête : API-Version: v1, Content-Type: application/json)
    Corps de requête : { username, password(chiffré), captcha_key }
     ↓
    Serveur :
@@ -1765,7 +1708,6 @@ Cors (prétraitement CORS + en-têtes de réponse)
   → Locale (détection de langue Accept-Language / ?lang=zh_CN|en)
   → SecurityFilter (limitation des méthodes HTTP/taille du corps/validation Content-Type/XSS/injection SQL/traversée de chemin/injection de commandes/interception des attaques CSRF)
   → RateLimit (limitation de débit par fenêtre glissante Redis + verrouillage du compte : 5 échecs de connexion ⇒ verrouillage de 15 minutes)
-  → ApiVersion (validation de la version API, groupe de routes /api)
   → AdminAuth (authentification JWT + liste noire, groupe de routes /admin)
   → AdminPermission (autorisation RBAC / cache Redis 60 s, groupe de routes /admin)
   → OperationLog (enregistrement automatique des POST/PUT/DELETE, avec détection de la source, groupe de routes /admin)

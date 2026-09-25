@@ -4,9 +4,48 @@
 
 # 开放管理后台 (open-admin)
 
-webman v2 + Flutter ベースのフルスタック管理バックエンドシステム。
+<p align="center">
+  <img src="public/img/pet.svg" width="150" height="200" alt="小安 — open-admin のプロジェクトペット">
+</p>
+
+**webman v2 + Flutter** ベースのフルスタック管理バックエンドシステム：認証と RBAC 権限、18 層の多層防御、Prometheus による可観測性、マルチクライアント（Flutter Web / HarmonyOS）。
+
+> プロジェクトペット「**小安**」は盾形のガードロボットで、ミドルウェアチェーンの「防御」と「認可」の二つの関門を守っています。
+> 素材 [`public/img/pet.svg`](public/img/pet.svg)：純粋な SVG（スクリプトなし、外部依存なし、ダークテーマと `prefers-reduced-motion` に対応）、サイトアイコンを兼ねます。
+>
+> 設計図：[システムアーキテクチャ](docs/diagrams/architecture.svg) · [機能設計](docs/diagrams/features.svg) · [ライフサイクル](docs/diagrams/lifecycle.svg)
 
 > [アーキテクチャ図](docs/ARCHITECTURE.ja.md) | [設計ドキュメント](docs/DESIGN.ja.md) | [セキュリティアーキテクチャ](docs/SECURITY.ja.md) | [API リファレンス](docs/API.ja.md)
+
+## プロジェクトペット · 小安
+
+<table>
+<tr>
+<td width="170"><img src="public/img/pet.svg" width="150" height="200" alt="小安"></td>
+<td>
+
+**小安**（Xiao An）は open-admin のプロジェクトペットで、「**安**全」と「管理後**台**」に由来します——盾形のガードロボットです。
+
+- **盾形のボディ** — 18 層の多層防御に対応。上部のアンテナは常時点灯し、サービスが常駐メモリ上で動作することを表します（webman/workerman）
+- **フェイススクリーンの両眼** — 定期的にまばたきします。すべてのリクエストを見つめ、ミドルウェアチェーンも見つめています
+- **胸の検証バッジ** — チェックマークが常時点灯し、`method.path` 権限検証の合格を表します
+
+**どこに登場するか**
+
+| 場所 | 形式 |
+|------|------|
+| サイトトップページ `GET /` | メインビジュアル + プロジェクト紹介とエントリナビゲーション（[`app/view/index/view.html`](app/view/index/view.html)） |
+| インストールウィザード `/install` | 3 ステップウィザードのヘッダーイメージ（`InstallController::layout()`） |
+| ブラウザのタブ | サイトアイコン `rel="icon" type="image/svg+xml"` |
+| 本ドキュメントと設計図 | プロジェクトアバター + アーキテクチャ図右下のペットカード |
+
+> 素材の単一ソース：[`public/img/pet.svg`](public/img/pet.svg)。これを変更すれば上記すべての箇所が同時に更新されます。
+
+</td>
+</tr>
+</table>
+
+**自分で描く？** アイコン規約：メインカラー `#1677FF`、暖色アンテナ `#FA8C16`、検証グリーン `#52C41A`、キャンバス `240 × 320`、盾形を中央に配置、最小使用サイズ 48 px。
 
 ## 機能一覧
 
@@ -23,7 +62,7 @@ webman v2 + Flutter ベースのフルスタック管理バックエンドシス
 | 📋 操作監査 | ログ照会 + ソース端検出 | 8 プラットフォーム自動識別 |
 | 📁 ファイル管理 | アップロード/Excel エクスポート/PDF エクスポート | 機密データ自動マスキング |
 | 🛡 セキュリティ | 18 層の多層防御 | XSS/SQLインジェクション/パストラバーサル/コマンドインジェクション/CSRF/レート制限/CSP... |
-| 🏥 運用保守 | ヘルスチェック/metrics/API ドキュメント/security.txt | Prometheus + OpenAPI 3.0 + hg/apidoc 対話型ドキュメント |
+| 🏥 運用保守 | ヘルスチェック/metrics/API ドキュメント/security.txt | Prometheus + OpenAPI 3.0 + erikwang2013/apidoc-php 対話型ドキュメント |
 | 🌐 国際化 | 中国語・英語切り替え | Accept-Language ヘッダー / ?lang= パラメータ |
 
 ## 技術スタック
@@ -72,7 +111,7 @@ open-admin/
 │   │   ├── DocsController.php      # OpenAPI ドキュメント
 │   │   └── BaseController.php      # ベースコントローラー
 │   ├── api/
-│   │   └── v1/controller/          # API v1 コントローラー（バージョンはリクエストヘッダー API-Version で制御）
+│   │   └── v1/controller/          # API v1 コントローラー（バージョンは URL プレフィックス /api/v1 に含まれる）
 │   │       ├── CaptchaController.php # クリック型 CAPTCHA
 │   │       └── AuthController.php    # ログイン/トークン更新
 │   ├── common/                 # 共通ユーティリティクラス
@@ -83,27 +122,66 @@ open-admin/
 │   │   ├── Cors.php            # クロスオリジン
 │   │   ├── SecurityFilter.php  # 攻撃検知ブロック（HTTP メソッド制限/XSS/SQL インジェクション/パストラバーサル/コマンドインジェクション/CSRF）
 │   │   ├── RateLimit.php       # Redis レート制限（スライディングウィンドウ + レスポンスヘッダー）
-│   │   ├── ApiVersion.php      # API バージョン検証
 │   │   ├── AdminAuth.php       # JWT 認証 + ブラックリスト
 │   │   ├── AdminPermission.php # RBAC 権限検証
 │   │   └── OperationLog.php    # 操作ログ自動記録（ソース端検出含む）
-│   └── model/                  # データモデル
+│   ├── model/                  # データモデル
+│   ├── view/index/view.html    # サイトトップページテンプレート（GET /、プロジェクトペットとエントリナビゲーションを含む）
+│   ├── queue/                  # キュータスク
+│   └── process/                # プロセス (Http, Monitor)
 ├── apps/
 │   ├── flutter/                # Flutter Web 管理バックエンド（PC スタイル）
-│   │   └── lib/app/
-│   │       ├── pages/          # 5 つの完全ページ（ダッシュボード/ユーザー/ロール/設定/ログ/個人センター）
-│   │       ├── services/       # ApiService（JWT インターセプター）+ AuthService（Token 永続化）
-│   │       └── layouts/        # レスポンシブ管理レイアウト（サイドバー+ヘッダー+コンテンツ領域）
+│   │   ├── lib/app/
+│   │   │   ├── pages/          # 6 つの完全ページ（ダッシュボード/ユーザー/ロール/設定/ログ/個人センター）
+│   │   │   ├── services/       # ApiService（JWT インターセプター）+ AuthService（Token 永続化）
+│   │   │   ├── layouts/        # レスポンシブ管理レイアウト（サイドバー+ヘッダー+コンテンツ領域）
+│   │   │   └── theme/          # Material 3 デュアルテーマ
+│   │   └── web/index.html      # Web エントリ（タイトル/説明/サイトアイコン）
 │   └── harmonyos/              # HarmonyOS ネイティブクライアント（Token シームレス更新）
 ├── config/                     # 設定ファイル（中国語コメント含む）
 │   ├── route.php               # ルーティング + API バージョン戦略
-│   ├── middleware.php           # グローバルミドルウェア登録
+│   ├── middleware.php          # グローバルミドルウェア登録
 │   └── ...                     # 各コンポーネントの設定
-├── database/install.sql        # SQL インストールスクリプト（権限シードデータ含む）
-├── public/                     # 公開エントリ
+├── database/                   # データベーススクリプト
+│   ├── install.sql             # 全量インストールスクリプト（権限シードデータ含む）
+│   └── backup/                 # バックアップと復元スクリプト
+├── docs/                       # ドキュメント
+│   ├── ARCHITECTURE.md         # アーキテクチャ設計図（Mermaid）
+│   ├── DESIGN.md               # 設計ドキュメント
+│   ├── SECURITY.md             # セキュリティアーキテクチャ設計
+│   ├── API.md                  # API リファレンスドキュメント
+│   ├── diagrams/               # 図表ディレクトリ
+│   │   ├── architecture.svg    # システムアーキテクチャ設計図（SVG）
+│   │   ├── features.svg        # 機能設計図（SVG）
+│   │   ├── lifecycle.svg       # ライフサイクル図（SVG）
+│   │   └── 01..12-*.md         # 分解図（Mermaid、12 言語版）
+│   └── translations/           # 多言語ドキュメント（12 言語 × README/CLAUDE）
+├── public/                     # パブリックエントリ（Web ルートディレクトリ）
+│   ├── img/pet.svg             # プロジェクトペット「小安」（SVG、サイトアイコン兼用）
+│   └── favicon.ico             # 旧ブラウザ互換の .ico フォールバック
+├── resource/translations/      # ランタイム言語パック（zh_CN / en）
+├── tests/                      # PHPUnit テスト
 ├── runtime/                    # ランタイムファイル
 └── vendor/                     # Composer 依存関係
 ```
+
+## アーキテクチャ設計と図表
+
+3 つの図はいずれも**純粋な手書き SVG**（スクリプトなし、外部フォント依存なし、無限に拡大縮小可能）で、GitHub / ブラウザで直接表示でき、PPT やドキュメントに挿入することもできます：
+
+| 図 | 内容 | ファイル |
+|---|------|------|
+| システムアーキテクチャ設計 | 四層トポロジー：クライアント層 → ゲートウェイ層 → webman アプリケーション層（ミドルウェアチェーン / コントローラー / 共通サービス）→ ストレージ層、右側にセキュリティと可観測性 | [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg) |
+| 機能設計 | 12 の機能ドメイン → コントローラー入口 → 主要機能、下部にミドルウェア実行チェーンとデータインターフェース仕様 | [`docs/diagrams/features.svg`](docs/diagrams/features.svg) |
+| ライフサイクル | インストール → 起動 → 接続 → 防御 → 認証・認可 → 処理 → 永続化 → レスポンス監査、異常分岐とトークンライフサイクルを含む | [`docs/diagrams/lifecycle.svg`](docs/diagrams/lifecycle.svg) |
+
+<img src="docs/diagrams/architecture.svg" width="1100" alt="open-admin システムアーキテクチャ設計図">
+
+<img src="docs/diagrams/features.svg" width="1100" alt="open-admin 機能設計図">
+
+<img src="docs/diagrams/lifecycle.svg" width="1100" alt="open-admin ライフサイクル図">
+
+> 編集可能なソースレベルの図が必要な場合は、[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.ja.md) と [`docs/diagrams/`](docs/diagrams/)（Mermaid、[Mermaid Live](https://mermaid.live/) に貼り付けて編集可能）を参照してください。
 
 ## 環境要件
 
@@ -222,7 +300,7 @@ docker-compose up -d
 
 - **統一レスポンス形式**: `{ "code": 0, "message": "success", "data": {...} }`、`code=0` は成功を意味
 - **エラーコード**: `400` パラメータエラー / `401` 未ログイン / `403` 権限なし / `404` 存在しない / `422` 検証失敗 / `429` レート制限 / `500` サーバーエラー
-- **API バージョン**: リクエストヘッダー `API-Version: v1` で制御（未指定時はデフォルト v1）、URL には含めない
+- **API バージョン**: バージョン番号は URL プレフィックスに含まれます（例 `/api/v1/...`）、リクエストヘッダーは使用しません
 - **認証**: `Authorization: Bearer <token>`；access_token の有効期限は 2 時間、refresh_token は 14 日
 - **ID 処理**: リクエスト/レスポンス内の ID は hashids 暗号化文字列、実際のデータベース ID を公開しない
 

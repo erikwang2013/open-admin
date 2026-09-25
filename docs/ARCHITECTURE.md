@@ -3,6 +3,8 @@
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
 > 以下 Mermaid 图表在 GitHub / GitLab / VS Code 中可自动渲染。其他环境请使用 [Mermaid Live Editor](https://mermaid.live/) 查看。
+>
+> 需要无需渲染器的静态图（SVG）见 [第 14 节](#14-静态设计图svg)。
 
 ---
 
@@ -90,7 +92,7 @@ flowchart TD
         CT5["DashboardController<br/>统计/趋势/分布"]
         CT6["ExportController<br/>Excel/PDF 导出"]
         CT7["CaptchaController<br/>验证码生成/校验"]
-        CT8["AuthController<br/>登录/注册/刷新"]
+        CT8["AuthController<br/>登录/刷新"]
     end
 
     subgraph "服务层 Service Layer"
@@ -593,7 +595,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph "第1层: 人机验证"
-        L1["点击验证码<br/>Click Captcha<br/>登录/注册强制"]
+        L1["点击验证码<br/>Click Captcha<br/>登录强制"]
     end
 
     subgraph "第2层: 操作确认"
@@ -678,3 +680,17 @@ flowchart TB
     style ES fill:#1890FF,color:#fff
     style REDIS fill:#1890FF,color:#fff
 ```
+
+---
+
+## 14. 静态设计图（SVG）
+
+以下三张图为**手写 SVG**（无脚本、无外部依赖、可无限缩放），无需 Mermaid 渲染器即可查看，适合直接插入文档、PPT 与 README：
+
+| 图 | 内容 | 文件 |
+|---|------|------|
+| 系统架构设计 | 四层拓扑：客户端层 → 网关层 → webman 应用层 → 存储层，含安全防护与可观测性 | [architecture.svg](diagrams/architecture.svg) |
+| 功能设计 | 12 个功能域 → 控制器入口 → 关键能力，附中间件执行链与数据接口规范 | [features.svg](diagrams/features.svg) |
+| 生命周期 | 安装 → 启动 → 接入 → 防护 → 鉴权 → 处理 → 持久化 → 响应审计，含异常分支与令牌生命周期 | [lifecycle.svg](diagrams/lifecycle.svg) |
+
+> 项目宠物「小安」素材：[`public/img/pet.svg`](../public/img/pet.svg)（纯 SVG，同时用作站点首页、安装向导与浏览器图标）

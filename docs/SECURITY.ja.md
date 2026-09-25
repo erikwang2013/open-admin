@@ -70,7 +70,7 @@
 |----|-----|------|
 | Access-Control-Allow-Origin | `*` | 任意のオリジンのクロスオリジンアクセスを許可（内網管理バックエンドのシーン） |
 | Access-Control-Allow-Methods | `GET,POST,PUT,DELETE,OPTIONS` | 許可されるメソッドセット |
-| Access-Control-Allow-Headers | `Authorization,Content-Type,API-Version` | 許可されるカスタムヘッダー |
+| Access-Control-Allow-Headers | `Authorization,Content-Type,Accept-Language` | 許可されるカスタムヘッダー |
 | Access-Control-Max-Age | `86400` | プリフライトリクエストを 24 時間キャッシュ |
 | X-Content-Type-Options | `nosniff` | ブラウザの MIME スニッフィングを禁止 |
 | X-Frame-Options | `DENY` | すべての iframe 埋め込みを禁止、クリックジャッキングを防止 |
@@ -123,7 +123,6 @@ Lua スクリプトは Redis サーバー側でシングルスレッド実行さ
 |------|------|------|------|
 | デフォルト（全ルート） | 60 回/分 | 60s | 汎用 API |
 | `/api/v1/auth/login` | 10 回/分 | 60s | ログイン（ブルートフォース防止） |
-| `/api/v1/auth/register` | 5 回/分 | 60s | 登録（一括登録防止） |
 
 ### レスポンスヘッダー
 

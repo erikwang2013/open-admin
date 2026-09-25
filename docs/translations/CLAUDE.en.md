@@ -18,7 +18,7 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
 | Domain | Feature |
 |----|------|
-| Authentication | Login/Register/Refresh/Logout + CAPTCHA + account lockout + session limit |
+| Authentication | Login/Refresh/Logout + click CAPTCHA + account lockout + session limit |
 | Dashboard | Real-time stats/trends/distribution/logs (Redis 5m cache) |
 | Users | CRUD + batch delete/enable-disable + Excel import |
 | Roles & Permissions | CRUD + permission tree + RBAC method.path authorization |
@@ -27,6 +27,18 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 | Files | Upload + Excel/PDF export (sensitive data masking) |
 | Security | 18-layer defense in depth (XSS/SQL injection/CSRF/rate limiting/CSP...) |
 | Operations | Health check/Prometheus metrics/API docs/security.txt + Docker + CI/CD |
+
+## Project Pet · Xiao An
+
+The shield-shaped guard robot "Xiao An" (小安) takes its name from 「**安**全」 (security) and 「管理后**台**」 (admin dashboard), and stands guard at the "protection" and "authentication" checkpoints of the middleware chain.
+
+- **Single source of style**: `public/img/pet.svg` (pure SVG, no scripts/no external dependencies, with a `prefers-reduced-motion` fallback). Editing this one file updates the site home page, the install wizard, and the browser icon at the same time — **do not copy a second version**.
+- **Where it is already wired in**:
+  - `GET /` site home page → `app/view/index/view.html` (route at the top of `config/route.php`, no authentication required)
+  - The 4 pages of the install wizard → injected uniformly by `InstallController::layout()`
+  - Site icon → `<link rel="icon" type="image/svg+xml" href="/img/pet.svg">` (home page + install wizard + `apps/flutter/web/index.html`)
+- **Color palette**: primary `#1677FF`, warm antenna `#FA8C16`, verification green `#52C41A`; canvas `240 × 320`.
+- **Design diagrams**: `docs/diagrams/architecture.svg` (system architecture), `features.svg` (feature design), `lifecycle.svg` (lifecycle) — also hand-written SVG, sharing the same palette as the pet; referenced directly from the README and the docs.
 
 ## Tech Stack
 
@@ -67,7 +79,7 @@ open-admin/
 │   │   ├── HealthController.php    # Health check
 │   │   ├── DocsController.php      # OpenAPI docs
 │   │   └── MetricsController.php   # Prometheus metrics
-│   ├── api/v1/controller/      # API v1 controllers (version header control)
+│   ├── api/v1/controller/      # API v1 controllers (dispatched via the /api/v1 URL prefix)
 │   │   ├── CaptchaController.php
 │   │   └── AuthController.php
 │   ├── common/                 # Common utilities
@@ -75,15 +87,15 @@ open-admin/
 │   │   ├── SnowflakeService.php
 │   │   └── EncryptionService.php
 │   ├── common/                 # Common definitions (incl. Apidoc Definitions)
-│   ├── middleware/             # Middleware (8)
+│   ├── middleware/             # Middleware (7)
 │   │   ├── Cors.php            # CORS (global)
 │   │   └── (migrated to erikwang2013/security-php package)  # 31 attack detectors
 │   │   ├── RateLimit.php       # Redis rate limiting (global, Lua atomic)
-│   │   ├── ApiVersion.php      # API version validation
 │   │   ├── AdminAuth.php       # JWT auth + blacklist
 │   │   ├── AdminPermission.php # RBAC permission check (Redis 60s cache)
 │   │   └── OperationLog.php    # Automatic operation logging (incl. client source detection)
 │   ├── model/                  # Data models
+│   ├── view/index/view.html    # Site home page template (GET /, project pet + entry navigation)
 │   ├── queue/                  # Queue tasks
 │   └── process/                # Processes (Http, Monitor)
 ├── apps/
@@ -115,11 +127,16 @@ open-admin/
 │   ├── SECURITY.md             # Security architecture design
 │   ├── API.md                  # API reference
 │   ├── nginx-security.conf     # Nginx security reference config
-│   ├── diagrams/               # Decomposed architecture diagrams
+│   ├── diagrams/               # Diagrams
+│   │   ├── architecture.svg    # System architecture design (hand-written SVG)
+│   │   ├── features.svg        # Feature design (hand-written SVG)
+│   │   ├── lifecycle.svg       # Lifecycle diagram (hand-written SVG)
+│   │   └── 01..12-*.md         # Decomposed architecture diagrams (Mermaid, 12 languages)
 │   └── superpowers/            # Specs & plans
 │       ├── specs/              # Design specs
 │       └── plans/              # Implementation plans
 ├── public/                     # Public entry
+│   └── img/pet.svg             # Project pet "Xiao An" (SVG, also the site icon)
 ├── runtime/                    # Runtime files
 ├── tests/                      # Tests
 ├── vendor/                     # Composer dependencies
@@ -142,7 +159,7 @@ open-admin/
 ```
 全局:  Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → {路由中间件}
 /admin: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
-/api:   Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → ApiVersion → Controller
+/api/v1: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller（版本体现在 URL 前缀中）
 /health: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller
 ```
 
@@ -161,20 +178,21 @@ open-admin/
 
 ## API Versioning Policy
 
-The version is controlled via the `API-Version` request header (default `v1`), not reflected in the URL:
+The version number is reflected in the URL prefix (`/api/v1/...`, `/api/v2/...`), not in request headers:
 
 ```bash
 curl http://localhost:8787/api/v1/auth/login
 ```
 
-Adding a new version only requires creating the `app/api/{version}/controller/` directory and registering it in the `ApiVersion` middleware.
+Adding a new version only requires creating the `app/api/{version}/controller/` directory and registering the corresponding route group in `config/route.php`.
 
 ## Rate Limiting Policy
 
 Redis sliding window (Lua atomic), default 60 req/min/IP/route:
-- Login: 10 req/min
-- Register: 5 req/min
+- Login `/api/v1/auth/login`: 10 req/min
 - Response headers: `X-RateLimit-Limit/Remaining/Reset`, plus `Retry-After` when exceeded
+
+> Keys in `RateLimit::$sensitive` must match the **full paths** in `config/route.php` (including the `/api/v{n}` version prefix), otherwise sensitive routes silently fall back to the default 60 req/min.
 
 ## Code Standards
 

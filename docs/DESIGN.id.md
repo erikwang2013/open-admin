@@ -6,9 +6,11 @@
 
 > Diagram arsitektur Mermaid yang terperinci lihat [ARCHITECTURE.id.md](ARCHITECTURE.id.md) (dapat dirender otomatis di GitHub/GitLab/VS Code).
 
+> Diagram desain statis (SVG): [Arsitektur Sistem](diagrams/architecture.svg) · [Desain Fitur](diagrams/features.svg) · [Siklus Hidup](diagrams/lifecycle.svg)
+
 ## 1. Arsitektur Sistem
 
-> **Daftar fitur**: Autentikasi(login/register/refresh/logout + penguncian akun + batasan sesi) | Dasbor(cache Redis) | CRUD pengguna + massal + impor | Peran & hak akses(RBAC) | Konfigurasi sistem | Audit operasi(8 platform sumber) | File(upload+ekspor+penyamaran) | Keamanan(18 lapis pertahanan) | Operasional(health/metrics/docs/Docker/CI)
+> **Daftar fitur**: Autentikasi(login/refresh/logout + penguncian akun + batasan sesi) | Dasbor(cache Redis) | CRUD pengguna + massal + impor | Peran & hak akses(RBAC) | Konfigurasi sistem | Audit operasi(8 platform sumber) | File(upload+ekspor+penyamaran) | Keamanan(18 lapis pertahanan) | Operasional(health/metrics/docs/Docker/CI)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -62,7 +64,7 @@
 | Lapisan | Direktori | Tanggung jawab |
 |---|------|------|
 | Routing | `config/route.php` | Pemetaan URL ke controller, pengikatan middleware, routing ber-versi |
-| Middleware | `app/middleware/` | Interception serangan(SecurityFilter), rate limit(RateLimit), autentikasi(JWT), otorisasi(RBAC), versi API(ApiVersion) |
+| Middleware | `app/middleware/` | Interception serangan(SecurityFilter), rate limit(RateLimit), autentikasi(JWT), otorisasi(RBAC) |
 | Controller | 14: Dashboard/User/Role/Permission/Config/Log/Profile/Export/Import/Upload/Health/Docs (sisi admin) + Captcha/Auth (API v1) | Validasi parameter permintaan, pemanggilan logika bisnis, format respons |
 | Layanan bisnis | `app/service/` | Logika bisnis yang dapat digunakan ulang (dicadangkan) |
 | Model data | `app/model/` | Pemetaan ORM, relasi, enkripsi/dekripsi bidang |
@@ -90,8 +92,9 @@ Route 匹配
   RateLimit ───────────► Redis 滑动窗口限流
   │ (失败返回 429 + Retry-After 头)
   ▼
-  ApiVersion ─────────► API-Version 头校验，注入 $request->apiVersion
-  │ (失败返回 400)
+  Distribusi rute ────► Nomor versi tercermin pada prefiks URL (/api/v1/...、/api/v2/...)
+  │                     Permintaan /api/v1 → grup rute terdaftar statis langsung ke controller
+  │                     Permintaan /admin → lanjut ke rantai middleware di bawah
   ▼
   AdminAuth ──────────► JWT 验证，注入 $request->adminId
   │ (失败返回 401)
@@ -175,7 +178,7 @@ erik_system_config (系统配置) — 独立表
 
 ```
 公开接口:  /api/v1/captcha/{generate|verify}
-           /api/v1/auth/{login|register|refresh}
+           /api/v1/auth/{login|refresh}
 
 管理端:   /admin/{resource}[/{hashid}]
           /admin/export/{excel|pdf}
@@ -199,33 +202,25 @@ erik_system_config (系统配置) — 独立表
 
 ### 4.2 Kebijakan Versi API
 
-Versi API dikontrol melalui header permintaan, **tidak tampil di path URL**:
-
-```http
-API-Version: v1
-```
+Nomor versi API tercermin pada prefiks URL (`/api/v1/...`, `/api/v2/...`), **tidak menggunakan header permintaan**. `config/route.php` mendaftarkan grup rute setiap versi secara statis yang terhubung langsung ke controller versi terkait, distribusi versi tidak melewati middleware apa pun.
 
 | Mekanisme | Keterangan |
 |------|------|
-| Versi default | Jika tidak membawa header `API-Version`, default `v1` |
-| Validasi | Middleware `ApiVersion` memvalidasi; versi tidak didukung mengembalikan 400 |
-| Routing | Fungsi bantuan `v()` menyelesaikan kelas controller secara dinamis sesuai versi |
+| Prefiks URL | Nomor versi tetap menjadi segmen path pertama URL: `/api/v1/...`, `/api/v2/...` |
+| Routing | `Route::group('/api/v1', ...)` didaftarkan secara statis di `config/route.php`, terhubung langsung ke controller |
 | Direktori | Controller diorganisir per versi: `app/api/{version}/controller/` |
+| Endpoint operasional | `/api/docs`, `/health`, `/metrics` dan sejenisnya tanpa prefiks versi |
 
 Contoh ekstensi — menambah API v2:
 1. Buat `app/api/v2/controller/AuthController.php`
-2. Tambahkan `'v2'` ke konstanta `SUPPORTED` middleware `ApiVersion`
-3. Definisi rute tidak perlu diubah
+2. Daftarkan grup rute `Route::group('/api/v2', ...)` di `config/route.php`
 
 ```bash
-# 使用 v1
-curl /api/v1/auth/login
+# v1
+curl http://localhost:8787/api/v1/auth/login
 
-# 使用 v2
-curl -H "API-Version: v2" /api/v1/auth/login
-
-# 不传，默认 v1
-curl /api/v1/auth/login
+# v2 (setelah menambah versi)
+curl http://localhost:8787/api/v2/auth/login
 ```
 
 ### 4.3 Kebijakan Rate Limit
@@ -236,7 +231,6 @@ Berdasarkan algoritma sliding window Redis Sorted Set, dieksekusi dengan skrip L
 |------|------|
 | Default | 60 kali/menit/IP/rute |
 | POST /api/v1/auth/login | 10 kali/menit |
-| POST /api/v1/auth/register | 5 kali/menit |
 
 Melebihi batas mengembalikan 429, header respons berisi X-RateLimit-Limit / Remaining / Reset / Retry-After.
 
@@ -362,7 +356,7 @@ Alur data: Page ← DataService ← ApiService (JWT Bearer) ← HTTP ← webman
 |------|------|
 | Pembatasan metode | Whitelist metode HTTP SecurityFilter, hanya mengizinkan GET/POST/PUT/DELETE/OPTIONS/HEAD, metode non-standar mengembalikan 405 |
 | Interception serangan | Middleware SecurityFilter, deteksi & blokir XSS/Injeksi SQL/Path traversal/Injeksi perintah/CSRF |
-| Verifikasi manusia | Captcha klik (Click Captcha), validasi wajib saat login/registrasi |
+| Verifikasi manusia | Captcha klik (Click Captcha), validasi wajib saat login |
 | Penguncian akun | 5 kali kegagalan login berturut-turut mengunci akun 15 menit, selama terkunci mengembalikan 429 |
 | Batasan sesi | Satu pengguna maksimal 3 Token konkuren, lebih dari itu Token paling lama otomatis masuk blacklist |
 | Rate limit | Middleware RateLimit, Redis sliding window, atomik Lua |

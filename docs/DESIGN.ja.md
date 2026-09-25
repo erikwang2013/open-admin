@@ -5,10 +5,12 @@
 > [中文](DESIGN.md) | [English](DESIGN.en.md) | [한국어](DESIGN.ko.md) | [Русский](DESIGN.ru.md) | [Deutsch](DESIGN.de.md) | [Français](DESIGN.fr.md) | [Español](DESIGN.es.md) | [Português](DESIGN.pt.md) | [हिन्दी](DESIGN.hi.md) | [العربية](DESIGN.ar.md) | [বাংলা](DESIGN.bn.md) | [Bahasa Indonesia](DESIGN.id.md) | [日本語](DESIGN.ja.md)
 
 > 詳細な Mermaid アーキテクチャ図は [ARCHITECTURE.md](ARCHITECTURE.ja.md) を参照してください（GitHub/GitLab/VS Code で自動レンダリング可能）。
+>
+> 静的設計図（SVG）：[システムアーキテクチャ](diagrams/architecture.svg) · [機能設計](diagrams/features.svg) · [ライフサイクル](diagrams/lifecycle.svg)
 
 ## 1. システムアーキテクチャ
 
-> **機能一覧**：認証(login/register/refresh/logout + アカウントロック + セッション制限) | ダッシュボード(Redisキャッシュ) | ユーザーCRUD+一括+インポート | ロール権限(RBAC) | システム設定 | 操作監査(8プラットフォームソース端) | ファイル(アップロード+エクスポート+マスキング) | セキュリティ(18層防御) | 運用(health/metrics/docs/Docker/CI)
+> **機能一覧**：認証(login/refresh/logout + アカウントロック + セッション制限) | ダッシュボード(Redisキャッシュ) | ユーザーCRUD+一括+インポート | ロール権限(RBAC) | システム設定 | 操作監査(8プラットフォームソース端) | ファイル(アップロード+エクスポート+マスキング) | セキュリティ(18層防御) | 運用(health/metrics/docs/Docker/CI)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -62,7 +64,7 @@
 | レイヤー | ディレクトリ | 責務 |
 |---|------|------|
 | ルーティング | `config/route.php` | URL からコントローラーへのマッピング、ミドルウェアバインディング、バージョン化ルート |
-| ミドルウェア | `app/middleware/` | 攻撃ブロック(SecurityFilter)、レート制限(RateLimit)、認証(JWT)、認可(RBAC)、APIバージョン(ApiVersion) |
+| ミドルウェア | `app/middleware/` | 攻撃ブロック(SecurityFilter)、レート制限(RateLimit)、認証(JWT)、認可(RBAC) |
 | コントローラー | 14 個：Dashboard/User/Role/Permission/Config/Log/Profile/Export/Import/Upload/Health/Docs (管理側) + Captcha/Auth (API v1) | リクエストパラメータ検証、ビジネスロジック呼び出し、レスポンス整形 |
 | 業務サービス | `app/service/` | 再利用可能な業務ロジック（予約） |
 | データモデル | `app/model/` | ORM マッピング、関連関係、フィールド暗号化・復号化 |
@@ -90,8 +92,9 @@ Route 匹配
   RateLimit ───────────► Redis 滑动窗口限流
   │ (失败返回 429 + Retry-After 头)
   ▼
-  ApiVersion ─────────► API-Version 头校验，注入 $request->apiVersion
-  │ (失败返回 400)
+  路由分发 ───────────► 版本号体现在 URL 前缀（/api/v1/...、/api/v2/...）
+  │                     /api/v1 请求 → 静态注册路由组直连控制器
+  │                     /admin 请求 → 继续下方中间件链
   ▼
   AdminAuth ──────────► JWT 验证，注入 $request->adminId
   │ (失败返回 401)
@@ -175,7 +178,7 @@ erik_system_config (系统配置) — 独立表
 
 ```
 公开接口:  /api/v1/captcha/{generate|verify}
-           /api/v1/auth/{login|register|refresh}
+           /api/v1/auth/{login|refresh}
 
 管理端:   /admin/{resource}[/{hashid}]
           /admin/export/{excel|pdf}
@@ -199,33 +202,25 @@ erik_system_config (系统配置) — 独立表
 
 ### 4.2 API バージョン戦略
 
-API バージョンはリクエストヘッダーで制御され、**URL パスには含まれません**：
-
-```http
-API-Version: v1
-```
+API バージョン番号は URL プレフィックスに含まれ（`/api/v1/...`、`/api/v2/...`）、**リクエストヘッダーは使用しません**。`config/route.php` が各バージョンのルートグループを静的に登録し、対応バージョンのコントローラーに直結します。バージョンの振り分けはどのミドルウェアも経由しません。
 
 | 仕組み | 説明 |
 |------|------|
-| デフォルトバージョン | `API-Version` ヘッダー未指定時はデフォルト `v1` |
-| 検証 | `ApiVersion` ミドルウェアが検証、サポートされていないバージョンは 400 を返す |
-| ルーティング | `v()` ヘルパー関数がバージョンに応じてコントローラークラスを動的解決 |
+| URL プレフィックス | バージョン番号は URL の第一パスセグメントに固定: `/api/v1/...`、`/api/v2/...` |
+| ルーティング | `config/route.php` に `Route::group('/api/v1', ...)` を静的に登録し、コントローラーに直結 |
 | ディレクトリ | コントローラーはバージョンごとに構成: `app/api/{version}/controller/` |
+| 運用エンドポイント | `/api/docs`、`/health`、`/metrics` などはバージョンプレフィックスを付けない |
 
 拡張例——v2 API の追加：
 1. `app/api/v2/controller/AuthController.php` を作成
-2. `ApiVersion` ミドルウェアの `SUPPORTED` 定数に `'v2'` を追加
-3. ルート定義の変更は不要
+2. `config/route.php` に `Route::group('/api/v2', ...)` ルートグループを登録
 
 ```bash
-# v1 を使用
-curl /api/v1/auth/login
+# v1
+curl http://localhost:8787/api/v1/auth/login
 
-# v2 を使用
-curl -H "API-Version: v2" /api/v1/auth/login
-
-# 未指定、デフォルト v1
-curl /api/v1/auth/login
+# v2（バージョン追加後）
+curl http://localhost:8787/api/v2/auth/login
 ```
 
 ### 4.3 レート制限戦略
@@ -236,7 +231,6 @@ Redis Sorted Set スライディングウィンドウアルゴリズム、原子
 |------|------|
 | デフォルト | 60 回/分/IP/ルート |
 | POST /api/v1/auth/login | 10 回/分 |
-| POST /api/v1/auth/register | 5 回/分 |
 
 超過すると 429 を返し、レスポンスヘッダーに X-RateLimit-Limit / Remaining / Reset / Retry-After を含みます。
 
@@ -362,7 +356,7 @@ Redis Sorted Set スライディングウィンドウアルゴリズム、原子
 |------|------|
 | メソッド制限 | SecurityFilter HTTP メソッドホワイトリスト、GET/POST/PUT/DELETE/OPTIONS/HEAD のみ許可、非標準メソッドは 405 |
 | 攻撃ブロック | SecurityFilter ミドルウェア、XSS/SQLインジェクション/パストラバーサル/コマンドインジェクション/CSRF 検知ブロック |
-| 人機認証 | クリックキャプチャ（Click Captcha）、ログイン/登録で強制検証 |
+| 人機認証 | クリックキャプチャ（Click Captcha）、ログインで強制検証 |
 | アカウントロック | 連続 5 回ログイン失敗で 15 分間ロック、ロック中は 429 を返す |
 | セッション制限 | 同一ユーザーの同時 Token は最大 3 つ、超過時は最も古い Token が自動ブラックリスト入り |
 | レート制限 | RateLimit ミドルウェア、Redis スライディングウィンドウ、Lua 原子化 |

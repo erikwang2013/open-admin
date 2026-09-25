@@ -4,9 +4,48 @@
 
 # Panel Admin Terbuka (open-admin)
 
-Sistem panel admin full-stack berbasis webman v2 + Flutter.
+<p align="center">
+  <img src="public/img/pet.svg" width="150" height="200" alt="Xiao An — hewan peliharaan proyek open-admin">
+</p>
+
+Sistem panel admin full-stack berbasis **webman v2 + Flutter**: autentikasi dan hak akses RBAC, 18 lapis pertahanan berlapis, observabilitas Prometheus, klien multi-platform (Flutter Web / HarmonyOS).
+
+> Hewan peliharaan proyek 「**Xiao An (小安)**」 adalah robot penjaga berbentuk perisai, berjaga di dua pos pemeriksaan 「perlindungan」 dan 「autentikasi」 pada rantai middleware.
+> Aset [`public/img/pet.svg`](public/img/pet.svg): SVG murni (tanpa skrip, tanpa dependensi eksternal, mendukung latar gelap dan `prefers-reduced-motion`), sekaligus digunakan sebagai ikon situs.
+>
+> Diagram desain: [Arsitektur Sistem](docs/diagrams/architecture.svg) · [Desain Fitur](docs/diagrams/features.svg) · [Siklus Hidup](docs/diagrams/lifecycle.svg)
 
 > [Diagram Arsitektur](docs/ARCHITECTURE.id.md) | [Dokumen Desain](docs/DESIGN.id.md) | [Arsitektur Keamanan](docs/SECURITY.id.md) | [Referensi API](docs/API.id.md)
+
+## Hewan Peliharaan Proyek · Xiao An (小安)
+
+<table>
+<tr>
+<td width="170"><img src="public/img/pet.svg" width="150" height="200" alt="Xiao An"></td>
+<td>
+
+**Xiao An (小安)** adalah hewan peliharaan proyek open-admin, diambil dari 「**安**全」(keamanan) dan 「管理后**台**」(panel admin) — seekor robot penjaga berbentuk perisai.
+
+- **Tubuh berbentuk perisai** — mewakili 18 lapis pertahanan berlapis; antena di bagian atas menyala terus, melambangkan layanan yang selalu berada di memori (webman/workerman)
+- **Dua pupil pada layar wajah** — berkedip secara berkala; ia mengawasi setiap permintaan, sekaligus mengawasi rantai middleware
+- **Lencana verifikasi di dada** — tanda centang menyala terus, melambangkan validasi hak akses `method.path` yang lolos
+
+**Di mana ia muncul**
+
+| Lokasi | Bentuk |
+|------|------|
+| Halaman utama situs `GET /` | Sosok utama + pengenalan proyek dan navigasi masuk ([`app/view/index/view.html`](app/view/index/view.html)) |
+| Wizard instalasi `/install` | Sosok pada header wizard tiga langkah (`InstallController::layout()`) |
+| Tab browser | Ikon situs `rel="icon" type="image/svg+xml"` |
+| Dokumentasi ini dan diagram desain | Avatar proyek + kartu hewan peliharaan di sudut kanan bawah diagram arsitektur |
+
+> Sumber aset tunggal: [`public/img/pet.svg`](public/img/pet.svg). Memodifikasinya sekaligus memperbarui semua lokasi di atas.
+
+</td>
+</tr>
+</table>
+
+**Ingin menggambar sendiri?** Spesifikasi ikon: warna utama `#1677FF`, antena hangat `#FA8C16`, hijau verifikasi `#52C41A`; kanvas `240 × 320`, perisai di tengah, ukuran minimum yang dapat digunakan 48 px.
 
 ## Daftar Fitur
 
@@ -23,7 +62,7 @@ Sistem panel admin full-stack berbasis webman v2 + Flutter.
 | 📋 Audit Operasi | Kueri log + deteksi sumber | Auto-deteksi 8 platform |
 | 📁 Manajemen File | Upload/ekspor Excel/ekspor PDF | Data sensitif otomatis disamarkan |
 | 🛡 Perlindungan Keamanan | 18 lapis pertahanan berlapis | XSS/Injeksi SQL/Path traversal/Injeksi perintah/CSRF/rate limit/CSP... |
-| 🏥 Operasional | Health check/metrics/dokumen API/security.txt | Prometheus + OpenAPI 3.0 + dokumentasi interaktif hg/apidoc |
+| 🏥 Operasional | Health check/metrics/dokumen API/security.txt | Prometheus + OpenAPI 3.0 + dokumentasi interaktif erikwang2013/apidoc-php |
 | 🌐 Internasionalisasi | Alih bahasa Cina-Inggris | Header Accept-Language / parameter ?lang= |
 
 ## Tumpukan Teknologi
@@ -72,7 +111,7 @@ open-admin/
 │   │   ├── DocsController.php      # Dokumen OpenAPI
 │   │   └── BaseController.php      # Kontroler dasar
 │   ├── api/
-│   │   └── v1/controller/          # Kontroler API v1 (versi dikontrol oleh header API-Version)
+│   │   └── v1/controller/          # Kontroler API v1 (versi tercermin pada prefiks URL /api/v1)
 │   │       ├── CaptchaController.php # Captcha klik
 │   │       └── AuthController.php    # Login/refresh token
 │   ├── common/                 # Kelas utilitas publik
@@ -83,27 +122,66 @@ open-admin/
 │   │   ├── Cors.php            # CORS lintas domain
 │   │   ├── SecurityFilter.php  # Interception deteksi serangan (pembatasan metode HTTP/XSS/Injeksi SQL/Path traversal/Injeksi perintah/CSRF)
 │   │   ├── RateLimit.php       # Rate limit Redis (sliding window + header respons)
-│   │   ├── ApiVersion.php      # Validasi versi API
 │   │   ├── AdminAuth.php       # Autentikasi JWT + blacklist
 │   │   ├── AdminPermission.php # Validasi hak akses RBAC
 │   │   └── OperationLog.php    # Pencatatan log operasi otomatis (termasuk deteksi sumber)
-│   └── model/                  # Model data
+│   ├── model/                  # Model data
+│   ├── view/index/view.html    # Templat halaman utama situs (GET /, hewan peliharaan proyek + navigasi masuk)
+│   ├── queue/                  # Tugas antrian
+│   └── process/                # Proses (Http, Monitor)
 ├── apps/
 │   ├── flutter/                # Panel admin Web Flutter (gaya PC)
-│   │   └── lib/app/
-│   │       ├── pages/          # 5 halaman lengkap (dasbor/pengguna/peran/konfigurasi/log/pusat akun)
-│   │       ├── services/       # ApiService (interceptor JWT) + AuthService (persistensi Token)
-│   │       └── layouts/        # Tata letak panel admin responsif (sidebar+header+area konten)
+│   │   ├── lib/app/
+│   │   │   ├── pages/          # 6 halaman lengkap (dasbor/pengguna/peran/konfigurasi/log/pusat akun)
+│   │   │   ├── services/       # ApiService (interceptor JWT) + AuthService (persistensi Token)
+│   │   │   ├── layouts/        # Tata letak panel admin responsif (sidebar+header+area konten)
+│   │   │   └── theme/          # Tema ganda Material 3
+│   │   └── web/index.html      # Titik masuk Web (judul/deskripsi/ikon situs)
 │   └── harmonyos/              # Klien native HarmonyOS (refresh token tanpa terasa)
 ├── config/                     # File konfigurasi (dengan komentar bahasa Cina)
 │   ├── route.php               # Routing + kebijakan versi API
 │   ├── middleware.php           # Registrasi middleware global
 │   └── ...                     # Konfigurasi berbagai komponen
-├── database/install.sql        # Skrip instalasi SQL (termasuk data seed hak akses)
-├── public/                     # Titik masuk publik
+├── database/                   # Skrip basis data
+│   ├── install.sql             # Skrip instalasi lengkap (termasuk data seed hak akses)
+│   └── backup/                 # Skrip backup dan pemulihan
+├── docs/                       # Dokumentasi
+│   ├── ARCHITECTURE.md         # Diagram arsitektur (Mermaid)
+│   ├── DESIGN.md               # Dokumen desain
+│   ├── SECURITY.md             # Desain arsitektur keamanan
+│   ├── API.md                  # Dokumen referensi API
+│   ├── diagrams/               # Direktori diagram
+│   │   ├── architecture.svg    # Diagram desain arsitektur sistem (SVG)
+│   │   ├── features.svg        # Diagram desain fitur (SVG)
+│   │   ├── lifecycle.svg       # Diagram siklus hidup (SVG)
+│   │   └── 01..12-*.md         # Diagram terurai (Mermaid, terjemahan 12 bahasa)
+│   └── translations/           # Dokumentasi multi-bahasa (12 bahasa × README/CLAUDE)
+├── public/                     # Titik masuk publik (root Web)
+│   ├── img/pet.svg             # Hewan peliharaan proyek 「Xiao An (小安)」(SVG, sekaligus ikon situs)
+│   └── favicon.ico             # Fallback .ico untuk browser lama
+├── resource/translations/      # Paket bahasa runtime (zh_CN / en)
+├── tests/                      # Pengujian PHPUnit
 ├── runtime/                    # File runtime
 └── vendor/                     # Dependensi Composer
 ```
+
+## Arsitektur Desain & Diagram
+
+Ketiga diagram tersebut adalah **SVG tulis tangan murni** (tanpa skrip, tanpa dependensi font eksternal, dapat diperbesar tanpa batas), dapat langsung dilihat di GitHub / browser, dan juga dapat disisipkan ke PPT dan dokumentasi:
+
+| Diagram | Konten | File |
+|---|------|------|
+| Desain Arsitektur Sistem | Topologi empat lapis: Lapisan Klien → Lapisan Gateway → Lapisan Aplikasi webman (rantai middleware / kontroler / layanan publik) → Lapisan Penyimpanan, dengan keamanan dan observabilitas di sisi kanan | [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg) |
+| Desain Fitur | 12 domain fitur → titik masuk kontroler → kemampuan kunci, di bagian bawah terdapat rantai eksekusi middleware dan spesifikasi antarmuka data | [`docs/diagrams/features.svg`](docs/diagrams/features.svg) |
+| Siklus Hidup | Instalasi → Startup → Akses → Perlindungan → Autentikasi → Pemrosesan → Persistensi → Audit respons, termasuk cabang pengecualian dan siklus hidup token | [`docs/diagrams/lifecycle.svg`](docs/diagrams/lifecycle.svg) |
+
+<img src="docs/diagrams/architecture.svg" width="1100" alt="Diagram desain arsitektur sistem open-admin">
+
+<img src="docs/diagrams/features.svg" width="1100" alt="Diagram desain fitur open-admin">
+
+<img src="docs/diagrams/lifecycle.svg" width="1100" alt="Diagram siklus hidup open-admin">
+
+> Jika memerlukan diagram tingkat kode sumber yang dapat diedit, lihat [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) dan [`docs/diagrams/`](docs/diagrams/) (Mermaid, dapat ditempel ke [Mermaid Live](https://mermaid.live/) untuk diedit).
 
 ## Persyaratan Lingkungan
 
@@ -222,7 +300,7 @@ Referensi API lengkap (format respons terpadu, kode kesalahan, detail semua endp
 
 - **Format respons terpadu**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0` berarti sukses
 - **Kode kesalahan**: `400` kesalahan parameter / `401` belum login / `403` tanpa izin / `404` tidak ditemukan / `422` gagal validasi / `429` rate limit / `500` kesalahan server
-- **Versi API**: Dikontrol melalui header `API-Version: v1` (default v1 jika tidak ada), tidak tampil di URL
+- **Versi API**: Nomor versi tercermin pada prefiks URL (seperti `/api/v1/...`), tidak menggunakan header permintaan
 - **Autentikasi**: `Authorization: Bearer <token>`; masa berlaku access_token 2 jam, refresh_token 14 hari
 - **Penanganan ID**: ID pada permintaan/respons adalah string terenkripsi hashids, tidak mengekspos ID basis data asli
 

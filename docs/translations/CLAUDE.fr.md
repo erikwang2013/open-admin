@@ -6,11 +6,19 @@
 
 Système de panneau d'administration full-stack basé sur webman v2 + Flutter.
 
+## Mention de copyright
+
+```
+Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+```
+
+> **Non modifiable, non supprimable, irréversible.** Tous les nouveaux fichiers doivent inclure la mention de copyright ci-dessus comme en-tête de fichier.
+
 ## Fonctionnalités
 
 | Domaine | Fonctionnalité |
 |----|------|
-| Authentification | Connexion/inscription/rafraîchissement/déconnexion + captcha + verrouillage du compte + limitation des sessions |
+| Authentification | Connexion/rafraîchissement/déconnexion + captcha à clic + verrouillage du compte + limitation des sessions |
 | Tableau de bord | Statistiques en temps réel/tendances/répartition/journaux (cache Redis 5 min) |
 | Utilisateurs | CRUD + suppression groupée/activation-désactivation + import Excel |
 | Rôles et permissions | CRUD + arbre des permissions + autorisation RBAC method.path |
@@ -19,6 +27,18 @@ Système de panneau d'administration full-stack basé sur webman v2 + Flutter.
 | Fichiers | Upload + export Excel/PDF (masquage des données sensibles) |
 | Sécurité | 18 couches de défense en profondeur (XSS/injection SQL/CSRF/limitation de débit/CSP...) |
 | Exploitation | Health check/métriques Prometheus/documentation API/security.txt + Docker + CI/CD |
+
+## Mascotte du projet · Xiao An
+
+Rover gardien en forme de bouclier « Xiao An » (小安), tiré de « **安**全 » (sécurité) et de « 管理后**台** » (panneau d'administration), posté aux deux points de contrôle « protection » et « authentification » de la chaîne de middlewares.
+
+- **Source unique de style** : `public/img/pet.svg` (SVG pur, sans script ni dépendance externe, avec repli `prefers-reduced-motion`). Modifier ce fichier met à jour simultanément la page d'accueil du site, l'assistant d'installation et l'icône du navigateur ; **ne pas en dupliquer une seconde copie**.
+- **Emplacements déjà intégrés** :
+  - Page d'accueil `GET /` → `app/view/index/view.html` (route en tête de `config/route.php`, sans authentification)
+  - 4 pages de l'assistant d'installation → injectées uniformément par `InstallController::layout()`
+  - Icône du site → `<link rel="icon" type="image/svg+xml" href="/img/pet.svg">` (page d'accueil + assistant d'installation + `apps/flutter/web/index.html`)
+- **Charte de couleurs** : couleur principale `#1677FF`, antenne chaude `#FA8C16`, vert de validation `#52C41A` ; toile `240 × 320`.
+- **Diagrammes** : `docs/diagrams/architecture.svg` (architecture système), `features.svg` (conception fonctionnelle), `lifecycle.svg` (cycle de vie) — également des SVG écrits à la main, partageant la même palette que la mascotte ; référencés directement dans le README et la documentation.
 
 ## Pile technique
 
@@ -59,7 +79,7 @@ open-admin/
 │   │   ├── HealthController.php    # Health check
 │   │   ├── DocsController.php      # Documentation OpenAPI
 │   │   └── MetricsController.php   # Métriques de surveillance Prometheus
-│   ├── api/v1/controller/      # Contrôleurs API v1 (contrôle par en-tête de version)
+│   ├── api/v1/controller/      # Contrôleurs API v1 (distribution par préfixe d'URL /api/v1)
 │   │   ├── CaptchaController.php
 │   │   └── AuthController.php
 │   ├── common/                 # Classes d'outils communes
@@ -67,15 +87,15 @@ open-admin/
 │   │   ├── SnowflakeService.php
 │   │   └── EncryptionService.php
 │   ├── common/                 # Définitions communes (avec définitions Apidoc)
-│   ├── middleware/             # Middlewares (8)
+│   ├── middleware/             # Middlewares (7)
 │   │   ├── Cors.php            # CORS (global)
-│   │   ├── SecurityFilter.php  # Interception des attaques (global : XSS/injection SQL/traversée de chemin/injection de commandes/CSRF)
+│   │   └── (migré vers le paquet erikwang2013/security-php)  # détection de 31 types d'attaques
 │   │   ├── RateLimit.php       # Limitation de débit Redis (global, atomique en Lua)
-│   │   ├── ApiVersion.php      # Validation de la version API
 │   │   ├── AdminAuth.php       # Authentification JWT + liste noire
 │   │   ├── AdminPermission.php # Validation des permissions RBAC (cache Redis 60 s)
 │   │   └── OperationLog.php    # Enregistrement automatique des journaux d'opérations (avec détection de la source)
 │   ├── model/                  # Modèles de données
+│   ├── view/index/view.html    # Modèle de la page d'accueil du site (GET /, mascotte + navigation)
 │   ├── queue/                  # Tâches de file d'attente
 │   └── process/                # Processus (Http, Monitor)
 ├── apps/
@@ -107,18 +127,24 @@ open-admin/
 │   ├── SECURITY.md             # Conception de l'architecture de sécurité
 │   ├── API.md                  # Référence de l'API
 │   ├── nginx-security.conf     # Configuration de sécurité Nginx de référence
-│   ├── diagrams/               # Diagrammes d'architecture décomposés
+│   ├── diagrams/               # Diagrammes
+│   │   ├── architecture.svg    # Conception de l'architecture système (SVG écrit à la main)
+│   │   ├── features.svg        # Conception fonctionnelle (SVG écrit à la main)
+│   │   ├── lifecycle.svg       # Cycle de vie (SVG écrit à la main)
+│   │   └── 01..12-*.md         # Diagrammes décomposés (Mermaid, 12 langues)
 │   └── superpowers/            # Spécifications et plans
 │       ├── specs/              # Spécifications de conception
 │       └── plans/              # Plans d'implémentation
 ├── public/                     # Point d'entrée public
+│   └── img/pet.svg             # Mascotte du projet « Xiao An » (SVG, également icône du site)
 ├── runtime/                    # Fichiers d'exécution
 ├── tests/                      # Tests
 ├── vendor/                     # Dépendances Composer
 ├── CLAUDE.md                   # Ce fichier
 ├── README.md                   # Documentation en chinois
-├── README.en.md                # Documentation en anglais
-├── README.ko.md ... README.ja.md  # Documentation multilingue (coréen/russe/allemand/français/espagnol/portugais/hindi/arabe/bengali/indonésien/japonais)
+├── docs/translations/          # Documentation multilingue (12 langues × README/CLAUDE)
+│   ├── README.en.md            # Documentation en anglais
+│   └── README.ko.md ... README.ja.md  # Autres langues (coréen/russe/allemand/français/espagnol/portugais/hindi/arabe/bengali/indonésien/japonais)
 ├── .env                        # Variables d'environnement (hors contrôle de version)
 ├── .env.example                # Modèle de variables d'environnement
 ├── .env.docker                 # Variables d'environnement Docker
@@ -133,10 +159,10 @@ open-admin/
 ## Chaîne d'exécution des middlewares
 
 ```
-Global :  Cors → Locale(Accept-Language) → SecurityFilter(vérification des méthodes→405) → RateLimit → {middlewares de route}
-/admin : Cors → Locale(Accept-Language) → SecurityFilter(vérification des méthodes→405) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
-/api :   Cors → Locale(Accept-Language) → SecurityFilter(vérification des méthodes→405) → RateLimit → ApiVersion → Controller
-/health : Cors → Locale(Accept-Language) → SecurityFilter(vérification des méthodes→405) → RateLimit → Controller
+Global :  Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → {middlewares de route}
+/admin : Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
+/api/v1 : Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller (la version est portée par le préfixe d'URL)
+/health : Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller
 ```
 
 > **Remarque** : les interfaces du panneau d'administration ne nécessitant pas de validation des permissions (comme la consultation de l'espace personnel) sont enregistrées hors du groupe `/admin`, avec uniquement le middleware `AdminAuth`. Les routes du groupe sont validées par `AdminPermission` selon les identifiants de permission au format `method.path`.
@@ -145,7 +171,7 @@ Global :  Cors → Locale(Accept-Language) → SecurityFilter(vérification des 
 
 ## Renforcements de sécurité
 
-- **Limitation des méthodes HTTP** : SecurityFilter n'autorise que GET/POST/PUT/DELETE/OPTIONS/HEAD, les méthodes non standard renvoient 405
+- **Détection d'attaques** : paquet erikwang2013/security-php (31 détecteurs : XSS/injection SQL/injection de commandes/traversée de chemin/SSRF/XXE/JNDI/désérialisation/attaques JWT/CSRF/fuite de données sensibles, etc. + vérification des méthodes HTTP/limitation de la taille du corps de requête/vérification du Content-Type + liste noire par escalade d'attaques IP)
 - **En-tête CSP** : Content-Security-Policy + X-Permitted-Cross-Domain-Policies injectés dans toutes les réponses
 - **Verrouillage du compte** : 5 échecs de connexion consécutifs ⇒ verrouillage du compte de 15 minutes
 - **Limitation des sessions concurrentes** : 3 jetons valides maximum par utilisateur, au-delà le jeton le plus ancien est ajouté à la liste noire
@@ -154,20 +180,21 @@ Global :  Cors → Locale(Accept-Language) → SecurityFilter(vérification des 
 
 ## Stratégie de version API
 
-La version est contrôlée par l'en-tête `API-Version` (v1 par défaut), non visible dans l'URL :
+Le numéro de version est porté par le préfixe d'URL (`/api/v1/...`, `/api/v2/...`), et non par un en-tête de requête :
 
 ```bash
 curl http://localhost:8787/api/v1/auth/login
 ```
 
-Pour ajouter une version, créez simplement le répertoire `app/api/{version}/controller/` et enregistrez-le dans le middleware `ApiVersion`.
+Pour ajouter une version, créez simplement le répertoire `app/api/{version}/controller/` et enregistrez le groupe de routes correspondant dans `config/route.php`.
 
 ## Stratégie de limitation de débit
 
 Fenêtre glissante Redis (atomique en Lua), défaut 60 requêtes/minute/IP/route :
-- Connexion : 10 requêtes/minute
-- Inscription : 5 requêtes/minute
+- Connexion `/api/v1/auth/login` : 10 requêtes/minute
 - En-têtes de réponse : `X-RateLimit-Limit/Remaining/Reset`, avec `Retry-After` en cas de dépassement
+
+> Les clés de `RateLimit::$sensitive` doivent correspondre aux **chemins complets** de `config/route.php` (préfixe de version `/api/v{n}` inclus), sinon les routes sensibles retombent silencieusement sur la limite par défaut de 60 requêtes/minute.
 
 ## Normes de code
 

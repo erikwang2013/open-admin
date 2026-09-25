@@ -5,6 +5,8 @@
 > [中文](ARCHITECTURE.md) | [English](ARCHITECTURE.en.md) | [한국어](ARCHITECTURE.ko.md) | [Русский](ARCHITECTURE.ru.md) | [Deutsch](ARCHITECTURE.de.md) | [Français](ARCHITECTURE.fr.md) | [Español](ARCHITECTURE.es.md) | [Português](ARCHITECTURE.pt.md) | [हिन्दी](ARCHITECTURE.hi.md) | [العربية](ARCHITECTURE.ar.md) | [বাংলা](ARCHITECTURE.bn.md) | [Bahasa Indonesia](ARCHITECTURE.id.md) | [日本語](ARCHITECTURE.ja.md)
 
 > নিচের Mermaid চার্টগুলো GitHub / GitLab / VS Code-এ স্বয়ংক্রিয় রেন্ডার হয়। অন্যান্য পরিবেশে দেখতে [Mermaid Live Editor](https://mermaid.live/) ব্যবহার করুন।
+>
+> রেন্ডারার ছাড়াই দেখা যায় এমন স্ট্যাটিক ডায়াগ্রাম (SVG) প্রয়োজন হলে [১৪ নং বিভাগ](#14-স্ট্যাটিক-ডিজাইন-ডায়াগ্রাম-svg) দেখুন।
 
 ---
 
@@ -22,11 +24,10 @@ flowchart TB
     end
 
     subgraph "অ্যাপ্লিকেশন লেয়ার (webman v2)"
-        C0["ApiVersion মিডলওয়্যার<br/>API-Version হেডার ভেরিফিকেশন"]
         C1["AdminAuth মিডলওয়্যার<br/>JWT ভেরিফিকেশন"]
         C2["AdminPermission মিডলওয়্যার<br/>RBAC পারমিশন ভেরিফিকেশন"]
         C3["অ্যাডমিন Controller<br/>Dashboard / User / Role / Permission"]
-        C4["পাবলিক Controller v1<br/>Captcha / Auth"]
+        C4["/api/v1 রাউট গ্রুপ সরাসরি পাবলিক Controller<br/>Captcha / Auth"]
         C5["Common Services<br/>Hashids / Snowflake / Encryption"]
     end
 
@@ -43,11 +44,10 @@ flowchart TB
 
     A1 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
     A2 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
-    B1 --> C0
-    C0 --> C1
+    B1 --> C1
+    B1 --> C4
     C1 --> C2
     C2 --> C3
-    C0 --> C4
     C3 --> C5
     C4 --> C5
     C3 --> D1
@@ -59,7 +59,6 @@ flowchart TB
     style A1 fill:#1677FF,color:#fff
     style A2 fill:#1677FF,color:#fff
     style B1 fill:#722ED1,color:#fff
-    style C0 fill:#EB2F96,color:#fff
     style C1 fill:#FA8C16,color:#fff
     style C2 fill:#FA8C16,color:#fff
     style C3 fill:#52C41A,color:#fff
@@ -83,7 +82,6 @@ flowchart TD
     subgraph "মিডলওয়্যার লেয়ার Middleware Layer"
         M_RL["RateLimit<br/>Redis স্লাইডিং উইন্ডো রেট লিমিট<br/>X-RateLimit রেসপন্স হেডার"]
         M_SF["SecurityFilter<br/>আক্রমণ ডিটেকশন ও ব্লকিং<br/>XSS/SQL ইনজেকশন/পাথ ট্রাভার্সাল/CSRF"]
-        M0["ApiVersion<br/>API ভার্সন ভেরিফিকেশন<br/>apiVersion ইনজেক্ট"]
         M1["AdminAuth<br/>JWT Token ভেরিফিকেশন<br/>adminId ইনজেক্ট"]
         M2["AdminPermission<br/>RBAC অথোরাইজেশন<br/>method.path ম্যাচিং<br/>Redis 60s পারমিশন ক্যাশ"]
     end
@@ -96,7 +94,7 @@ flowchart TD
         CT5["DashboardController<br/>পরিসংখ্যান/ট্রেন্ড/বণ্টন"]
         CT6["ExportController<br/>Excel/PDF এক্সপোর্ট"]
         CT7["CaptchaController<br/>ক্যাপচা জেনারেশন/ভেরিফিকেশন"]
-        CT8["AuthController<br/>লগইন/রেজিস্টার/রিফ্রেশ"]
+        CT8["AuthController<br/>লগইন/রিফ্রেশ"]
     end
 
     subgraph "সার্ভিস লেয়ার Service Layer"
@@ -119,11 +117,11 @@ flowchart TD
         D3["Redis"]
     end
 
-    R1 --> M_SF --> M_RL --> M0
-    M0 --> M1
+    R1 --> M_SF --> M_RL
+    M_RL --> M1
+    M_RL --> CT7 & CT8
     M1 --> M2
     M2 --> CT2 & CT3 & CT4 & CT5 & CT6
-    M0 --> CT7 & CT8
     CT1 -.->|extends| CT2 & CT3 & CT4 & CT5 & CT6
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> S1 & S2 & S3
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> MD1 & MD2 & MD3 & MD4 & MD5
@@ -134,7 +132,6 @@ flowchart TD
     style R1 fill:#722ED1,color:#fff
     style M_SF fill:#FF4D4F,color:#fff
     style M_RL fill:#EB2F96,color:#fff
-    style M0 fill:#EB2F96,color:#fff
     style M1 fill:#FA8C16,color:#fff
     style M2 fill:#FA8C16,color:#fff
     style CT1 fill:#1677FF,color:#fff
@@ -151,7 +148,6 @@ sequenceDiagram
     participant MW_LOC as Locale
     participant MW_SF as SecurityFilter
     participant MW_RL as RateLimit
-    participant MW0 as ApiVersion
     participant MW1 as AdminAuth
     participant MW2 as AdminPermission
     participant CTL as Controller
@@ -160,7 +156,7 @@ sequenceDiagram
     participant DB as MySQL
     participant OPLOG as OperationLog
 
-    C->>N: HTTPS রিকোয়েস্ট<br/>Header: API-Version: v1, Accept-Language: zh_CN
+    C->>N: HTTPS রিকোয়েস্ট /admin এন্ডপয়েন্ট<br/>Header: Accept-Language: zh_CN
     N->>MW_LOC: ফরোয়ার্ড
 
     MW_LOC->>MW_LOC: locale = zh_CN (Accept-Language / ?lang=)
@@ -182,13 +178,7 @@ sequenceDiagram
         MW_RL-->>C: 429 + Retry-After
     end
 
-    MW_RL->>MW0: পাস
-
-    alt অসমর্থিত ভার্সন
-        MW0-->>C: 400 অসমর্থিত API ভার্সন
-    else ভার্সন বৈধ
-        MW0->>MW0: $request->apiVersion = v1
-    end
+    MW_RL->>MW1: পাস
 
     alt Token অনুপস্থিত বা অবৈধ
         MW1-->>C: 401 Unauthorized
@@ -607,7 +597,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph "লেয়ার ১: হিউম্যান-মেশিন ভেরিফিকেশন"
-        L1["ক্লিক ক্যাপচা<br/>Click Captcha<br/>লগইন/রেজিস্টারে বাধ্যতামূলক"]
+        L1["ক্লিক ক্যাপচা<br/>Click Captcha<br/>লগইনে বাধ্যতামূলক"]
     end
 
     subgraph "লেয়ার ২: অপারেশন নিশ্চিতকরণ"
@@ -692,3 +682,17 @@ flowchart TB
     style ES fill:#1890FF,color:#fff
     style REDIS fill:#1890FF,color:#fff
 ```
+
+---
+
+## 14. স্ট্যাটিক ডিজাইন ডায়াগ্রাম (SVG)
+
+নিচের তিনটি ডায়াগ্রাম **হাতে আঁকা SVG**（কোনো স্ক্রিপ্ট নেই, বাহ্যিক নির্ভরতা নেই, অসীমভাবে স্কেলযোগ্য）, Mermaid রেন্ডারার ছাড়াই দেখা যায়, ডকুমেন্ট, PPT ও README-তে সরাসরি বসানোর জন্য উপযুক্ত：
+
+| ডায়াগ্রাম | বিষয়বস্তু | ফাইল |
+|---|------|------|
+| সিস্টেম আর্কিটেকচার ডিজাইন | চার স্তরের টপোলজি: ক্লায়েন্ট লেয়ার → গেটওয়ে লেয়ার → webman অ্যাপ্লিকেশন লেয়ার → স্টোরেজ লেয়ার, নিরাপত্তা প্রতিরক্ষা ও অবজার্ভেবিলিটিসহ | [architecture.svg](diagrams/architecture.svg) |
+| ফিচার ডিজাইন | ১২টি ফিচার ডোমেইন → কন্ট্রোলার এন্ট্রি → মূল সক্ষমতা, সাথে মিডলওয়্যার এক্সিকিউশন চেইন ও ডেটা ইন্টারফেস স্পেসিফিকেশন | [features.svg](diagrams/features.svg) |
+| লাইফসাইকেল | ইনস্টল → স্টার্টআপ → অ্যাক্সেস → প্রতিরক্ষা → অথেনটিকেশন → প্রসেসিং → পারসিস্টেন্স → রেসপন্স অডিট, ব্যতিক্রম শাখা ও টোকেন লাইফসাইকেলসহ | [lifecycle.svg](diagrams/lifecycle.svg) |
+
+> প্রজেক্ট পেট「小安」এর সামগ্রী: [`public/img/pet.svg`](../public/img/pet.svg)（বিশুদ্ধ SVG, একইসাথে সাইট হোমপেজ, ইনস্টলেশন উইজার্ড ও ব্রাউজার আইকন হিসেবে ব্যবহৃত）

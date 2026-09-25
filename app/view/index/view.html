@@ -1,14 +1,59 @@
 <!doctype html>
-<html>
+<!--
+  Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+  站点首页（GET /）— 项目介绍与入口导航，含项目宠物「小安」
+-->
+<html lang="zh-CN">
 <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="shortcut icon" href="/favicon.ico"/>
-    <title>webman</title>
-
+    <title>开放管理后台 open-admin · webman v2 + Flutter 全栈管理后台</title>
+    <meta name="description" content="基于 webman v2 + Flutter 的全栈管理后台系统：RBAC 权限、18 层纵深防御、Prometheus 指标、多端客户端。">
+    <link rel="icon" type="image/svg+xml" href="/img/pet.svg">
+    <link rel="shortcut icon" href="/favicon.ico">
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+             background:#f0f2f5;color:#333;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+        .box{background:#fff;border-radius:12px;box-shadow:0 2px 16px rgba(0,0,0,.08);width:640px;max-width:100%;padding:40px;text-align:center}
+        .pet{width:132px;height:auto}
+        h1{font-size:24px;color:#1a1a2e;margin:8px 0 6px}
+        .sub{color:#8c8c8c;font-size:14px;line-height:1.7}
+        .chips{margin:22px 0 6px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+        .chips span{font-size:12px;padding:4px 12px;border-radius:12px;background:#eaf2ff;color:#1677ff;border:1px solid #bedaff}
+        .links{margin-top:26px;display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
+        .links a{display:inline-block;padding:10px 22px;border-radius:6px;font-size:14px;text-decoration:none;
+                 background:#f5f5f5;color:#333;border:1px solid #e5e5e5;transition:.2s}
+        .links a:hover{border-color:#1677ff;color:#1677ff}
+        .links a.primary{background:#1677ff;color:#fff;border-color:#1677ff}
+        .links a.primary:hover{background:#4096ff}
+        footer{margin-top:28px;padding-top:18px;border-top:1px solid #f0f0f0;font-size:12px;color:#b0b0b0;line-height:1.8}
+        footer code{background:#f5f5f5;padding:1px 6px;border-radius:4px;color:#8c8c8c}
+    </style>
 </head>
 <body>
-hello <?=htmlspecialchars($name)?>
+<div class="box">
+    <img class="pet" src="/img/pet.svg" alt="小安 — open-admin 项目宠物" width="132" height="176">
+    <h1>开放管理后台 open-admin</h1>
+    <p class="sub">
+        基于 <strong>webman v2</strong> + <strong>Flutter</strong> 的全栈管理后台系统<br>
+        RBAC 权限 · 18 层纵深防御 · Prometheus 指标 · 多端客户端
+    </p>
+    <div class="chips">
+        <span>webman v2</span><span>PHP 8.3+</span><span>MySQL 8.0</span>
+        <span>Redis 7</span><span>Elasticsearch 8</span><span>Flutter 3.x</span><span>HarmonyOS</span>
+    </div>
+    <div class="links">
+        <a class="primary" href="/install">安装向导</a>
+        <a href="/api/docs">API 文档</a>
+        <a href="/health">健康检查</a>
+        <a href="/metrics">监控指标</a>
+    </div>
+    <footer>
+        守护者：小安 · 项目宠物（素材 <code>/img/pet.svg</code>）<br>
+        Copyright (c) 2026 erik &lt;erik@erik.xyz&gt; — https://erik.xyz
+    </footer>
+</div>
 </body>
 </html>

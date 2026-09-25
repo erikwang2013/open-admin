@@ -6,7 +6,7 @@
 
 ```mermaid
 flowchart TB
-    l1["Capa 1: Verificación humano-máquina<br/>Captcha de clic ClickCaptcha<br/>Verificación obligatoria en login/registro"]
+    l1["Capa 1: Verificación humano-máquina<br/>Captcha de clic ClickCaptcha<br/>Verificación obligatoria en login"]
     l2["Capa 2: Confirmación de operaciones<br/>Segunda confirmación de contraseña<br/>Obligatoria para operaciones DELETE"]
     l3["Capa 3: Seguridad de transporte<br/>HTTPS + JWT Bearer<br/>AES-256-CBC"]
     l4["Capa 4: Autenticación de identidad<br/>JWT HS256<br/>access_token 2h<br/>refresh_token 14d"]

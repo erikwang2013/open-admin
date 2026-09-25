@@ -10,7 +10,7 @@
 - **API 版本**: 版本号体现在 URL 前缀中（`/api/v1/...`、`/api/v2/...`），不使用请求头
 - **语言**: 通过 `Accept-Language` 头或 `?lang=zh_CN|en` 参数切换（默认 zh_CN），Locale 中间件自动检测
 
-> **端点总览**: 认证(5) | 仪表盘(1) | 用户(7) | 角色(4) | 权限(4) | 配置(4) | 日志(1) | 个人中心(3) | 导入导出(3) | 上传(1) | 运维(4: health/metrics/docs/security.txt) | 共 37 端点
+> **端点总览**: 认证(4) | 仪表盘(1) | 用户(7) | 角色(4) | 权限(4) | 配置(4) | 日志(1) | 个人中心(3) | 导入导出(3) | 上传(1) | 运维(4: health/metrics/docs/security.txt) | 共 36 端点
 - **认证**: `Authorization: Bearer <token>`（JWT）
 - **响应格式**: `{ "code": 0, "message": "success", "data": {...} }`
 - **文档端点**: `GET /api/docs` 返回 OpenAPI 3.0 JSON 规范
@@ -314,53 +314,7 @@ POST /api/v1/auth/login
 - 403: 账号已被禁用
 - 429: 账号已被锁定，请15分钟后再试（连续5次登录失败触发）
 
-### 3.6 注册
-
-```
-POST /api/v1/auth/register
-```
-
-- **认证**: 无需
-- **限流**: 5 次/分钟（按 IP + 路径）
-
-**请求体**:
-```json
-{
-  "username": "newuser",
-  "password": "djGYscnyS5V6mW6KyDFjB8vGwjBBnB3Odpyxu8LY...",
-  "real_name": "新用户",
-  "captcha_key": "abc123def456"
-}
-```
-
-| 字段 | 类型 | 必填 | 验证规则 | 说明 |
-|------|------|------|---------|------|
-| username | string | 是 | min:3, max:50 | 用户名（唯一） |
-| password | string | 是 | min:6, max:32 (明文) | AES-256-CBC-HMAC 加密后 Base64 编码 |
-| real_name | string | 是 | max:50 | 真实姓名 |
-| captcha_key | string | 是 | | 验证码 key（需先通过 `/api/v1/captcha/verify` 校验） |
-
-**响应示例**:
-```json
-{
-  "code": 0,
-  "message": "注册成功",
-  "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 7200,
-    "user": {
-      "id": "e5f6g7h8",
-      "username": "newuser",
-      "real_name": "新用户"
-    }
-  }
-}
-```
-
-注册成功后直接返回 JWT 令牌，用户状态默认启用（status=1）。
-
-### 3.7 刷新令牌
+### 3.6 刷新令牌
 
 ```
 POST /api/v1/auth/refresh
@@ -378,7 +332,7 @@ POST /api/v1/auth/refresh
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| refresh_token | string | 是 | 登录/注册时获取的 refresh_token |
+| refresh_token | string | 是 | 登录时获取的 refresh_token |
 
 **响应示例**:
 ```json
@@ -399,7 +353,7 @@ POST /api/v1/auth/refresh
 - 422: 缺少刷新令牌
 - 401: 刷新令牌无效或已过期
 
-### 3.8 Prometheus 监控指标
+### 3.7 Prometheus 监控指标
 
 ```
 GET /metrics
@@ -1649,7 +1603,6 @@ POST /admin/upload
 限流详情:
 - 默认全局限制: 60 次/分钟 / IP+路径
 - 登录端点 `/api/v1/auth/login`: 10 次/分钟
-- 注册端点 `/api/v1/auth/register`: 5 次/分钟
 - 使用 Redis 原子化滑动窗口算法（Lua ZSET），避免 TOCTOU 竞态
 - Redis 不可用时 fail open（放行），不阻塞请求
 

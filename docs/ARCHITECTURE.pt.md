@@ -5,6 +5,8 @@
 # Diagramas de arquitetura e fluxos de negócio
 
 > Os diagramas Mermaid abaixo são renderizados automaticamente no GitHub / GitLab / VS Code. Em outros ambientes, use o [Mermaid Live Editor](https://mermaid.live/) para visualizar.
+>
+> Para diagramas estáticos que dispensam renderizador (SVG), consulte a [seção 14](#14-design-estático-em-svg).
 
 ---
 
@@ -22,11 +24,10 @@ flowchart TB
     end
 
     subgraph "Camada de aplicação (webman v2)"
-        C0["Middleware ApiVersion<br/>Validação do cabeçalho API-Version"]
         C1["Middleware AdminAuth<br/>Validação JWT"]
         C2["Middleware AdminPermission<br/>Verificação de permissões RBAC"]
         C3["Controllers do painel<br/>Dashboard / User / Role / Permission"]
-        C4["Controllers públicos v1<br/>Captcha / Auth"]
+        C4["Controllers públicos via grupo de rotas /api/v1<br/>Captcha / Auth"]
         C5["Common Services<br/>Hashids / Snowflake / Encryption"]
     end
 
@@ -43,11 +44,10 @@ flowchart TB
 
     A1 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
     A2 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
-    B1 --> C0
-    C0 --> C1
+    B1 --> C1
     C1 --> C2
     C2 --> C3
-    C0 --> C4
+    B1 --> C4
     C3 --> C5
     C4 --> C5
     C3 --> D1
@@ -59,7 +59,6 @@ flowchart TB
     style A1 fill:#1677FF,color:#fff
     style A2 fill:#1677FF,color:#fff
     style B1 fill:#722ED1,color:#fff
-    style C0 fill:#EB2F96,color:#fff
     style C1 fill:#FA8C16,color:#fff
     style C2 fill:#FA8C16,color:#fff
     style C3 fill:#52C41A,color:#fff
@@ -83,7 +82,6 @@ flowchart TD
     subgraph "Camada de middlewares Middleware Layer"
         M_RL["RateLimit<br/>Rate limit com janela deslizante Redis<br/>Cabeçalhos de resposta X-RateLimit"]
         M_SF["SecurityFilter<br/>Bloqueio de detecção de ataques<br/>XSS/Injeção SQL/Path traversal/CSRF"]
-        M0["ApiVersion<br/>Validação de versão da API<br/>Injeta apiVersion"]
         M1["AdminAuth<br/>Validação do token JWT<br/>Injeta adminId"]
         M2["AdminPermission<br/>Autorização RBAC<br/>Correspondência method.path<br/>Cache de permissões Redis 60s"]
     end
@@ -96,7 +94,7 @@ flowchart TD
         CT5["DashboardController<br/>Estatísticas/tendências/distribuição"]
         CT6["ExportController<br/>Exportação Excel/PDF"]
         CT7["CaptchaController<br/>Geração/validação de captcha"]
-        CT8["AuthController<br/>Login/registro/atualização de token"]
+        CT8["AuthController<br/>Login/atualização de token"]
     end
 
     subgraph "Camada de serviços Service Layer"
@@ -151,7 +149,6 @@ sequenceDiagram
     participant MW_LOC as Locale
     participant MW_SF as SecurityFilter
     participant MW_RL as RateLimit
-    participant MW0 as ApiVersion
     participant MW1 as AdminAuth
     participant MW2 as AdminPermission
     participant CTL as Controller
@@ -160,7 +157,7 @@ sequenceDiagram
     participant DB as MySQL
     participant OPLOG as OperationLog
 
-    C->>N: Requisição HTTPS<br/>Header: API-Version: v1, Accept-Language: zh_CN
+    C->>N: Requisição HTTPS /admin<br/>Header: Accept-Language: zh_CN
     N->>MW_LOC: Encaminha
 
     MW_LOC->>MW_LOC: locale = zh_CN (Accept-Language / ?lang=)
@@ -182,13 +179,7 @@ sequenceDiagram
         MW_RL-->>C: 429 + Retry-After
     end
 
-    MW_RL->>MW0: Aprovado
-
-    alt Versão não suportada
-        MW0-->>C: 400 Versão de API não suportada
-    else Versão válida
-        MW0->>MW0: $request->apiVersion = v1
-    end
+    MW_RL->>MW1: Aprovado
 
     alt Token ausente ou inválido
         MW1-->>C: 401 Unauthorized
@@ -607,7 +598,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph "Camada 1: Verificação humano-máquina"
-        L1["Captcha de clique<br/>Click Captcha<br/>Obrigatório no login/registro"]
+        L1["Captcha de clique<br/>Click Captcha<br/>Obrigatório no login"]
     end
 
     subgraph "Camada 2: Confirmação de operação"
@@ -692,3 +683,17 @@ flowchart TB
     style ES fill:#1890FF,color:#fff
     style REDIS fill:#1890FF,color:#fff
 ```
+
+---
+
+## 14. Design estático em SVG
+
+Os três diagramas abaixo são **SVG escritos à mão** (sem scripts, sem dependências externas, com escala infinita), dispensam um renderizador Mermaid e são adequados para inserir diretamente em documentos, PPTs e no README:
+
+| Diagrama | Conteúdo | Arquivo |
+|---|------|------|
+| Design da arquitetura do sistema | Topologia em quatro camadas: camada de cliente → camada de gateway → camada de aplicação webman → camada de armazenamento, com proteção de segurança e observabilidade | [architecture.svg](diagrams/architecture.svg) |
+| Design de funcionalidades | 12 domínios funcionais → entradas dos controladores → capacidades principais, com a cadeia de execução de middlewares e a especificação da interface de dados | [features.svg](diagrams/features.svg) |
+| Ciclo de vida | Instalação → inicialização → acesso → proteção → autenticação → processamento → persistência → auditoria de resposta, com ramificações de exceção e ciclo de vida do token | [lifecycle.svg](diagrams/lifecycle.svg) |
+
+> Material do mascote do projeto「小安」: [`public/img/pet.svg`](../public/img/pet.svg) (SVG puro, usado também na página inicial do site, no assistente de instalação e como ícone do navegador)

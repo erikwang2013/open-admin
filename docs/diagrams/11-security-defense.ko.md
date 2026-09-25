@@ -6,7 +6,7 @@
 
 ```mermaid
 flowchart TB
-    l1["1층: 사람-기계 검증<br/>클릭 캡차 ClickCaptcha<br/>로그인/가입 강제 검증"]
+    l1["1층: 사람-기계 검증<br/>클릭 캡차 ClickCaptcha<br/>로그인 강제 검증"]
     l2["2층: 작업 확인<br/>비밀번호 재확인<br/>DELETE 작업 필수"]
     l3["3층: 전송 보안<br/>HTTPS + JWT Bearer<br/>AES-256-CBC"]
     l4["4층: 신원 인증<br/>JWT HS256<br/>access_token 2h<br/>refresh_token 14d"]

@@ -14,7 +14,7 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
 | 域 | 功能 |
 |----|------|
-| 认证 | 登录/注册/刷新/登出 + 验证码 + 账号锁定 + 会话限制 |
+| 认证 | 登录/刷新/登出 + 点击验证码 + 账号锁定 + 会话限制 |
 | 仪表盘 | 实时统计/趋势/分布/日志（Redis 5m 缓存）|
 | 用户 | CRUD + 批量删除/启禁用 + Excel 导入 |
 | 角色权限 | CRUD + 权限树 + RBAC method.path 鉴权 |
@@ -23,6 +23,18 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 | 文件 | 上传 + Excel/PDF 导出（敏感数据脱敏）|
 | 安全 | 18 层纵深防御（XSS/SQL注入/CSRF/限流/CSP...）|
 | 运维 | 健康检查/Prometheus 指标/API 文档/security.txt + Docker + CI/CD |
+
+## 项目宠物 · 小安
+
+盾形守卫机器人「小安」（Xiao An），取自「**安**全」与「管理后**台**」，守在中间件链的「防护」与「鉴权」两道关卡上。
+
+- **样式单一来源**：`public/img/pet.svg`（纯 SVG，无脚本/无外部依赖，含 `prefers-reduced-motion` 降级）。修改此文件即同时更新站点首页、安装向导与浏览器图标，**不要再复制出第二份**。
+- **已接入位置**：
+  - `GET /` 站点首页 → `app/view/index/view.html`（路由在 `config/route.php` 顶部，免认证）
+  - 安装向导 4 个页面 → `InstallController::layout()` 统一注入
+  - 站点图标 → `<link rel="icon" type="image/svg+xml" href="/img/pet.svg">`（首页 + 安装向导 + `apps/flutter/web/index.html`）
+- **配色规范**：主色 `#1677FF`、暖色天线 `#FA8C16`、校验绿 `#52C41A`；画布 `240 × 320`。
+- **设计图**：`docs/diagrams/architecture.svg`（系统架构）、`features.svg`（功能设计）、`lifecycle.svg`（生命周期）——同为手写 SVG，与宠物保持同一套配色；README 与文档中直接引用。
 
 ## 技术栈
 
@@ -73,12 +85,13 @@ open-admin/
 │   ├── common/                 # 公共定义（含 Apidoc Definitions）
 │   ├── middleware/             # 中间件（7 个）
 │   │   ├── Cors.php            # 跨域（全局）
-│   │   ├── SecurityFilter.php  # 攻击拦截（全局：XSS/SQL注入/路径遍历/命令注入/CSRF）
+│   │   └── (已迁移至 erikwang2013/security-php 包)  # 31种攻击检测
 │   │   ├── RateLimit.php       # Redis 限流（全局，Lua 原子化）
 │   │   ├── AdminAuth.php       # JWT 认证 + 黑名单
 │   │   ├── AdminPermission.php # RBAC 权限校验（Redis 60s 缓存）
 │   │   └── OperationLog.php    # 操作日志自动记录（含来源端检测）
 │   ├── model/                  # 数据模型
+│   ├── view/index/view.html    # 站点首页模板（GET /，项目宠物 + 入口导航）
 │   ├── queue/                  # 队列任务
 │   └── process/                # 进程 (Http, Monitor)
 ├── apps/
@@ -110,11 +123,16 @@ open-admin/
 │   ├── SECURITY.md             # 安全架构设计
 │   ├── API.md                  # API 参考文档
 │   ├── nginx-security.conf     # Nginx 安全参考配置
-│   ├── diagrams/               # 分解架构图
+│   ├── diagrams/               # 图表
+│   │   ├── architecture.svg    # 系统架构设计图（手写 SVG）
+│   │   ├── features.svg        # 功能设计图（手写 SVG）
+│   │   ├── lifecycle.svg       # 生命周期图（手写 SVG）
+│   │   └── 01..12-*.md         # 分解架构图（Mermaid，12 种语言）
 │   └── superpowers/            # 规范与计划
 │       ├── specs/              # 设计规范
 │       └── plans/              # 实现计划
 ├── public/                     # 公共入口
+│   └── img/pet.svg             # 项目宠物「小安」（SVG，兼作站点图标）
 ├── runtime/                    # 运行时文件
 ├── tests/                      # 测试
 ├── vendor/                     # Composer 依赖
@@ -137,15 +155,19 @@ open-admin/
 ## 中间件执行链
 
 ```
-全局:  Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → {路由中间件}
-/admin: Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
-/api/v1: Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → Controller（版本体现在 URL 前缀中）
-/health: Cors → Locale(Accept-Language) → SecurityFilter(方法检查→405) → RateLimit → Controller
+全局:  Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → {路由中间件}
+/admin: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
+/api/v1: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller（版本体现在 URL 前缀中）
+/health: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller
 ```
+
+> **注意**: 无需权限校验的管理端接口（如个人中心查看）放到 `/admin` 组外单独注册，仅加 `AdminAuth` 中间件。组内路由由 `AdminPermission` 校验 `method.path` 格式的权限标识。
+> 
+> **Redis 前缀**: 所有 key 自动加 `open-admin:` 前缀，通过 `.env` 的 `REDIS_PREFIX` 可自定义。
 
 ## 安全增强
 
-- **HTTP 方法限制**：SecurityFilter 仅允许 GET/POST/PUT/DELETE/OPTIONS/HEAD，非标准方法返回 405
+- **攻击检测**：erikwang2013/security-php 包（31 种检测器：XSS/SQL注入/命令注入/路径遍历/SSRF/XXE/JNDI/反序列化/JWT攻击/CSRF/敏感数据泄漏等 + HTTP方法校验/请求体大小限制/Content-Type校验 + IP攻击升级黑名单）
 - **CSP 头**：Content-Security-Policy + X-Permitted-Cross-Domain-Policies 注入所有响应
 - **账号锁定**：连续 5 次登录失败，账号锁定 15 分钟
 - **并发会话限制**：同一用户最多 3 个有效 Token，超出时最旧 Token 加入黑名单
@@ -165,9 +187,10 @@ curl http://localhost:8787/api/v1/auth/login
 ## 限流策略
 
 Redis 滑动窗口（Lua 原子化），默认 60 次/分钟/IP/路由：
-- 登录: 10 次/分钟
-- 注册: 5 次/分钟
+- 登录 `/api/v1/auth/login`: 10 次/分钟
 - 响应头: `X-RateLimit-Limit/Remaining/Reset`，超限附加 `Retry-After`
+
+> `RateLimit::$sensitive` 的键必须与 `config/route.php` 中的**完整路径**一致（含 `/api/v{n}` 版本前缀），否则敏感路由会静默退回默认 60 次/分钟。
 
 ## 代码规范
 
@@ -175,6 +198,11 @@ Redis 滑动窗口（Lua 原子化），默认 60 次/分钟/IP/路由：
 - 全局函数/类引用不加前置 `\`，使用 `use` 导入
 - 配置文件必须包含中文注释说明每个配置项的含义
 - 所有新建 `.php` 文件头必须包含版权声明
+- **Redis 通过 `support\Redis` 工具类访问**（单例连接池，自动读取 `REDIS_HOST/PORT/PASSWORD/DB` 环境变量），所有 key 自动添加前缀（默认 `open-admin:`，通过 `REDIS_PREFIX` 环境变量可配置）
+- **路由权限**: `/admin` 组内路由需 `method.path` 格式的权限（如 `get.admin/dashboard`），无需权限校验的路由放到组外仅加 `AdminAuth` 中间件
+- **CORS**: 新增请求头时需同步更新 `Cors.php` 中间件和 `route.php` fallback 的 `Access-Control-Allow-Headers`
+- **超级管理员保护**: `RoleController` 的 `update`/`destroy` 方法禁止操作 `slug == 'super_admin'` 的角色
+- webman 将 PHP Warning 转为异常，未定义的属性/变量会导致 500 错误
 
 ### 数据库
 - 表前缀: `erik_`
@@ -184,9 +212,13 @@ Redis 滑动窗口（Lua 原子化），默认 60 次/分钟/IP/路由：
 
 ### Flutter
 - Web 端布局使用 PC 管理后台风格（侧边栏 + 顶栏 + 内容区）
-- 使用 GetX 状态管理，`ApiService` 单例（Dio + JWT 拦截器）
+- 使用 GetX 状态管理，**所有 API 请求必须通过 `ApiService` 单例**（Dio + JWT 拦截器），禁止创建独立 Dio 实例或硬编码 baseUrl
 - Token 持久化使用 `shared_preferences`
 - 响应式断点: 移动端 (< 768px) 与桌面端 (>= 768px)
+- **页面头部 Row 必须使用 `Wrap`**，防止侧边栏展开时溢出；筛选 ChoiceChip 必须包在 `Obx` 内才能响应式更新
+- **DataTable 必须包裹 `SingleChildScrollView(scrollDirection: Axis.horizontal)`** 防止列溢出
+- 独立页面（如 ProfilePage）必须包含 `Scaffold`，否则 `TextField` 等 Material 组件会报 "No Material widget found"
+- 侧边栏展开/收起时用 `_showCollapsedContent` 延迟切换内容，避免动画期间 RenderFlex 溢出
 
 ### HarmonyOS
 - 使用 `@ohos.net.http` 原生 HTTP 客户端

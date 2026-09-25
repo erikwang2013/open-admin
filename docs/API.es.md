@@ -6,13 +6,13 @@
 
 ## 1. Descripción general
 
-El panel de administración abierto (open-admin) está construido sobre webman v2 y ofrece una API JSON RESTful. Todas las interfaces del panel de administración requieren autenticación JWT y verificación de permisos RBAC; las interfaces públicas se enrutan a controladores versionados mediante la cabecera de versión de API.
+El panel de administración abierto (open-admin) está construido sobre webman v2 y ofrece una API JSON RESTful. Todas las interfaces del panel de administración requieren autenticación JWT y verificación de permisos RBAC; el número de versión de las interfaces públicas está en el prefijo de la URL (por ejemplo, `/api/v1/auth/login`) y se enrutan directamente a los controladores versionados correspondientes.
 
 - **URL base**: `http://localhost:8787`
-- **Versión de API**: se controla mediante la cabecera `API-Version: v1` (por defecto v1 si no se envía)
+- **Versión de API**: el número de versión está en el prefijo de la URL (`/api/v1/...`, `/api/v2/...`); no se usa cabecera de petición
 - **Idioma**: se cambia mediante la cabecera `Accept-Language` o el parámetro `?lang=zh_CN|en` (por defecto zh_CN), el middleware Locale lo detecta automáticamente
 
-> **Resumen de endpoints**: autenticación(5) | panel(1) | usuarios(7) | roles(4) | permisos(4) | configuración(4) | logs(1) | perfil(3) | importación/exportación(3) | subida(1) | operaciones(4: health/metrics/docs/security.txt) | 37 endpoints en total
+> **Resumen de endpoints**: autenticación(4) | panel(1) | usuarios(7) | roles(4) | permisos(4) | configuración(4) | logs(1) | perfil(3) | importación/exportación(3) | subida(1) | operaciones(4: health/metrics/docs/security.txt) | 36 endpoints en total
 - **Autenticación**: `Authorization: Bearer <token>` (JWT)
 - **Formato de respuesta**: `{ "code": 0, "message": "success", "data": {...} }`
 - **Endpoint de documentación**: `GET /api/docs` devuelve la especificación JSON OpenAPI 3.0
@@ -43,8 +43,6 @@ El panel de administración abierto (open-admin) está construido sobre webman v
 | 500 | Error interno del servidor | |
 
 ## 3. Endpoints públicos
-
-Todos los endpoints públicos están montados bajo el grupo `/api` y se distribuyen mediante el middleware `ApiVersion` según la cabecera `API-Version` al controlador versionado correspondiente (por ejemplo, `app\api\v1\controller\AuthController`).
 
 ### 3.1 Health check
 
@@ -91,7 +89,6 @@ POST /api/v1/captcha/generate
 ```
 
 - **Autenticación**: ninguna
-- **Cabecera de petición**: `API-Version: v1` (obligatoria)
 - **Límite de peticiones**: predeterminado global (60 peticiones/minuto)
 
 **Cuerpo de la petición**:
@@ -184,7 +181,6 @@ POST /api/v1/captcha/verify
 ```
 
 - **Autenticación**: ninguna
-- **Cabecera de petición**: `API-Version: v1` (obligatoria)
 - **Límite de peticiones**: predeterminado global (60 peticiones/minuto)
 
 **Cuerpo de la petición** — tipo clic (`type: "click"`):
@@ -250,7 +246,6 @@ POST /api/v1/auth/login
 ```
 
 - **Autenticación**: ninguna
-- **Cabecera de petición**: `API-Version: v1` (obligatoria)
 - **Límite de peticiones**: 10 peticiones/minuto (por IP + ruta)
 
 **Cuerpo de la petición**:
@@ -320,61 +315,13 @@ La clave pública está integrada en la aplicación del frontend y no se transmi
 - 403: la cuenta está deshabilitada
 - 429: la cuenta está bloqueada; inténtelo de nuevo en 15 minutos (se activa tras 5 inicios de sesión fallidos consecutivos)
 
-### 3.6 Registro
-
-```
-POST /api/v1/auth/register
-```
-
-- **Autenticación**: ninguna
-- **Cabecera de petición**: `API-Version: v1` (obligatoria)
-- **Límite de peticiones**: 5 peticiones/minuto (por IP + ruta)
-
-**Cuerpo de la petición**:
-```json
-{
-  "username": "newuser",
-  "password": "djGYscnyS5V6mW6KyDFjB8vGwjBBnB3Odpyxu8LY...",
-  "real_name": "新用户",
-  "captcha_key": "abc123def456"
-}
-```
-
-| Campo | Tipo | Obligatorio | Regla de validación | Descripción |
-|------|------|------|---------|------|
-| username | string | Sí | min:3, max:50 | Nombre de usuario (único) |
-| password | string | Sí | min:6, max:32 (texto plano) | Cifrado AES-256-CBC-HMAC y codificado en Base64 |
-| real_name | string | Sí | max:50 | Nombre real |
-| captcha_key | string | Sí | | Clave del captcha (primero hay que validarla en `/api/v1/captcha/verify`) |
-
-**Ejemplo de respuesta**:
-```json
-{
-  "code": 0,
-  "message": "注册成功",
-  "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 7200,
-    "user": {
-      "id": "e5f6g7h8",
-      "username": "newuser",
-      "real_name": "新用户"
-    }
-  }
-}
-```
-
-Tras un registro exitoso se devuelven directamente los tokens JWT; el estado del usuario está habilitado por defecto (status=1).
-
-### 3.7 Renovar token
+### 3.6 Renovar token
 
 ```
 POST /api/v1/auth/refresh
 ```
 
 - **Autenticación**: ninguna
-- **Cabecera de petición**: `API-Version: v1` (obligatoria)
 - **Límite de peticiones**: predeterminado global (60 peticiones/minuto)
 
 **Cuerpo de la petición**:
@@ -386,7 +333,7 @@ POST /api/v1/auth/refresh
 
 | Campo | Tipo | Obligatorio | Descripción |
 |------|------|------|------|
-| refresh_token | string | Sí | El refresh_token obtenido en el inicio de sesión/registro |
+| refresh_token | string | Sí | El refresh_token obtenido en el inicio de sesión |
 
 **Ejemplo de respuesta**:
 ```json
@@ -407,7 +354,7 @@ Una renovación exitosa devuelve un nuevo access_token y un nuevo refresh_token;
 - 422: falta el token de renovación
 - 401: el token de renovación no es válido o ha caducado
 
-### 3.8 Métricas de monitorización Prometheus
+### 3.7 Métricas de monitorización Prometheus
 
 ```
 GET /metrics
@@ -1657,7 +1604,6 @@ Todas las interfaces (inyectadas en la capa de middleware global) incluyen las s
 Detalles del límite de peticiones:
 - Límite global por defecto: 60 peticiones/minuto / IP+ruta
 - Endpoint de inicio de sesión `/api/v1/auth/login`: 10 peticiones/minuto
-- Endpoint de registro `/api/v1/auth/register`: 5 peticiones/minuto
 - Usa un algoritmo de ventana deslizante atómico en Redis (Lua ZSET) para evitar condiciones de carrera TOCTOU
 - Si Redis no está disponible, fail open (se deja pasar) para no bloquear las peticiones
 
@@ -1667,14 +1613,12 @@ Secuencia de autenticación completa:
 
 ```
 1. El cliente solicita POST /api/v1/captcha/generate
-   (Cabecera de petición: API-Version: v1)
     ↓
    El servidor devuelve: key + type(click|slider|rotate) + imagen base64 + extra(datos según el tipo)
    
 2. El usuario completa la interacción del captcha (clic/arrastre/rotación) y el cliente recopila la respuesta
    
 3. El cliente solicita POST /api/v1/captcha/verify
-   (Cabecera de petición: API-Version: v1, Content-Type: application/json)
    Cuerpo de la petición: { key, type, clicks }
    - type=click:  clicks = [{x, y}, ...]        // matriz de coordenadas
    - type=slider: clicks = 120                   // desplazamiento en X
@@ -1689,7 +1633,6 @@ Secuencia de autenticación completa:
    El servidor devuelve: { valid: true/false }
 
 4. El cliente solicita POST /api/v1/auth/login
-   (Cabecera de petición: API-Version: v1, Content-Type: application/json)
    Cuerpo de la petición: { username, password(cifrada), captcha_key }
     ↓
    Servidor:
@@ -1765,7 +1708,6 @@ Cors (preprocesamiento CORS + cabeceras de respuesta)
   → Locale (detección de idioma Accept-Language / ?lang=zh_CN|en)
   → SecurityFilter (restricción de métodos HTTP/tamaño del cuerpo/validación de Content-Type/XSS/inyección SQL/traversal de rutas/inyección de comandos/bloqueo de ataques CSRF)
   → RateLimit (límite de peticiones con ventana deslizante Redis + bloqueo de cuenta: 5 inicios de sesión fallidos bloquean 15 minutos)
-  → ApiVersion (validación de versión de API, grupo de rutas /api)
   → AdminAuth (autenticación JWT + lista negra, grupo de rutas /admin)
   → AdminPermission (autorización RBAC / caché Redis de 60s, grupo de rutas /admin)
   → OperationLog (registro automático de POST/PUT/DELETE, incluye detección de origen, grupo de rutas /admin)

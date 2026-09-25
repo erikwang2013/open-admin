@@ -16,9 +16,9 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
 ## फीचर सूची
 
-| 域 | 功能 |
+| डोमेन | फीचर |
 |----|------|
-| प्रमाणीकरण | लॉगिन/रजिस्ट्रेशन/रीफ़्रेश/लॉगआउट + कैप्चा + खाता लॉक + सत्र सीमा |
+| प्रमाणीकरण | लॉगिन/रीफ़्रेश/लॉगआउट + क्लिक कैप्चा + खाता लॉक + सत्र सीमा |
 | डैशबोर्ड | रीयल-टाइम आँकड़े/ट्रेंड/वितरण/लॉग（Redis 5m कैश）|
 | उपयोगकर्ता | CRUD + बैच डिलीट/सक्षम-अक्षम + Excel आयात |
 | भूमिका-अनुमति | CRUD + अनुमति ट्री + RBAC method.path प्रमाणीकरण |
@@ -27,6 +27,18 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 | फ़ाइलें | अपलोड + Excel/PDF निर्यात（संवेदनशील डेटा मास्किंग）|
 | सुरक्षा | 18 परत गहन सुरक्षा（XSS/SQL इंजेक्शन/CSRF/रेट लिमिट/CSP...）|
 | संचालन | स्वास्थ्य जाँच/Prometheus मेट्रिक्स/API दस्तावेज़/security.txt + Docker + CI/CD |
+
+## प्रोजेक्ट पेट · शियाओ आन (小安)
+
+शील्ड-आकार का गार्ड रोबोट「शियाओ आन」(Xiao An) नाम「**安**全」(सुरक्षा) और「管理后**台**」(एडमिन पैनल) से लिया गया है, और यह मिडलवेयर चेन की「सुरक्षा」तथा「प्रमाणीकरण」दो चौकियों पर पहरा देता है।
+
+- **शैली का एकमात्र स्रोत**: `public/img/pet.svg`（शुद्ध SVG, कोई स्क्रिप्ट नहीं/कोई बाहरी निर्भरता नहीं, `prefers-reduced-motion` फ़ॉलबैक सहित）。इस फ़ाइल को बदलने पर साइट होम पेज, इंस्टॉल विज़ार्ड और ब्राउज़र आइकन एक साथ अपडेट हो जाते हैं, **दूसरी प्रति न बनाएँ**।
+- **जहाँ पहले से जोड़ा गया है**:
+  - `GET /` साइट होम पेज → `app/view/index/view.html`（रूट `config/route.php` के शीर्ष पर, बिना प्रमाणीकरण）
+  - इंस्टॉल विज़ार्ड के 4 पेज → `InstallController::layout()` द्वारा एकरूप रूप से इंजेक्ट
+  - साइट आइकन → `<link rel="icon" type="image/svg+xml" href="/img/pet.svg">`（होम पेज + इंस्टॉल विज़ार्ड + `apps/flutter/web/index.html`）
+- **रंग मानक**: मुख्य रंग `#1677FF`, गर्म एंटेना `#FA8C16`, सत्यापन हरा `#52C41A`; कैनवास `240 × 320`।
+- **डिज़ाइन चित्र**: `docs/diagrams/architecture.svg`（सिस्टम आर्किटेक्चर）, `features.svg`（फ़ीचर डिज़ाइन）, `lifecycle.svg`（लाइफसाइकल）——सभी हस्तलिखित SVG हैं और पेट के समान रंग-योजना रखते हैं; README और दस्तावेज़ों में सीधे संदर्भित।
 
 ## तकनीकी स्टैक
 
@@ -67,7 +79,7 @@ open-admin/
 │   │   ├── HealthController.php    # स्वास्थ्य जाँच
 │   │   ├── DocsController.php      # OpenAPI दस्तावेज़
 │   │   └── MetricsController.php   # Prometheus मॉनिटरिंग मेट्रिक्स
-│   ├── api/v1/controller/      # API v1 कंट्रोलर（संस्करण हेडर नियंत्रण）
+│   ├── api/v1/controller/      # API v1 कंट्रोलर（URL प्रीफ़िक्स /api/v1 वितरण）
 │   │   ├── CaptchaController.php
 │   │   └── AuthController.php
 │   ├── common/                 # सार्वजनिक उपयोगिता क्लास
@@ -75,15 +87,15 @@ open-admin/
 │   │   ├── SnowflakeService.php
 │   │   └── EncryptionService.php
 │   ├── common/                 # सार्वजनिक परिभाषाएँ（Apidoc Definitions सहित）
-│   ├── middleware/             # मिडलवेयर（8）
+│   ├── middleware/             # मिडलवेयर（7）
 │   │   ├── Cors.php            # क्रॉस-ओरिजिन（ग्लोबल）
 │   │   └── (erikwang2013/security-php पैकेज में स्थानांतरित)  # 31 प्रकार की अटैक डिटेक्शन
 │   │   ├── RateLimit.php       # Redis रेट लिमिट（ग्लोबल，Lua एटॉमिक）
-│   │   ├── ApiVersion.php      # API संस्करण सत्यापन
 │   │   ├── AdminAuth.php       # JWT प्रमाणीकरण + ब्लैकलिस्ट
 │   │   ├── AdminPermission.php # RBAC अनुमति सत्यापन（Redis 60s कैश）
 │   │   └── OperationLog.php    # ऑपरेशन लॉग स्वचालित रिकॉर्डिंग（स्रोत डिवाइस पहचान सहित）
 │   ├── model/                  # डेटा मॉडल
+│   ├── view/index/view.html    # साइट होम टेम्पलेट（GET /，प्रोजेक्ट पेट और एंट्री नेविगेशन सहित）
 │   ├── queue/                  # क्यू टास्क
 │   └── process/                # प्रोसेस (Http, Monitor)
 ├── apps/
@@ -115,11 +127,16 @@ open-admin/
 │   ├── SECURITY.md             # सुरक्षा आर्किटेक्चर डिज़ाइन
 │   ├── API.md                  # API संदर्भ दस्तावेज़
 │   ├── nginx-security.conf     # Nginx सुरक्षा संदर्भ कॉन्फ़िगरेशन
-│   ├── diagrams/               # विघटित आर्किटेक्चर आरेख
+│   ├── diagrams/               # चित्र
+│   │   ├── architecture.svg    # सिस्टम आर्किटेक्चर डिज़ाइन चित्र（हस्तलिखित SVG）
+│   │   ├── features.svg        # फ़ीचर डिज़ाइन चित्र（हस्तलिखित SVG）
+│   │   ├── lifecycle.svg       # लाइफसाइकल चित्र（हस्तलिखित SVG）
+│   │   └── 01..12-*.md         # विघटित आर्किटेक्चर आरेख（Mermaid，12 भाषाओं में）
 │   └── superpowers/            # मानक और योजनाएँ
 │       ├── specs/              # डिज़ाइन मानक
 │       └── plans/              # कार्यान्वयन योजनाएँ
 ├── public/                     # सार्वजनिक एंट्री
+│   └── img/pet.svg             # प्रोजेक्ट पेट「शियाओ आन」(SVG，साइट आइकन भी)
 ├── runtime/                    # रनटाइम फ़ाइलें
 ├── tests/                      # टेस्ट
 ├── vendor/                     # Composer निर्भरताएँ
@@ -143,7 +160,7 @@ open-admin/
 ```
 ग्लोबल:  Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → {रूट मिडलवेयर}
 /admin: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → AdminAuth → AdminPermission → OperationLog → Controller
-/api:   Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → ApiVersion → Controller
+/api/v1: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller（संस्करण URL प्रीफ़िक्स में व्यक्त）
 /health: Cors → Locale(Accept-Language) → SecurityMiddleware(erikwang2013/security-php) → RateLimit → Controller
 ```
 
@@ -162,20 +179,21 @@ open-admin/
 
 ## API संस्करण नीति
 
-संस्करण रिक्वेस्ट हेडर `API-Version` द्वारा नियंत्रित होता है（डिफ़ॉल्ट `v1`），URL में नहीं दिखता：
+संस्करण संख्या URL प्रीफ़िक्स में व्यक्त होती है（`/api/v1/...`、`/api/v2/...`），रिक्वेस्ट हेडर का उपयोग नहीं होता：
 
 ```bash
 curl http://localhost:8787/api/v1/auth/login
 ```
 
-नया संस्करण जोड़ने के लिए केवल `app/api/{version}/controller/` डायरेक्टरी बनाकर `ApiVersion` मिडलवेयर में रजिस्टर करें।
+नया संस्करण जोड़ने के लिए केवल `app/api/{version}/controller/` डायरेक्टरी बनाएँ, और `config/route.php` में उस संस्करण का रूट ग्रुप रजिस्टर करें।
 
 ## रेट लिमिट नीति
 
 Redis स्लाइडिंग विंडो（Lua एटॉमिक），डिफ़ॉल्ट 60 बार/मिनट/IP/रूट：
-- लॉगिन: 10 बार/मिनट
-- रजिस्ट्रेशन: 5 बार/मिनट
+- लॉगिन `/api/v1/auth/login`: 10 बार/मिनट
 - रिस्पॉन्स हेडर: `X-RateLimit-Limit/Remaining/Reset`，सीमा पार होने पर `Retry-After` जुड़ता है
+
+> `RateLimit::$sensitive` की कुंजियाँ `config/route.php` में दिए गए **पूर्ण पथ** के अनुरूप होनी चाहिए（`/api/v{n}` संस्करण प्रीफ़िक्स सहित），अन्यथा संवेदनशील रूट चुपचाप डिफ़ॉल्ट 60 बार/मिनट पर लौट जाएँगे।
 
 ## कोड मानक
 

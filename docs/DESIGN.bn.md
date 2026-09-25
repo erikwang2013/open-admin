@@ -5,10 +5,12 @@
 > [中文](DESIGN.md) | [English](DESIGN.en.md) | [한국어](DESIGN.ko.md) | [Русский](DESIGN.ru.md) | [Deutsch](DESIGN.de.md) | [Français](DESIGN.fr.md) | [Español](DESIGN.es.md) | [Português](DESIGN.pt.md) | [हिन्दी](DESIGN.hi.md) | [العربية](DESIGN.ar.md) | [বাংলা](DESIGN.bn.md) | [Bahasa Indonesia](DESIGN.id.md) | [日本語](DESIGN.ja.md)
 
 > বিস্তারিত Mermaid আর্কিটেকচার ডায়াগ্রাম দেখতে [ARCHITECTURE.bn.md](ARCHITECTURE.bn.md) দেখুন (GitHub/GitLab/VS Code-এ স্বয়ংক্রিয় রেন্ডার হয়)।
+>
+> স্ট্যাটিক ডিজাইন ডায়াগ্রাম (SVG): [সিস্টেম আর্কিটেকচার](diagrams/architecture.svg) · [ফিচার ডিজাইন](diagrams/features.svg) · [লাইফসাইকেল](diagrams/lifecycle.svg)
 
 ## 1. সিস্টেম আর্কিটেকচার
 
-> **ফিচার তালিকা**: অথেনটিকেশন(login/register/refresh/logout + অ্যাকাউন্ট লক + সেশন সীমা) | ড্যাশবোর্ড(Redis ক্যাশ) | ইউজার CRUD+বাল্ক+ইমপোর্ট | রোল ও পারমিশন(RBAC) | সিস্টেম কনফিগ | অপারেশন অডিট(৮ প্ল্যাটফর্ম সোর্স ডিভাইস) | ফাইল(আপলোড+এক্সপোর্ট+মাস্কিং) | নিরাপত্তা(১৮ স্তর প্রতিরক্ষা) | অপারেশন(health/metrics/docs/Docker/CI)
+> **ফিচার তালিকা**: অথেনটিকেশন(login/refresh/logout + অ্যাকাউন্ট লক + সেশন সীমা) | ড্যাশবোর্ড(Redis ক্যাশ) | ইউজার CRUD+বাল্ক+ইমপোর্ট | রোল ও পারমিশন(RBAC) | সিস্টেম কনফিগ | অপারেশন অডিট(৮ প্ল্যাটফর্ম সোর্স ডিভাইস) | ফাইল(আপলোড+এক্সপোর্ট+মাস্কিং) | নিরাপত্তা(১৮ স্তর প্রতিরক্ষা) | অপারেশন(health/metrics/docs/Docker/CI)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -62,7 +64,7 @@
 | লেয়ার | ডিরেক্টরি | দায়িত্ব |
 |---|------|------|
 | রাউট | `config/route.php` | URL থেকে কন্ট্রোলার ম্যাপিং, মিডলওয়্যার বাইন্ডিং, ভার্সনযুক্ত রাউট |
-| মিডলওয়্যার | `app/middleware/` | আক্রমণ ব্লকিং(SecurityFilter), রেট লিমিট(RateLimit), অথেনটিকেশন(JWT), অথোরাইজেশন(RBAC), API ভার্সন(ApiVersion) |
+| মিডলওয়্যার | `app/middleware/` | আক্রমণ ব্লকিং(SecurityFilter), রেট লিমিট(RateLimit), অথেনটিকেশন(JWT), অথোরাইজেশন(RBAC) |
 | কন্ট্রোলার | ১৪টি: Dashboard/User/Role/Permission/Config/Log/Profile/Export/Import/Upload/Health/Docs (অ্যাডমিন) + Captcha/Auth (API v1) | রিকোয়েস্ট প্যারামিটার ভ্যালিডেশন, বিজনেস লজিক কল, রেসপন্স ফরম্যাটিং |
 | বিজনেস সার্ভিস | `app/service/` | পুনর্ব্যবহারযোগ্য বিজনেস লজিক (রিজার্ভ) |
 | ডেটা মডেল | `app/model/` | ORM ম্যাপিং, সম্পর্ক, ফিল্ড এনক্রিপশন/ডিক্রিপশন |
@@ -90,8 +92,9 @@ Route 匹配
   RateLimit ───────────► Redis 滑动窗口限流
   │ (失败返回 429 + Retry-After 头)
   ▼
-  ApiVersion ─────────► API-Version 头校验，注入 $request->apiVersion
-  │ (失败返回 400)
+  路由分发 ───────────► 版本号体现在 URL 前缀（/api/v1/...、/api/v2/...）
+  │                     /api/v1 请求 → 静态注册路由组直连控制器
+  │                     /admin 请求 → 继续下方中间件链
   ▼
   AdminAuth ──────────► JWT 验证，注入 $request->adminId
   │ (失败返回 401)
@@ -175,7 +178,7 @@ erik_system_config (系统配置) — 独立表
 
 ```
 公开接口:  /api/v1/captcha/{generate|verify}
-           /api/v1/auth/{login|register|refresh}
+           /api/v1/auth/{login|refresh}
 
 管理端:   /admin/{resource}[/{hashid}]
           /admin/export/{excel|pdf}
@@ -199,33 +202,25 @@ erik_system_config (系统配置) — 独立表
 
 ### 4.2 API ভার্সন পলিসি
 
-API ভার্সন রিকোয়েস্ট হেডার দিয়ে নিয়ন্ত্রিত হয়, **URL পাথে প্রকাশিত হয় না**:
-
-```http
-API-Version: v1
-```
+API ভার্সন নম্বর URL প্রিফিক্সে প্রকাশ করা হয় (`/api/v1/...`、`/api/v2/...`), **রিকোয়েস্ট হেডার ব্যবহার করা হয় না**। `config/route.php`-এ প্রতিটি ভার্সনের রাউট গ্রুপ স্ট্যাটিকভাবে রেজিস্টার করা হয় এবং সরাসরি সংশ্লিষ্ট ভার্সনের কন্ট্রোলারে যায়, ভার্সন ডিসপ্যাচ কোনো মিডলওয়্যার ভেদ করে না।
 
 | মেকানিজম | বর্ণনা |
 |------|------|
-| ডিফল্ট ভার্সন | `API-Version` হেডার না দিলে ডিফল্ট `v1` |
-| ভেরিফিকেশন | `ApiVersion` মিডলওয়্যার ভেরিফাই করে, অসমর্থিত ভার্সনে 400 রিটার্ন |
-| রাউটিং | `v()` হেল্পার ফাংশন ভার্সন অনুযায়ী ডাইনামিকভাবে কন্ট্রোলার ক্লাস রেজলভ করে |
+| URL প্রিফিক্স | ভার্সন নম্বর URL-এর প্রথম পাথ সেগমেন্ট: `/api/v1/...`、`/api/v2/...` |
+| রাউট | `config/route.php`-এ `Route::group('/api/v1', ...)` স্ট্যাটিকভাবে রেজিস্টার করে সরাসরি কন্ট্রোলারে পৌঁছায় |
 | ডিরেক্টরি | কন্ট্রোলার ভার্সন অনুযায়ী সাজানো: `app/api/{version}/controller/` |
+| অপারেশন এন্ডপয়েন্ট | `/api/docs`、`/health`、`/metrics` ইত্যাদিতে ভার্সন প্রিফিক্স থাকে না |
 
 এক্সটেনশন উদাহরণ — নতুন v2 API যোগ করা:
 1. `app/api/v2/controller/AuthController.php` তৈরি করুন
-2. `ApiVersion` মিডলওয়্যারের `SUPPORTED` কনস্ট্যান্টে `'v2'` যোগ করুন
-3. রাউট ডেফিনিশন পরিবর্তনের প্রয়োজন নেই
+2. `config/route.php`-এ `Route::group('/api/v2', ...)` রাউট গ্রুপ রেজিস্টার করুন
 
 ```bash
-# v1 ব্যবহার
-curl /api/v1/auth/login
+# v1
+curl http://localhost:8787/api/v1/auth/login
 
-# v2 ব্যবহার
-curl -H "API-Version: v2" /api/v1/auth/login
-
-# না দিলে, ডিফল্ট v1
-curl /api/v1/auth/login
+# v2（নতুন ভার্সন যোগ করার পর）
+curl http://localhost:8787/api/v2/auth/login
 ```
 
 ### 4.3 রেট লিমিট পলিসি
@@ -236,7 +231,6 @@ Redis Sorted Set স্লাইডিং উইন্ডো অ্যালগ�
 |------|------|
 | ডিফল্ট | ৬০ বার/মিনিট/IP/রাউট |
 | POST /api/v1/auth/login | ১০ বার/মিনিট |
-| POST /api/v1/auth/register | ৫ বার/মিনিট |
 
 সীমা অতিক্রম করলে 429 রিটার্ন, রেসপন্স হেডারে X-RateLimit-Limit / Remaining / Reset / Retry-After থাকে।
 
@@ -362,7 +356,7 @@ Redis Sorted Set স্লাইডিং উইন্ডো অ্যালগ�
 |------|------|
 | মেথড সীমা | SecurityFilter HTTP মেথড হোয়াইটলিস্ট, শুধুমাত্র GET/POST/PUT/DELETE/OPTIONS/HEAD অনুমোদিত, নন-স্ট্যান্ডার্ড মেথডে 405 |
 | আক্রমণ ব্লকিং | SecurityFilter মিডলওয়্যার, XSS/SQL ইনজেকশন/পাথ ট্রাভার্সাল/কমান্ড ইনজেকশন/CSRF ডিটেকশন ও ব্লকিং |
-| হিউম্যান-মেশিন ভেরিফিকেশন | ক্লিক ক্যাপচা (Click Captcha), লগইন/রেজিস্টারে বাধ্যতামূলক ভেরিফিকেশন |
+| হিউম্যান-মেশিন ভেরিফিকেশন | ক্লিক ক্যাপচা (Click Captcha), লগইনে বাধ্যতামূলক ভেরিফিকেশন |
 | অ্যাকাউন্ট লক | টানা ৫ বার লগইন ব্যর্থ হলে ১৫ মিনিট লক, লক থাকা অবস্থায় 429 |
 | সেশন সীমা | একই ইউজারের সর্বোচ্চ ৩টি কনকারেন্ট Token, এর বেশি হলে সবচেয়ে পুরনো Token অটো ব্ল্যাকলিস্ট |
 | রেট লিমিট | RateLimit মিডলওয়্যার, Redis স্লাইডিং উইন্ডো, Lua অ্যাটমিক |

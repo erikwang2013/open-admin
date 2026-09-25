@@ -5,6 +5,8 @@
 # Diagrammes d'architecture et de logique métier
 
 > Les diagrammes Mermaid ci-dessous sont automatiquement rendus dans GitHub / GitLab / VS Code. Pour les autres environnements, utilisez [Mermaid Live Editor](https://mermaid.live/).
+>
+> Pour les schémas statiques (SVG) ne nécessitant aucun moteur de rendu, voir [section 14](#14-diagrammes-statiques-svg).
 
 ---
 
@@ -22,11 +24,10 @@ flowchart TB
     end
 
     subgraph "Couche application (webman v2)"
-        C0["Middleware ApiVersion<br/>Validation de l'en-tête API-Version"]
         C1["Middleware AdminAuth<br/>Validation JWT"]
         C2["Middleware AdminPermission<br/>Validation des permissions RBAC"]
         C3["Contrôleurs du panneau d'administration<br/>Dashboard / User / Role / Permission"]
-        C4["Contrôleurs publics v1<br/>Captcha / Auth"]
+        C4["Groupe de routes /api/v1 → Contrôleurs publics<br/>Captcha / Auth"]
         C5["Services communs<br/>Hashids / Snowflake / Encryption"]
     end
 
@@ -43,11 +44,10 @@ flowchart TB
 
     A1 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
     A2 -->|"HTTPS / JSON<br/>JWT Bearer"| B1
-    B1 --> C0
-    C0 --> C1
+    B1 --> C1
+    B1 --> C4
     C1 --> C2
     C2 --> C3
-    C0 --> C4
     C3 --> C5
     C4 --> C5
     C3 --> D1
@@ -59,7 +59,6 @@ flowchart TB
     style A1 fill:#1677FF,color:#fff
     style A2 fill:#1677FF,color:#fff
     style B1 fill:#722ED1,color:#fff
-    style C0 fill:#EB2F96,color:#fff
     style C1 fill:#FA8C16,color:#fff
     style C2 fill:#FA8C16,color:#fff
     style C3 fill:#52C41A,color:#fff
@@ -83,7 +82,6 @@ flowchart TD
     subgraph "Couche middleware Middleware Layer"
         M_RL["RateLimit<br/>Limitation de débit par fenêtre glissante Redis<br/>En-têtes de réponse X-RateLimit"]
         M_SF["SecurityFilter<br/>Interception de la détection d'attaques<br/>XSS/injection SQL/traversée de chemin/CSRF"]
-        M0["ApiVersion<br/>Validation de la version API<br/>Injection apiVersion"]
         M1["AdminAuth<br/>Validation du jeton JWT<br/>Injection adminId"]
         M2["AdminPermission<br/>Autorisation RBAC<br/>Correspondance method.path<br/>Cache des permissions Redis 60 s"]
     end
@@ -96,7 +94,7 @@ flowchart TD
         CT5["DashboardController<br/>statistiques/tendances/répartition"]
         CT6["ExportController<br/>Export Excel/PDF"]
         CT7["CaptchaController<br/>Génération/validation du captcha"]
-        CT8["AuthController<br/>Connexion/inscription/rafraîchissement"]
+        CT8["AuthController<br/>Connexion/rafraîchissement"]
     end
 
     subgraph "Couche service Service Layer"
@@ -119,11 +117,11 @@ flowchart TD
         D3["Redis"]
     end
 
-    R1 --> M_SF --> M_RL --> M0
-    M0 --> M1
+    R1 --> M_SF --> M_RL
+    M_RL --> M1
+    M_RL --> CT7 & CT8
     M1 --> M2
     M2 --> CT2 & CT3 & CT4 & CT5 & CT6
-    M0 --> CT7 & CT8
     CT1 -.->|extends| CT2 & CT3 & CT4 & CT5 & CT6
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> S1 & S2 & S3
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> MD1 & MD2 & MD3 & MD4 & MD5
@@ -134,7 +132,6 @@ flowchart TD
     style R1 fill:#722ED1,color:#fff
     style M_SF fill:#FF4D4F,color:#fff
     style M_RL fill:#EB2F96,color:#fff
-    style M0 fill:#EB2F96,color:#fff
     style M1 fill:#FA8C16,color:#fff
     style M2 fill:#FA8C16,color:#fff
     style CT1 fill:#1677FF,color:#fff
@@ -151,7 +148,6 @@ sequenceDiagram
     participant MW_LOC as Locale
     participant MW_SF as SecurityFilter
     participant MW_RL as RateLimit
-    participant MW0 as ApiVersion
     participant MW1 as AdminAuth
     participant MW2 as AdminPermission
     participant CTL as Contrôleur
@@ -160,7 +156,7 @@ sequenceDiagram
     participant DB as MySQL
     participant OPLOG as OperationLog
 
-    C->>N: Requête HTTPS<br/>En-tête : API-Version: v1, Accept-Language: zh_CN
+    C->>N: Requête HTTPS vers les points de terminaison /admin<br/>En-tête : Accept-Language: zh_CN
     N->>MW_LOC: Transfert
 
     MW_LOC->>MW_LOC: locale = zh_CN (Accept-Language / ?lang=)
@@ -182,13 +178,7 @@ sequenceDiagram
         MW_RL-->>C: 429 + Retry-After
     end
 
-    MW_RL->>MW0: Validation
-
-    alt Version non prise en charge
-        MW0-->>C: 400 Version API non prise en charge
-    else Version valide
-        MW0->>MW0: $request->apiVersion = v1
-    end
+    MW_RL->>MW1: Validation
 
     alt Jeton absent ou invalide
         MW1-->>C: 401 Unauthorized
@@ -607,7 +597,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph "Couche 1 : vérification homme-machine"
-        L1["Captcha à clic<br/>Click Captcha<br/>Obligatoire à la connexion/inscription"]
+        L1["Captcha à clic<br/>Click Captcha<br/>Obligatoire à la connexion"]
     end
 
     subgraph "Couche 2 : confirmation des opérations"
@@ -692,3 +682,17 @@ flowchart TB
     style ES fill:#1890FF,color:#fff
     style REDIS fill:#1890FF,color:#fff
 ```
+
+---
+
+## 14. Diagrammes statiques (SVG)
+
+Les trois diagrammes ci-dessous sont des **SVG écrits à la main** (sans script, sans dépendance externe, zoom infini) : ils se consultent sans moteur de rendu Mermaid et s'insèrent directement dans la documentation, les diapositives et le README :
+
+| Diagramme | Contenu | Fichier |
+|---|------|------|
+| Conception de l'architecture système | Topologie à quatre couches : couche client → couche passerelle → couche application webman → couche de stockage, avec la protection de sécurité et l'observabilité | [architecture.svg](diagrams/architecture.svg) |
+| Conception fonctionnelle | 12 domaines fonctionnels → points d'entrée des contrôleurs → capacités clés, avec la chaîne d'exécution des middlewares et les spécifications d'interface de données | [features.svg](diagrams/features.svg) |
+| Cycle de vie | Installation → démarrage → accès → protection → authentification → traitement → persistance → audit de la réponse, avec les branches d'exception et le cycle de vie des jetons | [lifecycle.svg](diagrams/lifecycle.svg) |
+
+> Mascotte du projet « Xiao An » : [`public/img/pet.svg`](../public/img/pet.svg) (SVG pur, également utilisé comme page d'accueil du site, assistant d'installation et icône du navigateur)

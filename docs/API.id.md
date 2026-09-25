@@ -6,13 +6,13 @@
 
 ## 1. Ringkasan
 
-Panel Admin Terbuka (open-admin) dibangun di atas webman v2 dan menyediakan RESTful JSON API. Semua antarmuka sisi admin memerlukan autentikasi JWT dan validasi hak akses RBAC; antarmuka publik dirutekan ke kontroler ber-versi melalui header versi API.
+Panel Admin Terbuka (open-admin) dibangun di atas webman v2 dan menyediakan RESTful JSON API. Semua antarmuka sisi admin memerlukan autentikasi JWT dan validasi hak akses RBAC; nomor versi antarmuka publik tercermin pada prefiks URL (seperti `/api/v1/auth/login`), dirutekan ke kontroler ber-versi terkait.
 
 - **URL dasar**: `http://localhost:8787`
-- **Versi API**: Dikontrol melalui header `API-Version: v1` (default v1 jika tidak ada)
+- **Versi API**: Nomor versi tercermin pada prefiks URL (`/api/v1/...`, `/api/v2/...`), tidak menggunakan header permintaan
 - **Bahasa**: Berpindah melalui header `Accept-Language` atau parameter `?lang=zh_CN|en` (default zh_CN), dideteksi otomatis oleh middleware Locale
 
-> **Ringkasan endpoint**: Autentikasi(5) | Dasbor(1) | Pengguna(7) | Peran(4) | Hak Akses(4) | Konfigurasi(4) | Log(1) | Pusat Akun(3) | Impor Ekspor(3) | Upload(1) | Operasional(4: health/metrics/docs/security.txt) | Total 37 endpoint
+> **Ringkasan endpoint**: Autentikasi(4) | Dasbor(1) | Pengguna(7) | Peran(4) | Hak Akses(4) | Konfigurasi(4) | Log(1) | Pusat Akun(3) | Impor Ekspor(3) | Upload(1) | Operasional(4: health/metrics/docs/security.txt) | Total 36 endpoint
 - **Autentikasi**: `Authorization: Bearer <token>` (JWT)
 - **Format respons**: `{ "code": 0, "message": "success", "data": {...} }`
 - **Endpoint dokumentasi**: `GET /api/docs` mengembalikan spesifikasi JSON OpenAPI 3.0
@@ -44,7 +44,7 @@ Panel Admin Terbuka (open-admin) dibangun di atas webman v2 dan menyediakan REST
 
 ## 3. Endpoint Publik
 
-Semua endpoint publik terpasang di grup `/api`, didistribusikan oleh middleware `ApiVersion` ke kontroler ber-versi sesuai header `API-Version` (misalnya `app\api\v1\controller\AuthController`).
+Semua endpoint publik terpasang di grup rute `/api/v1`, nomor versi tercermin pada prefiks URL dan tidak menggunakan header permintaan (misalnya `app\api\v1\controller\AuthController`).
 
 ### 3.1 Pemeriksaan Kesehatan
 
@@ -91,7 +91,6 @@ POST /api/v1/captcha/generate
 ```
 
 - **Autentikasi**: Tidak diperlukan
-- **Header permintaan**: `API-Version: v1` (wajib)
 - **Rate limit**: Default global (60 kali/menit)
 
 **Body permintaan**:
@@ -184,7 +183,6 @@ POST /api/v1/captcha/verify
 ```
 
 - **Autentikasi**: Tidak diperlukan
-- **Header permintaan**: `API-Version: v1` (wajib)
 - **Rate limit**: Default global (60 kali/menit)
 
 **Body permintaan** — tipe klik (`type: "click"`):
@@ -250,7 +248,6 @@ POST /api/v1/auth/login
 ```
 
 - **Autentikasi**: Tidak diperlukan
-- **Header permintaan**: `API-Version: v1` (wajib)
 - **Rate limit**: 10 kali/menit (per IP + path)
 
 **Body permintaan**:
@@ -320,61 +317,13 @@ Kunci publik tertanam di aplikasi frontend, tidak perlu dikirim melalui jaringan
 - 403: Akun telah dinonaktifkan
 - 429: Akun telah terkunci, coba lagi setelah 15 menit (dipicu 5 kali kegagalan login berturut-turut)
 
-### 3.6 Registrasi
-
-```
-POST /api/v1/auth/register
-```
-
-- **Autentikasi**: Tidak diperlukan
-- **Header permintaan**: `API-Version: v1` (wajib)
-- **Rate limit**: 5 kali/menit (per IP + path)
-
-**Body permintaan**:
-```json
-{
-  "username": "newuser",
-  "password": "djGYscnyS5V6mW6KyDFjB8vGwjBBnB3Odpyxu8LY...",
-  "real_name": "新用户",
-  "captcha_key": "abc123def456"
-}
-```
-
-| Bidang | Tipe | Wajib | Aturan validasi | Keterangan |
-|------|------|------|---------|------|
-| username | string | Ya | min:3, max:50 | Nama pengguna (unik) |
-| password | string | Ya | min:6, max:32 (teks polos) | Dienkripsi AES-256-CBC-HMAC lalu di-encode Base64 |
-| real_name | string | Ya | max:50 | Nama asli |
-| captcha_key | string | Ya | | Key captcha (harus lolos verifikasi `/api/v1/captcha/verify` terlebih dahulu) |
-
-**Contoh respons**:
-```json
-{
-  "code": 0,
-  "message": "注册成功",
-  "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 7200,
-    "user": {
-      "id": "e5f6g7h8",
-      "username": "newuser",
-      "real_name": "新用户"
-    }
-  }
-}
-```
-
-Setelah registrasi berhasil, token JWT langsung dikembalikan, status pengguna default aktif (status=1).
-
-### 3.7 Refresh Token
+### 3.6 Refresh Token
 
 ```
 POST /api/v1/auth/refresh
 ```
 
 - **Autentikasi**: Tidak diperlukan
-- **Header permintaan**: `API-Version: v1` (wajib)
 - **Rate limit**: Default global (60 kali/menit)
 
 **Body permintaan**:
@@ -386,7 +335,7 @@ POST /api/v1/auth/refresh
 
 | Bidang | Tipe | Wajib | Keterangan |
 |------|------|------|------|
-| refresh_token | string | Ya | refresh_token yang didapat saat login/registrasi |
+| refresh_token | string | Ya | refresh_token yang didapat saat login |
 
 **Contoh respons**:
 ```json
@@ -407,7 +356,7 @@ Refresh berhasil mengembalikan access_token dan refresh_token baru secara bersam
 - 422: Token refresh tidak ada
 - 401: Token refresh tidak valid atau sudah kedaluwarsa
 
-### 3.8 Metrik Pemantauan Prometheus
+### 3.7 Metrik Pemantauan Prometheus
 
 ```
 GET /metrics
@@ -1657,7 +1606,6 @@ Semua antarmuka (disuntikkan pada lapisan middleware global) menyertakan header 
 Detail rate limit:
 - Batas global default: 60 kali/menit / IP+path
 - Endpoint login `/api/v1/auth/login`: 10 kali/menit
-- Endpoint registrasi `/api/v1/auth/register`: 5 kali/menit
 - Menggunakan algoritma sliding window atomik Redis (Lua ZSET), menghindari race condition TOCTOU
 - Saat Redis tidak tersedia, fail open (membiarkan lewat), tidak memblokir permintaan
 
@@ -1667,14 +1615,12 @@ Urutan autentikasi lengkap:
 
 ```
 1. 客户端请求 POST /api/v1/captcha/generate
-   (请求头: API-Version: v1)
     ↓
    服务端返回: key + type(click|slider|rotate) + base64 图片 + extra(类型相关数据)
    
 2. 用户交互完成验证码操作（点击/拖拽/旋转），客户端收集答案
    
 3. 客户端请求 POST /api/v1/captcha/verify
-   (请求头: API-Version: v1, Content-Type: application/json)
    请求体: { key, type, clicks }
    - type=click:  clicks = [{x, y}, ...]        // 坐标数组
    - type=slider: clicks = 120                   // X 偏移量
@@ -1689,7 +1635,6 @@ Urutan autentikasi lengkap:
    服务端返回: { valid: true/false }
 
 4. 客户端请求 POST /api/v1/auth/login
-   (请求头: API-Version: v1, Content-Type: application/json)
    请求体: { username, password(加密), captcha_key }
     ↓
    服务端:
@@ -1761,14 +1706,13 @@ Urutan autentikasi lengkap:
 Middleware global berlaku untuk semua permintaan, dieksekusi berurutan:
 
 ```
-Cors（跨域预处理 + 响应头）
-  → Locale（Accept-Language 语言检测 / ?lang=zh_CN|en）
-  → SecurityFilter（HTTP方法限制/请求体大小/Content-Type校验/XSS/SQL注入/路径遍历/命令注入/CSRF 攻击拦截）
-  → RateLimit（Redis 滑动窗口限流 + 账号锁定：5次登录失败锁定15分钟）
-  → ApiVersion（API 版本校验，/api 路由组）
-  → AdminAuth（JWT 认证 + 黑名单，/admin 路由组）
-  → AdminPermission（RBAC 鉴权 / Redis 60s 缓存，/admin 路由组）
-  → OperationLog（POST/PUT/DELETE 自动记录，含来源端检测，/admin 路由组）
+Cors（pra-pemrosesan lintas domain + header respons）
+  → Locale（deteksi bahasa Accept-Language / ?lang=zh_CN|en）
+  → SecurityFilter（pembatasan metode HTTP/ukuran body permintaan/validasi Content-Type/interception serangan XSS/Injeksi SQL/Path traversal/Injeksi perintah/CSRF）
+  → RateLimit（rate limit sliding window Redis + penguncian akun: 5 kali kegagalan login terkunci 15 menit）
+  → AdminAuth（autentikasi JWT + blacklist, grup rute /admin）
+  → AdminPermission（otorisasi RBAC / cache Redis 60s, grup rute /admin）
+  → OperationLog（pencatatan otomatis POST/PUT/DELETE, termasuk deteksi sumber, grup rute /admin）
 ```
 
 `/health` dan `/api/docs` adalah endpoint publik, hanya melalui `Cors → SecurityFilter → RateLimit`.

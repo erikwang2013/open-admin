@@ -2,7 +2,7 @@
 
 ```mermaid
 flowchart TB
-    l1["第1层: 人机验证<br/>点击验证码ClickCaptcha<br/>登录/注册强制校验"]
+    l1["第1层: 人机验证<br/>点击验证码ClickCaptcha<br/>登录强制校验"]
     l2["第2层: 操作确认<br/>密码二次确认<br/>DELETE操作必须"]
     l3["第3层: 传输安全<br/>HTTPS + JWT Bearer<br/>AES-256-CBC"]
     l4["第4层: 身份认证<br/>JWT HS256<br/>access_token 2h<br/>refresh_token 14d"]
