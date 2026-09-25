@@ -1,6 +1,6 @@
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 >
-> [中文](../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
+> [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
 
 # Panel de administración abierto (open-admin)
 
@@ -15,7 +15,7 @@ Sistema de panel de administración full-stack basado en **webman v2 + Flutter**
 >
 > Diagramas de diseño: [Arquitectura del sistema](../../docs/diagrams/architecture.svg) · [Diseño de funciones](../../docs/diagrams/features.svg) · [Ciclo de vida](../../docs/diagrams/lifecycle.svg)
 
-> [Diagrama de arquitectura](docs/ARCHITECTURE.es.md) | [Documento de diseño](docs/DESIGN.es.md) | [Arquitectura de seguridad](docs/SECURITY.es.md) | [Referencia de API](docs/API.es.md)
+> [Diagrama de arquitectura](../ARCHITECTURE.es.md) | [Documento de diseño](../DESIGN.es.md) | [Arquitectura de seguridad](../SECURITY.es.md) | [Referencia de API](../API.es.md)
 
 ## Mascota del proyecto · Xiao An
 
@@ -296,7 +296,7 @@ docker-compose up -d
 
 ## Documentación de la API
 
-La referencia completa de la API (formato de respuesta unificado, códigos de error, detalles de todos los endpoints, flujo de autenticación, política de límite de peticiones y cadena de middleware) está en **[docs/API.es.md](docs/API.es.md)**. Puntos clave:
+La referencia completa de la API (formato de respuesta unificado, códigos de error, detalles de todos los endpoints, flujo de autenticación, política de límite de peticiones y cadena de middleware) está en **[docs/API.es.md](../API.es.md)**. Puntos clave:
 
 - **Formato de respuesta unificado**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0` significa éxito
 - **Códigos de error**: `400` error de parámetros / `401` no autenticado / `403` sin permiso / `404` no existe / `422` error de validación / `429` límite de peticiones / `500` error del servidor

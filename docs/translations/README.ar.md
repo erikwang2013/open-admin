@@ -1,25 +1,25 @@
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 >
-> [中文](../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md) | [مخطط العمارة](docs/ARCHITECTURE.ar.md) | [وثيقة التصميم](docs/DESIGN.ar.md) | [بنية الأمان](docs/SECURITY.ar.md) | [مرجع API](docs/API.ar.md)
+> [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md) | [مخطط العمارة](../ARCHITECTURE.ar.md) | [وثيقة التصميم](../DESIGN.ar.md) | [بنية الأمان](../SECURITY.ar.md) | [مرجع API](../API.ar.md)
 
 # نظام إدارة مفتوح (open-admin)
 
 <p align="center">
-  <img src="public/img/pet.svg" width="150" height="200" alt="شياو آن — حيوان مشروع open-admin">
+  <img src="../../public/img/pet.svg" width="150" height="200" alt="شياو آن — حيوان مشروع open-admin">
 </p>
 
 نظام إدارة خلفي متكامل مبني على **webman v2 + Flutter**: المصادقة وصلاحيات RBAC، ودفاع متعمق من 18 طبقة، وقابلية مراقبة عبر Prometheus، وعملاء متعددو المنصات (Flutter Web / HarmonyOS).
 
 > حيوان المشروع «**شياو آن**» روبوت حارس درعي الشكل، يقف عند بوابتي «الحماية» و«التحقق من الهوية» في سلسلة الوسائط.
-> المواد [`public/img/pet.svg`](public/img/pet.svg): SVG خالص (بلا سكربتات، بلا اعتماديات خارجية، يدعم الخلفية الداكنة و`prefers-reduced-motion`)، ويُستخدم أيضًا كأيقونة الموقع.
+> المواد [`public/img/pet.svg`](../../public/img/pet.svg): SVG خالص (بلا سكربتات، بلا اعتماديات خارجية، يدعم الخلفية الداكنة و`prefers-reduced-motion`)، ويُستخدم أيضًا كأيقونة الموقع.
 >
-> رسوم التصميم: [عمارة النظام](docs/diagrams/architecture.svg) · [التصميم الوظيفي](docs/diagrams/features.svg) · [دورة الحياة](docs/diagrams/lifecycle.svg)
+> رسوم التصميم: [عمارة النظام](../../docs/diagrams/architecture.svg) · [التصميم الوظيفي](../../docs/diagrams/features.svg) · [دورة الحياة](../../docs/diagrams/lifecycle.svg)
 
 ## حيوان المشروع · شياو آن
 
 <table>
 <tr>
-<td width="170"><img src="public/img/pet.svg" width="150" height="200" alt="شياو آن"></td>
+<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="شياو آن"></td>
 <td>
 
 **شياو آن** (Xiao An) هو حيوان مشروع open-admin، مأخوذ من «**الأمان**» و«**لوحة الإدارة**» — روبوت حارس درعي الشكل.
@@ -32,12 +32,12 @@
 
 | الموضع | الشكل |
 |------|------|
-| الصفحة الرئيسية للموقع `GET /` | الصورة الرئيسية + تعريف المشروع وروابط الدخول ([`app/view/index/view.html`](app/view/index/view.html)) |
+| الصفحة الرئيسية للموقع `GET /` | الصورة الرئيسية + تعريف المشروع وروابط الدخول ([`app/view/index/view.html`](../../app/view/index/view.html)) |
 | معالج التثبيت `/install` | صورة رأس المعالج المكوّن من ثلاث خطوات (`InstallController::layout()`) |
 | تبويب المتصفح | أيقونة الموقع `rel="icon" type="image/svg+xml"` |
 | هذه الوثيقة ورسوم التصميم | صورة المشروع + بطاقة الحيوان في أسفل يمين مخطط العمارة |
 
-> مصدر واحد للمواد: [`public/img/pet.svg`](public/img/pet.svg). تعديله يحدّث جميع المواضع أعلاه في الوقت نفسه.
+> مصدر واحد للمواد: [`public/img/pet.svg`](../../public/img/pet.svg). تعديله يحدّث جميع المواضع أعلاه في الوقت نفسه.
 
 </td>
 </tr>
@@ -163,17 +163,17 @@ open-admin/
 
 | الرسم | المحتوى | الملف |
 |---|------|------|
-| تصميم عمارة النظام | طوبولوجيا من أربع طبقات: طبقة العملاء → طبقة البوابة → طبقة تطبيق webman (سلسلة الوسائط / وحدات التحكم / الخدمات المشتركة) → طبقة التخزين، مع الأمان وإمكانية المراقبة على اليمين | [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg) |
-| التصميم الوظيفي | 12 مجالًا وظيفيًا → مداخل وحدات التحكم → القدرات الرئيسية، وفي الأسفل سلسلة تنفيذ الوسائط ومواصفات واجهات البيانات | [`docs/diagrams/features.svg`](docs/diagrams/features.svg) |
-| دورة الحياة | التثبيت → الإقلاع → الاتصال → الحماية → التحقق من الهوية → المعالجة → الاستمرارية → تدقيق الاستجابة، مع الفروع الاستثنائية ودورة حياة الرمز | [`docs/diagrams/lifecycle.svg`](docs/diagrams/lifecycle.svg) |
+| تصميم عمارة النظام | طوبولوجيا من أربع طبقات: طبقة العملاء → طبقة البوابة → طبقة تطبيق webman (سلسلة الوسائط / وحدات التحكم / الخدمات المشتركة) → طبقة التخزين، مع الأمان وإمكانية المراقبة على اليمين | [`docs/diagrams/architecture.svg`](../../docs/diagrams/architecture.svg) |
+| التصميم الوظيفي | 12 مجالًا وظيفيًا → مداخل وحدات التحكم → القدرات الرئيسية، وفي الأسفل سلسلة تنفيذ الوسائط ومواصفات واجهات البيانات | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
+| دورة الحياة | التثبيت → الإقلاع → الاتصال → الحماية → التحقق من الهوية → المعالجة → الاستمرارية → تدقيق الاستجابة، مع الفروع الاستثنائية ودورة حياة الرمز | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="docs/diagrams/architecture.svg" width="1100" alt="رسم تصميم عمارة نظام open-admin">
+<img src="../../docs/diagrams/architecture.svg" width="1100" alt="رسم تصميم عمارة نظام open-admin">
 
-<img src="docs/diagrams/features.svg" width="1100" alt="رسم التصميم الوظيفي لـ open-admin">
+<img src="../../docs/diagrams/features.svg" width="1100" alt="رسم التصميم الوظيفي لـ open-admin">
 
-<img src="docs/diagrams/lifecycle.svg" width="1100" alt="رسم دورة حياة open-admin">
+<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="رسم دورة حياة open-admin">
 
-> للحصول على رسوم قابلة للتحرير على مستوى المصدر، راجع [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) و[`docs/diagrams/`](docs/diagrams/) (Mermaid، قابلة للصق في [Mermaid Live](https://mermaid.live/) للتحرير).
+> للحصول على رسوم قابلة للتحرير على مستوى المصدر، راجع [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) و[`docs/diagrams/`](../../docs/diagrams/) (Mermaid، قابلة للصق في [Mermaid Live](https://mermaid.live/) للتحرير).
 
 ## متطلبات البيئة
 
@@ -288,7 +288,7 @@ docker-compose up -d
 
 ## توثيق API
 
-مرجع API الكامل (تنسيق الاستجابة الموحد، أكواد الأخطاء، تفاصيل جميع النقاط الطرفية، عملية المصادقة، استراتيجية تحديد المعدل، سلسلة الوسائط) في **[docs/API.ar.md](docs/API.ar.md)**، ومن أبرز النقاط:
+مرجع API الكامل (تنسيق الاستجابة الموحد، أكواد الأخطاء، تفاصيل جميع النقاط الطرفية، عملية المصادقة، استراتيجية تحديد المعدل، سلسلة الوسائط) في **[docs/API.ar.md](../API.ar.md)**، ومن أبرز النقاط:
 
 - **تنسيق الاستجابة الموحد**: `{ "code": 0, "message": "success", "data": {...} }`، `code=0` تعني النجاح
 - **أكواد الأخطاء**: `400` خطأ في المعاملات / `401` غير مسجّل الدخول / `403` لا صلاحية / `404` غير موجود / `422` فشل التحقق / `429` تجاوز معدل الطلبات / `500` خطأ في الخادم

@@ -6,7 +6,7 @@
 
 > Подробные схемы Mermaid см. в [ARCHITECTURE.ru.md](ARCHITECTURE.ru.md) (автоматически отображаются в GitHub/GitLab/VS Code).
 >
-> Статические схемы (SVG): [архитектура системы](diagrams/architecture.svg) · [функциональное проектирование](diagrams/features.svg) · [жизненный цикл](lifecycle.svg)
+> Статические схемы (SVG): [архитектура системы](diagrams/architecture.svg) · [функциональное проектирование](diagrams/features.svg) · [жизненный цикл](diagrams/lifecycle.svg)
 
 ## 1. Архитектура системы
 

@@ -1,25 +1,25 @@
 # 开放管理后台 (open-admin) — ओपन एडमिन पैनल
 
 <p align="center">
-  <img src="public/img/pet.svg" width="150" height="200" alt="शियाओ आन — open-admin प्रोजेक्ट पेट">
+  <img src="../../public/img/pet.svg" width="150" height="200" alt="शियाओ आन — open-admin प्रोजेक्ट पेट">
 </p>
 
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 >
-> [中文](../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
+> [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
 
 **webman v2 + Flutter** पर आधारित पूर्ण-स्टैक प्रशासन पैनल प्रणाली: प्रमाणीकरण और RBAC अनुमतियाँ, 18-परत गहन सुरक्षा, Prometheus ऑब्ज़र्वेबिलिटी, बहु-प्लेटफ़ॉर्म क्लाइंट (Flutter Web / HarmonyOS)।
 
 > प्रोजेक्ट पेट「**शियाओ आन**」एक शील्ड-आकार का गार्ड रोबोट है, जो मिडलवेयर चेन की「सुरक्षा」और「प्रमाणीकरण」दो चौकियों पर पहरा देता है।
-> सामग्री [`public/img/pet.svg`](public/img/pet.svg): शुद्ध SVG（कोई स्क्रिप्ट नहीं, कोई बाहरी निर्भरता नहीं, गहरे बैकग्राउंड और `prefers-reduced-motion` समर्थित）, साथ ही साइट आइकन के रूप में उपयोग।
+> सामग्री [`public/img/pet.svg`](../../public/img/pet.svg): शुद्ध SVG（कोई स्क्रिप्ट नहीं, कोई बाहरी निर्भरता नहीं, गहरे बैकग्राउंड और `prefers-reduced-motion` समर्थित）, साथ ही साइट आइकन के रूप में उपयोग।
 >
-> डिज़ाइन चित्र: [सिस्टम आर्किटेक्चर](docs/diagrams/architecture.svg) · [फ़ीचर डिज़ाइन](docs/diagrams/features.svg) · [लाइफसाइकल](docs/diagrams/lifecycle.svg)
+> डिज़ाइन चित्र: [सिस्टम आर्किटेक्चर](../../docs/diagrams/architecture.svg) · [फ़ीचर डिज़ाइन](../../docs/diagrams/features.svg) · [लाइफसाइकल](../../docs/diagrams/lifecycle.svg)
 
 ## प्रोजेक्ट पेट · शियाओ आन (小安)
 
 <table>
 <tr>
-<td width="170"><img src="public/img/pet.svg" width="150" height="200" alt="शियाओ आन"></td>
+<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="शियाओ आन"></td>
 <td>
 
 **शियाओ आन** (Xiao An) open-admin का प्रोजेक्ट पेट है, जिसका नाम「**安**全」(सुरक्षा) और「管理后**台**」(एडमिन पैनल) से लिया गया है——एक शील्ड-आकार का गार्ड रोबोट।
@@ -32,12 +32,12 @@
 
 | स्थान | रूप |
 |------|------|
-| साइट होम पेज `GET /` | मुख्य छवि + प्रोजेक्ट परिचय और एंट्री नेविगेशन ([`app/view/index/view.html`](app/view/index/view.html)) |
+| साइट होम पेज `GET /` | मुख्य छवि + प्रोजेक्ट परिचय और एंट्री नेविगेशन ([`app/view/index/view.html`](../../app/view/index/view.html)) |
 | इंस्टॉल विज़ार्ड `/install` | तीन-चरणीय विज़ार्ड का हेडर चित्र (`InstallController::layout()`) |
 | ब्राउज़र टैब | साइट आइकन `rel="icon" type="image/svg+xml"` |
 | यह दस्तावेज़ और डिज़ाइन चित्र | प्रोजेक्ट अवतार + आर्किटेक्चर चित्र के निचले-दाएँ कोने में पेट कार्ड |
 
-> सामग्री का एकमात्र स्रोत: [`public/img/pet.svg`](public/img/pet.svg)। इसे बदलने पर ऊपर बताए गए सभी स्थान एक साथ अपडेट हो जाते हैं।
+> सामग्री का एकमात्र स्रोत: [`public/img/pet.svg`](../../public/img/pet.svg)। इसे बदलने पर ऊपर बताए गए सभी स्थान एक साथ अपडेट हो जाते हैं।
 
 </td>
 </tr>
@@ -169,17 +169,17 @@ open-admin/
 
 | चित्र | सामग्री | फ़ाइल |
 |---|------|------|
-| सिस्टम आर्किटेक्चर डिज़ाइन | चार-परत टोपोलॉजी: क्लाइंट परत → गेटवे परत → webman एप्लिकेशन परत (मिडलवेयर चेन / कंट्रोलर / सार्वजनिक सेवाएँ) → स्टोरेज परत, दाईं ओर सुरक्षा और ऑब्ज़र्वेबिलिटी सहित | [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg) |
-| फ़ीचर डिज़ाइन | 12 फ़ीचर डोमेन → कंट्रोलर प्रवेश → मुख्य क्षमताएँ, नीचे मिडलवेयर निष्पादन चेन और डेटा इंटरफ़ेस मानक | [`docs/diagrams/features.svg`](docs/diagrams/features.svg) |
-| लाइफसाइकल | इंस्टॉल → स्टार्टअप → एक्सेस → सुरक्षा → प्रमाणीकरण → प्रोसेसिंग → पर्सिस्टेंस → रिस्पॉन्स ऑडिट, अपवाद शाखाओं और टोकन लाइफसाइकल सहित | [`docs/diagrams/lifecycle.svg`](docs/diagrams/lifecycle.svg) |
+| सिस्टम आर्किटेक्चर डिज़ाइन | चार-परत टोपोलॉजी: क्लाइंट परत → गेटवे परत → webman एप्लिकेशन परत (मिडलवेयर चेन / कंट्रोलर / सार्वजनिक सेवाएँ) → स्टोरेज परत, दाईं ओर सुरक्षा और ऑब्ज़र्वेबिलिटी सहित | [`docs/diagrams/architecture.svg`](../../docs/diagrams/architecture.svg) |
+| फ़ीचर डिज़ाइन | 12 फ़ीचर डोमेन → कंट्रोलर प्रवेश → मुख्य क्षमताएँ, नीचे मिडलवेयर निष्पादन चेन और डेटा इंटरफ़ेस मानक | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
+| लाइफसाइकल | इंस्टॉल → स्टार्टअप → एक्सेस → सुरक्षा → प्रमाणीकरण → प्रोसेसिंग → पर्सिस्टेंस → रिस्पॉन्स ऑडिट, अपवाद शाखाओं और टोकन लाइफसाइकल सहित | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="docs/diagrams/architecture.svg" width="1100" alt="open-admin सिस्टम आर्किटेक्चर डिज़ाइन चित्र">
+<img src="../../docs/diagrams/architecture.svg" width="1100" alt="open-admin सिस्टम आर्किटेक्चर डिज़ाइन चित्र">
 
-<img src="docs/diagrams/features.svg" width="1100" alt="open-admin फ़ीचर डिज़ाइन चित्र">
+<img src="../../docs/diagrams/features.svg" width="1100" alt="open-admin फ़ीचर डिज़ाइन चित्र">
 
-<img src="docs/diagrams/lifecycle.svg" width="1100" alt="open-admin लाइफसाइकल चित्र">
+<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="open-admin लाइफसाइकल चित्र">
 
-> संपादन-योग्य स्रोत-स्तरीय चित्र चाहिए तो [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) और [`docs/diagrams/`](docs/diagrams/) देखें（Mermaid, [Mermaid Live](https://mermaid.live/) में पेस्ट करके संपादित कर सकते हैं）。
+> संपादन-योग्य स्रोत-स्तरीय चित्र चाहिए तो [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) और [`docs/diagrams/`](../../docs/diagrams/) देखें（Mermaid, [Mermaid Live](https://mermaid.live/) में पेस्ट करके संपादित कर सकते हैं）。
 
 ## पर्यावरण आवश्यकताएँ
 
@@ -294,7 +294,7 @@ docker-compose up -d
 
 ## API दस्तावेज़
 
-पूर्ण API संदर्भ (एकीकृत रिस्पॉन्स फॉर्मेट, एरर कोड, सभी एंडपॉइंट विवरण, प्रमाणीकरण प्रवाह, रेट लिमिट नीति, मिडलवेयर चेन) **[docs/API.hi.md](docs/API.hi.md)** में देखें, मुख्य बातें निम्न हैं:
+पूर्ण API संदर्भ (एकीकृत रिस्पॉन्स फॉर्मेट, एरर कोड, सभी एंडपॉइंट विवरण, प्रमाणीकरण प्रवाह, रेट लिमिट नीति, मिडलवेयर चेन) **[docs/API.hi.md](../API.hi.md)** में देखें, मुख्य बातें निम्न हैं:
 
 - **एकीकृत रिस्पॉन्स फॉर्मेट**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0` सफलता दर्शाता है
 - **एरर कोड**: `400` पैरामीटर त्रुटि / `401` लॉगिन नहीं / `403` अनुमति नहीं / `404` मौजूद नहीं / `422` सत्यापन विफल / `429` रेट लिमिट / `500` सर्वर त्रुटि

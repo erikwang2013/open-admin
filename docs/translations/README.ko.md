@@ -1,27 +1,27 @@
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 >
-> [中文](../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
+> [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
 
 # 오픈 관리 백엔드 (open-admin)
 
 <p align="center">
-  <img src="public/img/pet.svg" width="150" height="200" alt="샤오안 — open-admin 프로젝트 펫">
+  <img src="../../public/img/pet.svg" width="150" height="200" alt="샤오안 — open-admin 프로젝트 펫">
 </p>
 
 **webman v2 + Flutter** 기반의 풀스택 관리 백엔드 시스템: 인증과 RBAC 권한, 18계층 심층 방어, Prometheus 관측성, 멀티 플랫폼 클라이언트 (Flutter Web / HarmonyOS).
 
 > 프로젝트 펫 「**샤오안**」은 방패형 수호 로봇으로, 미들웨어 체인의 「방어」와 「인증」 두 관문을 지킵니다.
-> 소재 [`public/img/pet.svg`](public/img/pet.svg): 순수 SVG (스크립트·외부 의존성 없음, 다크 배경과 `prefers-reduced-motion` 지원), 사이트 아이콘으로도 사용됩니다.
+> 소재 [`public/img/pet.svg`](../../public/img/pet.svg): 순수 SVG (스크립트·외부 의존성 없음, 다크 배경과 `prefers-reduced-motion` 지원), 사이트 아이콘으로도 사용됩니다.
 >
-> 설계도: [시스템 아키텍처](docs/diagrams/architecture.svg) · [기능 설계](docs/diagrams/features.svg) · [수명 주기](docs/diagrams/lifecycle.svg)
+> 설계도: [시스템 아키텍처](../../docs/diagrams/architecture.svg) · [기능 설계](../../docs/diagrams/features.svg) · [수명 주기](../../docs/diagrams/lifecycle.svg)
 
-> [아키텍처 다이어그램](docs/ARCHITECTURE.ko.md) | [설계 문서](docs/DESIGN.ko.md) | [보안 아키텍처](docs/SECURITY.ko.md) | [API 참조](docs/API.ko.md)
+> [아키텍처 다이어그램](../ARCHITECTURE.ko.md) | [설계 문서](../DESIGN.ko.md) | [보안 아키텍처](../SECURITY.ko.md) | [API 참조](../API.ko.md)
 
 ## 프로젝트 펫 · 샤오안
 
 <table>
 <tr>
-<td width="170"><img src="public/img/pet.svg" width="150" height="200" alt="샤오안"></td>
+<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="샤오안"></td>
 <td>
 
 **샤오안**(Xiao An)은 open-admin의 프로젝트 펫으로, 「**안**전(安全)」과 「관리 백엔드(管理后台)」에서 이름을 딴 방패형 수호 로봇입니다.
@@ -34,12 +34,12 @@
 
 | 위치 | 형태 |
 |------|------|
-| 사이트 첫 페이지 `GET /` | 메인 이미지 + 프로젝트 소개와 진입 내비게이션 ([`app/view/index/view.html`](app/view/index/view.html)) |
+| 사이트 첫 페이지 `GET /` | 메인 이미지 + 프로젝트 소개와 진입 내비게이션 ([`app/view/index/view.html`](../../app/view/index/view.html)) |
 | 설치 마법사 `/install` | 3단계 마법사의 페이지 헤더 이미지 (`InstallController::layout()`) |
 | 브라우저 탭 | 사이트 아이콘 `rel="icon" type="image/svg+xml"` |
 | 본 문서와 설계도 | 프로젝트 아바타 + 아키텍처 다이어그램 우측 하단의 펫 카드 |
 
-> 소재 단일 소스: [`public/img/pet.svg`](public/img/pet.svg). 이 파일을 수정하면 위 모든 위치가 동시에 갱신됩니다.
+> 소재 단일 소스: [`public/img/pet.svg`](../../public/img/pet.svg). 이 파일을 수정하면 위 모든 위치가 동시에 갱신됩니다.
 
 </td>
 </tr>
@@ -163,17 +163,17 @@ open-admin/
 
 | 이미지 | 내용 | 파일 |
 |---|------|------|
-| 시스템 아키텍처 설계 | 4계층 토폴로지: 클라이언트 계층 → 게이트웨이 계층 → webman 애플리케이션 계층 (미들웨어 체인 / 컨트롤러 / 공용 서비스) → 저장 계층, 우측에 보안과 관측성 포함 | [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg) |
-| 기능 설계 | 12개 기능 영역 → 컨트롤러 진입점 → 핵심 역량, 하단에 미들웨어 실행 체인과 데이터 인터페이스 규격 | [`docs/diagrams/features.svg`](docs/diagrams/features.svg) |
-| 수명 주기 | 설치 → 시작 → 접속 → 보호 → 인증 → 처리 → 영속화 → 응답 감사, 예외 분기와 토큰 수명 주기 포함 | [`docs/diagrams/lifecycle.svg`](docs/diagrams/lifecycle.svg) |
+| 시스템 아키텍처 설계 | 4계층 토폴로지: 클라이언트 계층 → 게이트웨이 계층 → webman 애플리케이션 계층 (미들웨어 체인 / 컨트롤러 / 공용 서비스) → 저장 계층, 우측에 보안과 관측성 포함 | [`docs/diagrams/architecture.svg`](../../docs/diagrams/architecture.svg) |
+| 기능 설계 | 12개 기능 영역 → 컨트롤러 진입점 → 핵심 역량, 하단에 미들웨어 실행 체인과 데이터 인터페이스 규격 | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
+| 수명 주기 | 설치 → 시작 → 접속 → 보호 → 인증 → 처리 → 영속화 → 응답 감사, 예외 분기와 토큰 수명 주기 포함 | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="docs/diagrams/architecture.svg" width="1100" alt="open-admin 시스템 아키텍처 설계도">
+<img src="../../docs/diagrams/architecture.svg" width="1100" alt="open-admin 시스템 아키텍처 설계도">
 
-<img src="docs/diagrams/features.svg" width="1100" alt="open-admin 기능 설계도">
+<img src="../../docs/diagrams/features.svg" width="1100" alt="open-admin 기능 설계도">
 
-<img src="docs/diagrams/lifecycle.svg" width="1100" alt="open-admin 수명 주기 도표">
+<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="open-admin 수명 주기 도표">
 
-> 편집 가능한 소스 수준 다이어그램이 필요하면 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.ko.md)와 [`docs/diagrams/`](docs/diagrams/)(Mermaid, [Mermaid Live](https://mermaid.live/)에 붙여넣어 편집 가능)를 참조하세요.
+> 편집 가능한 소스 수준 다이어그램이 필요하면 [`docs/ARCHITECTURE.md`](../ARCHITECTURE.ko.md)와 [`docs/diagrams/`](../../docs/diagrams/)(Mermaid, [Mermaid Live](https://mermaid.live/)에 붙여넣어 편집 가능)를 참조하세요.
 
 ## 환경 요구 사항
 
@@ -288,7 +288,7 @@ docker-compose up -d
 
 ## API 문서
 
-전체 API 참조 (통합 응답 형식, 오류 코드, 전체 엔드포인트 상세, 인증 흐름, 레이트 리밋 정책, 미들웨어 체인)는 **[docs/API.md](docs/API.ko.md)**를 참조하세요. 핵심 요점:
+전체 API 참조 (통합 응답 형식, 오류 코드, 전체 엔드포인트 상세, 인증 흐름, 레이트 리밋 정책, 미들웨어 체인)는 **[docs/API.md](../API.ko.md)**를 참조하세요. 핵심 요점:
 
 - **통합 응답 형식**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0`은 성공을 의미
 - **오류 코드**: `400` 파라미터 오류 / `401` 미로그인 / `403` 권한 없음 / `404` 존재하지 않음 / `422` 검증 실패 / `429` 레이트 리밋 / `500` 서버 오류

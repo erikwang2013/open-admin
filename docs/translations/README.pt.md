@@ -1,27 +1,27 @@
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 >
-> [中文](../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
+> [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
 
-> [Diagramas de arquitetura](docs/ARCHITECTURE.pt.md) | [Documento de design](docs/DESIGN.pt.md) | [Arquitetura de segurança](docs/SECURITY.pt.md) | [Referência da API](docs/API.pt.md)
+> [Diagramas de arquitetura](../ARCHITECTURE.pt.md) | [Documento de design](../DESIGN.pt.md) | [Arquitetura de segurança](../SECURITY.pt.md) | [Referência da API](../API.pt.md)
 
 # Painel de Administração Open Source (open-admin)
 
 <p align="center">
-  <img src="public/img/pet.svg" width="150" height="200" alt="小安 — mascote do projeto open-admin">
+  <img src="../../public/img/pet.svg" width="150" height="200" alt="小安 — mascote do projeto open-admin">
 </p>
 
 Sistema de administração full-stack baseado em **webman v2 + Flutter**: autenticação e permissões RBAC, defesa em profundidade com 18 camadas, observabilidade com Prometheus e clientes multiplataforma (Flutter Web / HarmonyOS).
 
 > O mascote do projeto「**小安**」é um robô guardião em forma de escudo, que monta guarda nas duas barreiras「proteção」e「autenticação」da cadeia de middlewares.
-> Material [`public/img/pet.svg`](public/img/pet.svg): SVG puro (sem scripts, sem dependências externas, com suporte a fundo escuro e a `prefers-reduced-motion`), usado também como ícone do site.
+> Material [`public/img/pet.svg`](../../public/img/pet.svg): SVG puro (sem scripts, sem dependências externas, com suporte a fundo escuro e a `prefers-reduced-motion`), usado também como ícone do site.
 >
-> Diagramas de design: [Arquitetura do sistema](docs/diagrams/architecture.svg) · [Design de funcionalidades](docs/diagrams/features.svg) · [Ciclo de vida](docs/diagrams/lifecycle.svg)
+> Diagramas de design: [Arquitetura do sistema](../../docs/diagrams/architecture.svg) · [Design de funcionalidades](../../docs/diagrams/features.svg) · [Ciclo de vida](../../docs/diagrams/lifecycle.svg)
 
 ## Mascote do projeto · 小安
 
 <table>
 <tr>
-<td width="170"><img src="public/img/pet.svg" width="150" height="200" alt="小安"></td>
+<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="小安"></td>
 <td>
 
 **小安** (Xiao An) é o mascote do projeto open-admin, cujo nome vem de「**安**」(segurança) e「管理后**台**」(painel de administração) — um robô guardião em forma de escudo.
@@ -34,12 +34,12 @@ Sistema de administração full-stack baseado em **webman v2 + Flutter**: autent
 
 | Local | Forma |
 |------|------|
-| Página inicial `GET /` | Imagem principal + apresentação do projeto e navegação de entrada ([`app/view/index/view.html`](app/view/index/view.html)) |
+| Página inicial `GET /` | Imagem principal + apresentação do projeto e navegação de entrada ([`app/view/index/view.html`](../../app/view/index/view.html)) |
 | Assistente de instalação `/install` | Imagem do cabeçalho do assistente de três etapas (`InstallController::layout()`) |
 | Aba do navegador | Ícone do site `rel="icon" type="image/svg+xml"` |
 | Este documento e os diagramas | Avatar do projeto + card do mascote no canto inferior direito do diagrama de arquitetura |
 
-> Fonte única do material: [`public/img/pet.svg`](public/img/pet.svg). Modificá-lo atualiza todos os locais acima ao mesmo tempo.
+> Fonte única do material: [`public/img/pet.svg`](../../public/img/pet.svg). Modificá-lo atualiza todos os locais acima ao mesmo tempo.
 
 </td>
 </tr>
@@ -171,17 +171,17 @@ Os três diagramas são **SVG totalmente escritos à mão** (sem scripts, sem de
 
 | Diagrama | Conteúdo | Arquivo |
 |---|------|------|
-| Design da arquitetura do sistema | Topologia em quatro camadas: camada de cliente → camada de gateway → camada de aplicação webman (cadeia de middlewares / controladores / serviços comuns) → camada de armazenamento, com segurança e observabilidade à direita | [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg) |
-| Design de funcionalidades | 12 domínios funcionais → entradas dos controladores → capacidades principais; na parte inferior, a cadeia de execução de middlewares e a especificação da interface de dados | [`docs/diagrams/features.svg`](docs/diagrams/features.svg) |
-| Ciclo de vida | Instalação → inicialização → acesso → proteção → autenticação → processamento → persistência → auditoria de resposta, com ramificações de exceção e ciclo de vida do token | [`docs/diagrams/lifecycle.svg`](docs/diagrams/lifecycle.svg) |
+| Design da arquitetura do sistema | Topologia em quatro camadas: camada de cliente → camada de gateway → camada de aplicação webman (cadeia de middlewares / controladores / serviços comuns) → camada de armazenamento, com segurança e observabilidade à direita | [`docs/diagrams/architecture.svg`](../../docs/diagrams/architecture.svg) |
+| Design de funcionalidades | 12 domínios funcionais → entradas dos controladores → capacidades principais; na parte inferior, a cadeia de execução de middlewares e a especificação da interface de dados | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
+| Ciclo de vida | Instalação → inicialização → acesso → proteção → autenticação → processamento → persistência → auditoria de resposta, com ramificações de exceção e ciclo de vida do token | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="docs/diagrams/architecture.svg" width="1100" alt="Diagrama da arquitetura do sistema open-admin">
+<img src="../../docs/diagrams/architecture.svg" width="1100" alt="Diagrama da arquitetura do sistema open-admin">
 
-<img src="docs/diagrams/features.svg" width="1100" alt="Diagrama de design de funcionalidades do open-admin">
+<img src="../../docs/diagrams/features.svg" width="1100" alt="Diagrama de design de funcionalidades do open-admin">
 
-<img src="docs/diagrams/lifecycle.svg" width="1100" alt="Diagrama de ciclo de vida do open-admin">
+<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="Diagrama de ciclo de vida do open-admin">
 
-> Para diagramas editáveis em nível de código-fonte, consulte [`docs/ARCHITECTURE.pt.md`](docs/ARCHITECTURE.pt.md) e [`docs/diagrams/`](docs/diagrams/) (Mermaid, pode ser colado no [Mermaid Live](https://mermaid.live/) para edição).
+> Para diagramas editáveis em nível de código-fonte, consulte [`docs/ARCHITECTURE.pt.md`](../ARCHITECTURE.pt.md) e [`docs/diagrams/`](../../docs/diagrams/) (Mermaid, pode ser colado no [Mermaid Live](https://mermaid.live/) para edição).
 
 ## Requisitos de ambiente
 
@@ -296,7 +296,7 @@ docker-compose up -d
 
 ## Documentação da API
 
-A referência completa da API (formato unificado de resposta, códigos de erro, detalhes de todos os endpoints, fluxo de autenticação, política de rate limit, cadeia de middlewares) está em **[docs/API.pt.md](docs/API.pt.md)**. Pontos principais:
+A referência completa da API (formato unificado de resposta, códigos de erro, detalhes de todos os endpoints, fluxo de autenticação, política de rate limit, cadeia de middlewares) está em **[docs/API.pt.md](../API.pt.md)**. Pontos principais:
 
 - **Formato unificado de resposta**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0` indica sucesso
 - **Códigos de erro**: `400` erro de parâmetro / `401` não autenticado / `403` sem permissão / `404` não encontrado / `422` falha de validação / `429` rate limit / `500` erro do servidor

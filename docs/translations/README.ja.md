@@ -1,27 +1,27 @@
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 >
-> [中文](../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
+> [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
 
 # 开放管理后台 (open-admin)
 
 <p align="center">
-  <img src="public/img/pet.svg" width="150" height="200" alt="小安 — open-admin のプロジェクトペット">
+  <img src="../../public/img/pet.svg" width="150" height="200" alt="小安 — open-admin のプロジェクトペット">
 </p>
 
 **webman v2 + Flutter** ベースのフルスタック管理バックエンドシステム：認証と RBAC 権限、18 層の多層防御、Prometheus による可観測性、マルチクライアント（Flutter Web / HarmonyOS）。
 
 > プロジェクトペット「**小安**」は盾形のガードロボットで、ミドルウェアチェーンの「防御」と「認可」の二つの関門を守っています。
-> 素材 [`public/img/pet.svg`](public/img/pet.svg)：純粋な SVG（スクリプトなし、外部依存なし、ダークテーマと `prefers-reduced-motion` に対応）、サイトアイコンを兼ねます。
+> 素材 [`public/img/pet.svg`](../../public/img/pet.svg)：純粋な SVG（スクリプトなし、外部依存なし、ダークテーマと `prefers-reduced-motion` に対応）、サイトアイコンを兼ねます。
 >
-> 設計図：[システムアーキテクチャ](docs/diagrams/architecture.svg) · [機能設計](docs/diagrams/features.svg) · [ライフサイクル](docs/diagrams/lifecycle.svg)
+> 設計図：[システムアーキテクチャ](../../docs/diagrams/architecture.svg) · [機能設計](../../docs/diagrams/features.svg) · [ライフサイクル](../../docs/diagrams/lifecycle.svg)
 
-> [アーキテクチャ図](docs/ARCHITECTURE.ja.md) | [設計ドキュメント](docs/DESIGN.ja.md) | [セキュリティアーキテクチャ](docs/SECURITY.ja.md) | [API リファレンス](docs/API.ja.md)
+> [アーキテクチャ図](../ARCHITECTURE.ja.md) | [設計ドキュメント](../DESIGN.ja.md) | [セキュリティアーキテクチャ](../SECURITY.ja.md) | [API リファレンス](../API.ja.md)
 
 ## プロジェクトペット · 小安
 
 <table>
 <tr>
-<td width="170"><img src="public/img/pet.svg" width="150" height="200" alt="小安"></td>
+<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="小安"></td>
 <td>
 
 **小安**（Xiao An）は open-admin のプロジェクトペットで、「**安**全」と「管理後**台**」に由来します——盾形のガードロボットです。
@@ -34,12 +34,12 @@
 
 | 場所 | 形式 |
 |------|------|
-| サイトトップページ `GET /` | メインビジュアル + プロジェクト紹介とエントリナビゲーション（[`app/view/index/view.html`](app/view/index/view.html)） |
+| サイトトップページ `GET /` | メインビジュアル + プロジェクト紹介とエントリナビゲーション（[`app/view/index/view.html`](../../app/view/index/view.html)） |
 | インストールウィザード `/install` | 3 ステップウィザードのヘッダーイメージ（`InstallController::layout()`） |
 | ブラウザのタブ | サイトアイコン `rel="icon" type="image/svg+xml"` |
 | 本ドキュメントと設計図 | プロジェクトアバター + アーキテクチャ図右下のペットカード |
 
-> 素材の単一ソース：[`public/img/pet.svg`](public/img/pet.svg)。これを変更すれば上記すべての箇所が同時に更新されます。
+> 素材の単一ソース：[`public/img/pet.svg`](../../public/img/pet.svg)。これを変更すれば上記すべての箇所が同時に更新されます。
 
 </td>
 </tr>
@@ -171,17 +171,17 @@ open-admin/
 
 | 図 | 内容 | ファイル |
 |---|------|------|
-| システムアーキテクチャ設計 | 四層トポロジー：クライアント層 → ゲートウェイ層 → webman アプリケーション層（ミドルウェアチェーン / コントローラー / 共通サービス）→ ストレージ層、右側にセキュリティと可観測性 | [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg) |
-| 機能設計 | 12 の機能ドメイン → コントローラー入口 → 主要機能、下部にミドルウェア実行チェーンとデータインターフェース仕様 | [`docs/diagrams/features.svg`](docs/diagrams/features.svg) |
-| ライフサイクル | インストール → 起動 → 接続 → 防御 → 認証・認可 → 処理 → 永続化 → レスポンス監査、異常分岐とトークンライフサイクルを含む | [`docs/diagrams/lifecycle.svg`](docs/diagrams/lifecycle.svg) |
+| システムアーキテクチャ設計 | 四層トポロジー：クライアント層 → ゲートウェイ層 → webman アプリケーション層（ミドルウェアチェーン / コントローラー / 共通サービス）→ ストレージ層、右側にセキュリティと可観測性 | [`docs/diagrams/architecture.svg`](../../docs/diagrams/architecture.svg) |
+| 機能設計 | 12 の機能ドメイン → コントローラー入口 → 主要機能、下部にミドルウェア実行チェーンとデータインターフェース仕様 | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
+| ライフサイクル | インストール → 起動 → 接続 → 防御 → 認証・認可 → 処理 → 永続化 → レスポンス監査、異常分岐とトークンライフサイクルを含む | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="docs/diagrams/architecture.svg" width="1100" alt="open-admin システムアーキテクチャ設計図">
+<img src="../../docs/diagrams/architecture.svg" width="1100" alt="open-admin システムアーキテクチャ設計図">
 
-<img src="docs/diagrams/features.svg" width="1100" alt="open-admin 機能設計図">
+<img src="../../docs/diagrams/features.svg" width="1100" alt="open-admin 機能設計図">
 
-<img src="docs/diagrams/lifecycle.svg" width="1100" alt="open-admin ライフサイクル図">
+<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="open-admin ライフサイクル図">
 
-> 編集可能なソースレベルの図が必要な場合は、[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.ja.md) と [`docs/diagrams/`](docs/diagrams/)（Mermaid、[Mermaid Live](https://mermaid.live/) に貼り付けて編集可能）を参照してください。
+> 編集可能なソースレベルの図が必要な場合は、[`docs/ARCHITECTURE.md`](../ARCHITECTURE.ja.md) と [`docs/diagrams/`](../../docs/diagrams/)（Mermaid、[Mermaid Live](https://mermaid.live/) に貼り付けて編集可能）を参照してください。
 
 ## 環境要件
 
@@ -296,7 +296,7 @@ docker-compose up -d
 
 ## API ドキュメント
 
-完全な API リファレンス（統一レスポンス形式、エラーコード、全エンドポイント詳細、認証フロー、レート制限戦略、ミドルウェアチェーン）は **[docs/API.md](docs/API.ja.md)** を参照してください。要点は以下の通り：
+完全な API リファレンス（統一レスポンス形式、エラーコード、全エンドポイント詳細、認証フロー、レート制限戦略、ミドルウェアチェーン）は **[docs/API.md](../API.ja.md)** を参照してください。要点は以下の通り：
 
 - **統一レスポンス形式**: `{ "code": 0, "message": "success", "data": {...} }`、`code=0` は成功を意味
 - **エラーコード**: `400` パラメータエラー / `401` 未ログイン / `403` 権限なし / `404` 存在しない / `422` 検証失敗 / `429` レート制限 / `500` サーバーエラー

@@ -1,27 +1,27 @@
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 >
-> [中文](../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
+> [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
 
 # Panel Admin Terbuka (open-admin)
 
 <p align="center">
-  <img src="public/img/pet.svg" width="150" height="200" alt="Xiao An — hewan peliharaan proyek open-admin">
+  <img src="../../public/img/pet.svg" width="150" height="200" alt="Xiao An — hewan peliharaan proyek open-admin">
 </p>
 
 Sistem panel admin full-stack berbasis **webman v2 + Flutter**: autentikasi dan hak akses RBAC, 18 lapis pertahanan berlapis, observabilitas Prometheus, klien multi-platform (Flutter Web / HarmonyOS).
 
 > Hewan peliharaan proyek 「**Xiao An (小安)**」 adalah robot penjaga berbentuk perisai, berjaga di dua pos pemeriksaan 「perlindungan」 dan 「autentikasi」 pada rantai middleware.
-> Aset [`public/img/pet.svg`](public/img/pet.svg): SVG murni (tanpa skrip, tanpa dependensi eksternal, mendukung latar gelap dan `prefers-reduced-motion`), sekaligus digunakan sebagai ikon situs.
+> Aset [`public/img/pet.svg`](../../public/img/pet.svg): SVG murni (tanpa skrip, tanpa dependensi eksternal, mendukung latar gelap dan `prefers-reduced-motion`), sekaligus digunakan sebagai ikon situs.
 >
-> Diagram desain: [Arsitektur Sistem](docs/diagrams/architecture.svg) · [Desain Fitur](docs/diagrams/features.svg) · [Siklus Hidup](docs/diagrams/lifecycle.svg)
+> Diagram desain: [Arsitektur Sistem](../../docs/diagrams/architecture.svg) · [Desain Fitur](../../docs/diagrams/features.svg) · [Siklus Hidup](../../docs/diagrams/lifecycle.svg)
 
-> [Diagram Arsitektur](docs/ARCHITECTURE.id.md) | [Dokumen Desain](docs/DESIGN.id.md) | [Arsitektur Keamanan](docs/SECURITY.id.md) | [Referensi API](docs/API.id.md)
+> [Diagram Arsitektur](../ARCHITECTURE.id.md) | [Dokumen Desain](../DESIGN.id.md) | [Arsitektur Keamanan](../SECURITY.id.md) | [Referensi API](../API.id.md)
 
 ## Hewan Peliharaan Proyek · Xiao An (小安)
 
 <table>
 <tr>
-<td width="170"><img src="public/img/pet.svg" width="150" height="200" alt="Xiao An"></td>
+<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="Xiao An"></td>
 <td>
 
 **Xiao An (小安)** adalah hewan peliharaan proyek open-admin, diambil dari 「**安**全」(keamanan) dan 「管理后**台**」(panel admin) — seekor robot penjaga berbentuk perisai.
@@ -34,12 +34,12 @@ Sistem panel admin full-stack berbasis **webman v2 + Flutter**: autentikasi dan 
 
 | Lokasi | Bentuk |
 |------|------|
-| Halaman utama situs `GET /` | Sosok utama + pengenalan proyek dan navigasi masuk ([`app/view/index/view.html`](app/view/index/view.html)) |
+| Halaman utama situs `GET /` | Sosok utama + pengenalan proyek dan navigasi masuk ([`app/view/index/view.html`](../../app/view/index/view.html)) |
 | Wizard instalasi `/install` | Sosok pada header wizard tiga langkah (`InstallController::layout()`) |
 | Tab browser | Ikon situs `rel="icon" type="image/svg+xml"` |
 | Dokumentasi ini dan diagram desain | Avatar proyek + kartu hewan peliharaan di sudut kanan bawah diagram arsitektur |
 
-> Sumber aset tunggal: [`public/img/pet.svg`](public/img/pet.svg). Memodifikasinya sekaligus memperbarui semua lokasi di atas.
+> Sumber aset tunggal: [`public/img/pet.svg`](../../public/img/pet.svg). Memodifikasinya sekaligus memperbarui semua lokasi di atas.
 
 </td>
 </tr>
@@ -171,17 +171,17 @@ Ketiga diagram tersebut adalah **SVG tulis tangan murni** (tanpa skrip, tanpa de
 
 | Diagram | Konten | File |
 |---|------|------|
-| Desain Arsitektur Sistem | Topologi empat lapis: Lapisan Klien → Lapisan Gateway → Lapisan Aplikasi webman (rantai middleware / kontroler / layanan publik) → Lapisan Penyimpanan, dengan keamanan dan observabilitas di sisi kanan | [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg) |
-| Desain Fitur | 12 domain fitur → titik masuk kontroler → kemampuan kunci, di bagian bawah terdapat rantai eksekusi middleware dan spesifikasi antarmuka data | [`docs/diagrams/features.svg`](docs/diagrams/features.svg) |
-| Siklus Hidup | Instalasi → Startup → Akses → Perlindungan → Autentikasi → Pemrosesan → Persistensi → Audit respons, termasuk cabang pengecualian dan siklus hidup token | [`docs/diagrams/lifecycle.svg`](docs/diagrams/lifecycle.svg) |
+| Desain Arsitektur Sistem | Topologi empat lapis: Lapisan Klien → Lapisan Gateway → Lapisan Aplikasi webman (rantai middleware / kontroler / layanan publik) → Lapisan Penyimpanan, dengan keamanan dan observabilitas di sisi kanan | [`docs/diagrams/architecture.svg`](../../docs/diagrams/architecture.svg) |
+| Desain Fitur | 12 domain fitur → titik masuk kontroler → kemampuan kunci, di bagian bawah terdapat rantai eksekusi middleware dan spesifikasi antarmuka data | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
+| Siklus Hidup | Instalasi → Startup → Akses → Perlindungan → Autentikasi → Pemrosesan → Persistensi → Audit respons, termasuk cabang pengecualian dan siklus hidup token | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="docs/diagrams/architecture.svg" width="1100" alt="Diagram desain arsitektur sistem open-admin">
+<img src="../../docs/diagrams/architecture.svg" width="1100" alt="Diagram desain arsitektur sistem open-admin">
 
-<img src="docs/diagrams/features.svg" width="1100" alt="Diagram desain fitur open-admin">
+<img src="../../docs/diagrams/features.svg" width="1100" alt="Diagram desain fitur open-admin">
 
-<img src="docs/diagrams/lifecycle.svg" width="1100" alt="Diagram siklus hidup open-admin">
+<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="Diagram siklus hidup open-admin">
 
-> Jika memerlukan diagram tingkat kode sumber yang dapat diedit, lihat [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) dan [`docs/diagrams/`](docs/diagrams/) (Mermaid, dapat ditempel ke [Mermaid Live](https://mermaid.live/) untuk diedit).
+> Jika memerlukan diagram tingkat kode sumber yang dapat diedit, lihat [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) dan [`docs/diagrams/`](../../docs/diagrams/) (Mermaid, dapat ditempel ke [Mermaid Live](https://mermaid.live/) untuk diedit).
 
 ## Persyaratan Lingkungan
 
@@ -296,7 +296,7 @@ docker-compose up -d
 
 ## Dokumentasi API
 
-Referensi API lengkap (format respons terpadu, kode kesalahan, detail semua endpoint, alur autentikasi, kebijakan rate limit, rantai middleware) lihat **[docs/API.id.md](docs/API.id.md)**, poin-poin penting:
+Referensi API lengkap (format respons terpadu, kode kesalahan, detail semua endpoint, alur autentikasi, kebijakan rate limit, rantai middleware) lihat **[docs/API.id.md](../API.id.md)**, poin-poin penting:
 
 - **Format respons terpadu**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0` berarti sukses
 - **Kode kesalahan**: `400` kesalahan parameter / `401` belum login / `403` tanpa izin / `404` tidak ditemukan / `422` gagal validasi / `429` rate limit / `500` kesalahan server

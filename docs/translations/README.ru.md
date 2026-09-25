@@ -1,27 +1,27 @@
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 >
-> [中文](../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
+> [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
 
 # Открытая админ-панель (open-admin)
 
 <p align="center">
-  <img src="public/img/pet.svg" width="150" height="200" alt="Сяо Ань — талисман проекта open-admin">
+  <img src="../../public/img/pet.svg" width="150" height="200" alt="Сяо Ань — талисман проекта open-admin">
 </p>
 
 Полнофункциональная система администрирования на базе **webman v2 + Flutter**: аутентификация и права RBAC, 18 уровней эшелонированной обороны, наблюдаемость Prometheus, клиенты для нескольких платформ (Flutter Web / HarmonyOS).
 
 > Талисман проекта «**Сяо Ань**» — робот-страж в форме щита, стоящий на двух рубежах цепочки промежуточного ПО: «защита» и «аутентификация».
-> Материал [`public/img/pet.svg`](public/img/pet.svg): чистый SVG (без скриптов, без внешних зависимостей, поддерживает тёмный фон и `prefers-reduced-motion`), одновременно служит иконкой сайта.
+> Материал [`public/img/pet.svg`](../../public/img/pet.svg): чистый SVG (без скриптов, без внешних зависимостей, поддерживает тёмный фон и `prefers-reduced-motion`), одновременно служит иконкой сайта.
 >
-> Схемы: [архитектура системы](docs/diagrams/architecture.svg) · [функциональное проектирование](docs/diagrams/features.svg) · [жизненный цикл](docs/diagrams/lifecycle.svg)
+> Схемы: [архитектура системы](../../docs/diagrams/architecture.svg) · [функциональное проектирование](../../docs/diagrams/features.svg) · [жизненный цикл](../../docs/diagrams/lifecycle.svg)
 
-> [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md) | [Схема архитектуры](docs/ARCHITECTURE.ru.md) | [Проектная документация](docs/DESIGN.ru.md) | [Архитектура безопасности](docs/SECURITY.ru.md) | [Справочник API](docs/API.ru.md)
+> [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md) | [Схема архитектуры](../ARCHITECTURE.ru.md) | [Проектная документация](../DESIGN.ru.md) | [Архитектура безопасности](../SECURITY.ru.md) | [Справочник API](../API.ru.md)
 
 ## Талисман проекта · Сяо Ань
 
 <table>
 <tr>
-<td width="170"><img src="public/img/pet.svg" width="150" height="200" alt="Сяо Ань"></td>
+<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="Сяо Ань"></td>
 <td>
 
 **Сяо Ань** (Xiao An) — талисман проекта open-admin; имя взято от слов «**безопас**ность» и «админ-**панель**» — это робот-страж в форме щита.
@@ -34,12 +34,12 @@
 
 | Место | Форма |
 |------|------|
-| Главная страница сайта `GET /` | Основной образ + краткое описание проекта и навигация по входам ([`app/view/index/view.html`](app/view/index/view.html)) |
+| Главная страница сайта `GET /` | Основной образ + краткое описание проекта и навигация по входам ([`app/view/index/view.html`](../../app/view/index/view.html)) |
 | Мастер установки `/install` | Образ в шапке трёхшагового мастера (`InstallController::layout()`) |
 | Вкладка браузера | Иконка сайта `rel="icon" type="image/svg+xml"` |
 | Данный документ и схемы | Аватар проекта + карточка талисмана в правом нижнем углу схемы архитектуры |
 
-> Единый источник материала: [`public/img/pet.svg`](public/img/pet.svg). Изменение этого файла обновляет все перечисленные места сразу.
+> Единый источник материала: [`public/img/pet.svg`](../../public/img/pet.svg). Изменение этого файла обновляет все перечисленные места сразу.
 
 </td>
 </tr>
@@ -171,17 +171,17 @@ open-admin/
 
 | Схема | Содержание | Файл |
 |---|------|------|
-| Проектирование архитектуры системы | Четырёхуровневая топология: клиентский уровень → шлюзовый уровень → прикладной уровень webman (цепочка промежуточного ПО / контроллеры / общие сервисы) → уровень хранения; справа — защита и наблюдаемость | [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg) |
-| Проектирование функциональности | 12 функциональных доменов → точки входа контроллеров → ключевые возможности; внизу — цепочка выполнения промежуточного ПО и спецификация интерфейсов данных | [`docs/diagrams/features.svg`](docs/diagrams/features.svg) |
-| Жизненный цикл | Установка → запуск → подключение → защита → аутентификация → обработка → персистентность → аудит ответа, включая ветви исключений и жизненный цикл токена | [`docs/diagrams/lifecycle.svg`](docs/diagrams/lifecycle.svg) |
+| Проектирование архитектуры системы | Четырёхуровневая топология: клиентский уровень → шлюзовый уровень → прикладной уровень webman (цепочка промежуточного ПО / контроллеры / общие сервисы) → уровень хранения; справа — защита и наблюдаемость | [`docs/diagrams/architecture.svg`](../../docs/diagrams/architecture.svg) |
+| Проектирование функциональности | 12 функциональных доменов → точки входа контроллеров → ключевые возможности; внизу — цепочка выполнения промежуточного ПО и спецификация интерфейсов данных | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
+| Жизненный цикл | Установка → запуск → подключение → защита → аутентификация → обработка → персистентность → аудит ответа, включая ветви исключений и жизненный цикл токена | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="docs/diagrams/architecture.svg" width="1100" alt="Схема архитектуры системы open-admin">
+<img src="../../docs/diagrams/architecture.svg" width="1100" alt="Схема архитектуры системы open-admin">
 
-<img src="docs/diagrams/features.svg" width="1100" alt="Схема функционального проектирования open-admin">
+<img src="../../docs/diagrams/features.svg" width="1100" alt="Схема функционального проектирования open-admin">
 
-<img src="docs/diagrams/lifecycle.svg" width="1100" alt="Схема жизненного цикла open-admin">
+<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="Схема жизненного цикла open-admin">
 
-> Если нужны редактируемые схемы уровня исходников, см. [`docs/ARCHITECTURE.ru.md`](docs/ARCHITECTURE.ru.md) и [`docs/diagrams/`](docs/diagrams/) (Mermaid, можно вставить в [Mermaid Live](https://mermaid.live/) для редактирования).
+> Если нужны редактируемые схемы уровня исходников, см. [`docs/ARCHITECTURE.ru.md`](../ARCHITECTURE.ru.md) и [`docs/diagrams/`](../../docs/diagrams/) (Mermaid, можно вставить в [Mermaid Live](https://mermaid.live/) для редактирования).
 
 ## Требования к окружению
 
@@ -296,7 +296,7 @@ docker-compose up -d
 
 ## Документация API
 
-Полный справочник API (единый формат ответов, коды ошибок, все эндпоинты, процесс аутентификации, политика лимитов, цепочка промежуточного ПО) — см. **[docs/API.ru.md](docs/API.ru.md)**. Ключевые моменты:
+Полный справочник API (единый формат ответов, коды ошибок, все эндпоинты, процесс аутентификации, политика лимитов, цепочка промежуточного ПО) — см. **[docs/API.ru.md](../API.ru.md)**. Ключевые моменты:
 
 - **Единый формат ответа**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0` означает успех
 - **Коды ошибок**: `400` ошибка параметров / `401` не авторизован / `403` нет прав / `404` не найдено / `422` ошибка валидации / `429` превышен лимит запросов / `500` ошибка сервера

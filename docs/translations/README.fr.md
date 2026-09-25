@@ -1,21 +1,21 @@
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 >
-> [中文](../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
+> [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
 
 # Open Admin (open-admin)
 
 <p align="center">
-  <img src="public/img/pet.svg" width="150" height="200" alt="Xiao An — mascotte du projet open-admin">
+  <img src="../../public/img/pet.svg" width="150" height="200" alt="Xiao An — mascotte du projet open-admin">
 </p>
 
 Système de panneau d'administration full-stack basé sur **webman v2 + Flutter** : authentification et permissions RBAC, 18 couches de défense en profondeur, observabilité Prometheus, clients multi-plateformes (Flutter Web / HarmonyOS).
 
 > La mascotte du projet, « **Xiao An** », est un rover gardien en forme de bouclier, posté aux deux points de contrôle « protection » et « authentification » de la chaîne de middlewares.
-> Ressource [`public/img/pet.svg`](public/img/pet.svg) : SVG pur (sans script, sans dépendance externe, compatible fond sombre et `prefers-reduced-motion`), également utilisé comme icône du site.
+> Ressource [`public/img/pet.svg`](../../public/img/pet.svg) : SVG pur (sans script, sans dépendance externe, compatible fond sombre et `prefers-reduced-motion`), également utilisé comme icône du site.
 >
-> Diagrammes : [Architecture système](docs/diagrams/architecture.svg) · [Conception fonctionnelle](docs/diagrams/features.svg) · [Cycle de vie](docs/diagrams/lifecycle.svg)
+> Diagrammes : [Architecture système](../../docs/diagrams/architecture.svg) · [Conception fonctionnelle](../../docs/diagrams/features.svg) · [Cycle de vie](../../docs/diagrams/lifecycle.svg)
 
-> [Diagrammes d'architecture](docs/ARCHITECTURE.fr.md) | [Document de conception](docs/DESIGN.fr.md) | [Architecture de sécurité](docs/SECURITY.fr.md) | [Référence API](docs/API.fr.md)
+> [Diagrammes d'architecture](../ARCHITECTURE.fr.md) | [Document de conception](../DESIGN.fr.md) | [Architecture de sécurité](../SECURITY.fr.md) | [Référence API](../API.fr.md)
 
 ## Fonctionnalités
 
@@ -39,7 +39,7 @@ Système de panneau d'administration full-stack basé sur **webman v2 + Flutter*
 
 <table>
 <tr>
-<td width="170"><img src="public/img/pet.svg" width="150" height="200" alt="Xiao An"></td>
+<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="Xiao An"></td>
 <td>
 
 **Xiao An** (小安) est la mascotte du projet open-admin, tirée de « **安**全 » (sécurité) et de « 管理后**台** » (panneau d'administration) — un rover gardien en forme de bouclier.
@@ -52,12 +52,12 @@ Système de panneau d'administration full-stack basé sur **webman v2 + Flutter*
 
 | Emplacement | Forme |
 |------|------|
-| Page d'accueil `GET /` | Image principale + présentation du projet et navigation des entrées ([`app/view/index/view.html`](app/view/index/view.html)) |
+| Page d'accueil `GET /` | Image principale + présentation du projet et navigation des entrées ([`app/view/index/view.html`](../../app/view/index/view.html)) |
 | Assistant d'installation `/install` | Image d'en-tête de l'assistant en trois étapes (`InstallController::layout()`) |
 | Onglet du navigateur | Icône du site `rel="icon" type="image/svg+xml"` |
 | Cette documentation et les diagrammes | Avatar du projet + carte de la mascotte en bas à droite des diagrammes d'architecture |
 
-> Source unique de la ressource : [`public/img/pet.svg`](public/img/pet.svg). La modifier met simultanément à jour tous les emplacements ci-dessus.
+> Source unique de la ressource : [`public/img/pet.svg`](../../public/img/pet.svg). La modifier met simultanément à jour tous les emplacements ci-dessus.
 
 </td>
 </tr>
@@ -170,17 +170,17 @@ Les trois diagrammes sont des **SVG entièrement écrits à la main** (sans scri
 
 | Diagramme | Contenu | Fichier |
 |---|------|------|
-| Conception de l'architecture système | Topologie à quatre couches : couche client → couche passerelle → couche application webman (chaîne de middlewares / contrôleurs / services communs) → couche de stockage, avec sécurité et observabilité sur la droite | [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg) |
-| Conception fonctionnelle | 12 domaines fonctionnels → points d'entrée des contrôleurs → capacités clés, en bas la chaîne d'exécution des middlewares et les spécifications d'interface de données | [`docs/diagrams/features.svg`](docs/diagrams/features.svg) |
-| Cycle de vie | Installation → démarrage → accès → protection → authentification → traitement → persistance → audit de la réponse, avec les branches d'exception et le cycle de vie des jetons | [`docs/diagrams/lifecycle.svg`](docs/diagrams/lifecycle.svg) |
+| Conception de l'architecture système | Topologie à quatre couches : couche client → couche passerelle → couche application webman (chaîne de middlewares / contrôleurs / services communs) → couche de stockage, avec sécurité et observabilité sur la droite | [`docs/diagrams/architecture.svg`](../../docs/diagrams/architecture.svg) |
+| Conception fonctionnelle | 12 domaines fonctionnels → points d'entrée des contrôleurs → capacités clés, en bas la chaîne d'exécution des middlewares et les spécifications d'interface de données | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
+| Cycle de vie | Installation → démarrage → accès → protection → authentification → traitement → persistance → audit de la réponse, avec les branches d'exception et le cycle de vie des jetons | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="docs/diagrams/architecture.svg" width="1100" alt="Diagramme de conception de l'architecture système open-admin">
+<img src="../../docs/diagrams/architecture.svg" width="1100" alt="Diagramme de conception de l'architecture système open-admin">
 
-<img src="docs/diagrams/features.svg" width="1100" alt="Diagramme de conception fonctionnelle open-admin">
+<img src="../../docs/diagrams/features.svg" width="1100" alt="Diagramme de conception fonctionnelle open-admin">
 
-<img src="docs/diagrams/lifecycle.svg" width="1100" alt="Diagramme du cycle de vie open-admin">
+<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="Diagramme du cycle de vie open-admin">
 
-> Pour des diagrammes éditables au niveau source, voir [`docs/ARCHITECTURE.fr.md`](docs/ARCHITECTURE.fr.md) et [`docs/diagrams/`](docs/diagrams/) (Mermaid, à coller dans [Mermaid Live](https://mermaid.live/) pour édition).
+> Pour des diagrammes éditables au niveau source, voir [`docs/ARCHITECTURE.fr.md`](../ARCHITECTURE.fr.md) et [`docs/diagrams/`](../../docs/diagrams/) (Mermaid, à coller dans [Mermaid Live](https://mermaid.live/) pour édition).
 
 ## Prérequis
 
@@ -295,7 +295,7 @@ docker-compose up -d
 
 ## Documentation API
 
-La référence API complète (format de réponse unifié, codes d'erreur, détails de tous les points de terminaison, flux d'authentification, stratégie de limitation de débit, chaîne de middlewares) est disponible dans **[docs/API.md](docs/API.fr.md)**, points essentiels :
+La référence API complète (format de réponse unifié, codes d'erreur, détails de tous les points de terminaison, flux d'authentification, stratégie de limitation de débit, chaîne de middlewares) est disponible dans **[docs/API.md](../API.fr.md)**, points essentiels :
 
 - **Format de réponse unifié** : `{ "code": 0, "message": "success", "data": {...} }`, `code=0` signifie succès
 - **Codes d'erreur** : `400` erreur de paramètre / `401` non connecté / `403` accès refusé / `404` introuvable / `422` échec de validation / `429` limitation de débit / `500` erreur serveur

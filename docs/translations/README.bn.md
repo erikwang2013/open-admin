@@ -1,27 +1,27 @@
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 >
-> [中文](../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
+> [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
 
-[架构设计图](docs/ARCHITECTURE.bn.md) | [设计文档](docs/DESIGN.bn.md) | [安全架构](docs/SECURITY.bn.md) | [API 参考](docs/API.bn.md)
+[架构设计图](../ARCHITECTURE.bn.md) | [设计文档](../DESIGN.bn.md) | [安全架构](../SECURITY.bn.md) | [API 参考](../API.bn.md)
 
 # ওপেন অ্যাডমিন (open-admin)
 
 <p align="center">
-  <img src="public/img/pet.svg" width="150" height="200" alt="শিয়াও আন — open-admin প্রকল্পের পেট">
+  <img src="../../public/img/pet.svg" width="150" height="200" alt="শিয়াও আন — open-admin প্রকল্পের পেট">
 </p>
 
 **webman v2 + Flutter**-ভিত্তিক ফুল-স্ট্যাক অ্যাডমিন ব্যাকএন্ড সিস্টেম: অথেনটিকেশন ও RBAC অনুমতি, ১৮ স্তরের গভীর প্রতিরক্ষা, Prometheus অবজারভেবিলিটি, মাল্টি-প্ল্যাটফর্ম ক্লায়েন্ট (Flutter Web / HarmonyOS)।
 
 > প্রকল্প পেট「**小安**」একটি ঢাল-আকৃতির গার্ড রোবট, যা মিডলওয়্যার চেইনের「প্রতিরক্ষা」ও「অথেনটিকেশন」এই দুটি চেকপয়েন্টে পাহারা দেয়।
-> সামগ্রী [`public/img/pet.svg`](public/img/pet.svg): বিশুদ্ধ SVG (কোনো স্ক্রিপ্ট নেই, বাহ্যিক নির্ভরতা নেই, ডার্ক ব্যাকগ্রাউন্ড ও `prefers-reduced-motion` সাপোর্ট করে), একইসাথে সাইট আইকন হিসেবেও ব্যবহৃত।
+> সামগ্রী [`public/img/pet.svg`](../../public/img/pet.svg): বিশুদ্ধ SVG (কোনো স্ক্রিপ্ট নেই, বাহ্যিক নির্ভরতা নেই, ডার্ক ব্যাকগ্রাউন্ড ও `prefers-reduced-motion` সাপোর্ট করে), একইসাথে সাইট আইকন হিসেবেও ব্যবহৃত।
 >
-> ডিজাইন ডায়াগ্রাম: [সিস্টেম আর্কিটেকচার](docs/diagrams/architecture.svg) · [ফিচার ডিজাইন](docs/diagrams/features.svg) · [লাইফসাইকেল](docs/diagrams/lifecycle.svg)
+> ডিজাইন ডায়াগ্রাম: [সিস্টেম আর্কিটেকচার](../../docs/diagrams/architecture.svg) · [ফিচার ডিজাইন](../../docs/diagrams/features.svg) · [লাইফসাইকেল](../../docs/diagrams/lifecycle.svg)
 
 ## প্রকল্প পেট · 小安
 
 <table>
 <tr>
-<td width="170"><img src="public/img/pet.svg" width="150" height="200" alt="শিয়াও আন"></td>
+<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="শিয়াও আন"></td>
 <td>
 
 **小安**（Xiao An）open-admin-এর প্রকল্প পেট, নামটি নেওয়া হয়েছে「**安**全」(নিরাপত্তা) ও「管理后**台**」(অ্যাডমিন ব্যাকএন্ড) থেকে —— একটি ঢাল-আকৃতির গার্ড রোবট।
@@ -34,12 +34,12 @@
 
 | অবস্থান | রূপ |
 |------|------|
-| সাইট হোমপেজ `GET /` | প্রধান চিত্র + প্রকল্প পরিচিতি ও এন্ট্রি নেভিগেশন ([`app/view/index/view.html`](app/view/index/view.html)) |
+| সাইট হোমপেজ `GET /` | প্রধান চিত্র + প্রকল্প পরিচিতি ও এন্ট্রি নেভিগেশন ([`app/view/index/view.html`](../../app/view/index/view.html)) |
 | ইনস্টলেশন উইজার্ড `/install` | তিন-ধাপের উইজার্ডের পেজ হেডার চিত্র (`InstallController::layout()`) |
 | ব্রাউজার ট্যাব | সাইট আইকন `rel="icon" type="image/svg+xml"` |
 | এই ডকুমেন্ট ও ডিজাইন ডায়াগ্রাম | প্রকল্প অবতার + আর্কিটেকচার ডায়াগ্রামের নিচ-ডান কোণের পেট কার্ড |
 
-> সামগ্রীর একমাত্র সোর্স: [`public/img/pet.svg`](public/img/pet.svg)। এটি পরিবর্তন করলেই উপরের সব জায়গা একসাথে আপডেট হয়।
+> সামগ্রীর একমাত্র সোর্স: [`public/img/pet.svg`](../../public/img/pet.svg)। এটি পরিবর্তন করলেই উপরের সব জায়গা একসাথে আপডেট হয়।
 
 </td>
 </tr>
@@ -171,17 +171,17 @@ open-admin/
 
 | ডায়াগ্রাম | বিষয়বস্তু | ফাইল |
 |---|------|------|
-| সিস্টেম আর্কিটেকচার ডিজাইন | চার স্তরের টপোলজি: ক্লায়েন্ট লেয়ার → গেটওয়ে লেয়ার → webman অ্যাপ্লিকেশন লেয়ার (মিডলওয়্যার চেইন / কন্ট্রোলার / পাবলিক সার্ভিস) → স্টোরেজ লেয়ার, ডানদিকে নিরাপত্তা ও অবজারভেবিলিটি | [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg) |
-| ফিচার ডিজাইন | ১২টি ফিচার ডোমেইন → কন্ট্রোলার এন্ট্রি → মূল সক্ষমতা, নিচে মিডলওয়্যার এক্সিকিউশন চেইন ও ডেটা ইন্টারফেস স্পেসিফিকেশন | [`docs/diagrams/features.svg`](docs/diagrams/features.svg) |
-| লাইফসাইকেল | ইনস্টল → স্টার্টআপ → অ্যাক্সেস → প্রতিরক্ষা → অথেনটিকেশন → প্রসেসিং → পারসিস্টেন্স → রেসপন্স অডিট, ব্যতিক্রম শাখা ও টোকেন লাইফসাইকেলসহ | [`docs/diagrams/lifecycle.svg`](docs/diagrams/lifecycle.svg) |
+| সিস্টেম আর্কিটেকচার ডিজাইন | চার স্তরের টপোলজি: ক্লায়েন্ট লেয়ার → গেটওয়ে লেয়ার → webman অ্যাপ্লিকেশন লেয়ার (মিডলওয়্যার চেইন / কন্ট্রোলার / পাবলিক সার্ভিস) → স্টোরেজ লেয়ার, ডানদিকে নিরাপত্তা ও অবজারভেবিলিটি | [`docs/diagrams/architecture.svg`](../../docs/diagrams/architecture.svg) |
+| ফিচার ডিজাইন | ১২টি ফিচার ডোমেইন → কন্ট্রোলার এন্ট্রি → মূল সক্ষমতা, নিচে মিডলওয়্যার এক্সিকিউশন চেইন ও ডেটা ইন্টারফেস স্পেসিফিকেশন | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
+| লাইফসাইকেল | ইনস্টল → স্টার্টআপ → অ্যাক্সেস → প্রতিরক্ষা → অথেনটিকেশন → প্রসেসিং → পারসিস্টেন্স → রেসপন্স অডিট, ব্যতিক্রম শাখা ও টোকেন লাইফসাইকেলসহ | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="docs/diagrams/architecture.svg" width="1100" alt="open-admin সিস্টেম আর্কিটেকচার ডিজাইন ডায়াগ্রাম">
+<img src="../../docs/diagrams/architecture.svg" width="1100" alt="open-admin সিস্টেম আর্কিটেকচার ডিজাইন ডায়াগ্রাম">
 
-<img src="docs/diagrams/features.svg" width="1100" alt="open-admin ফিচার ডিজাইন ডায়াগ্রাম">
+<img src="../../docs/diagrams/features.svg" width="1100" alt="open-admin ফিচার ডিজাইন ডায়াগ্রাম">
 
-<img src="docs/diagrams/lifecycle.svg" width="1100" alt="open-admin লাইফসাইকেল ডায়াগ্রাম">
+<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="open-admin লাইফসাইকেল ডায়াগ্রাম">
 
-> সম্পাদনযোগ্য সোর্স-লেভেল ডায়াগ্রাম প্রয়োজন হলে দেখুন [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) এবং [`docs/diagrams/`](docs/diagrams/) (Mermaid, [Mermaid Live](https://mermaid.live/)-এ পেস্ট করে সম্পাদনা করা যায়)।
+> সম্পাদনযোগ্য সোর্স-লেভেল ডায়াগ্রাম প্রয়োজন হলে দেখুন [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) এবং [`docs/diagrams/`](../../docs/diagrams/) (Mermaid, [Mermaid Live](https://mermaid.live/)-এ পেস্ট করে সম্পাদনা করা যায়)।
 
 ## এনভায়রনমেন্ট প্রয়োজনীয়তা
 
@@ -295,7 +295,7 @@ docker-compose up -d
 
 ## API ডকুমেন্টেশন
 
-সম্পূর্ণ API রেফারেন্স (ইউনিফাইড রেসপন্স ফরম্যাট, এরর কোড, সব এন্ডপয়েন্টের বিস্তারিত, অথেনটিকেশন ফ্লো, রেট লিমিট পলিসি, মিডলওয়্যার চেইন) **[docs/API.bn.md](docs/API.bn.md)**-তে দেখুন, মূল পয়েন্টগুলো:
+সম্পূর্ণ API রেফারেন্স (ইউনিফাইড রেসপন্স ফরম্যাট, এরর কোড, সব এন্ডপয়েন্টের বিস্তারিত, অথেনটিকেশন ফ্লো, রেট লিমিট পলিসি, মিডলওয়্যার চেইন) **[docs/API.bn.md](../API.bn.md)**-তে দেখুন, মূল পয়েন্টগুলো:
 
 - **ইউনিফাইড রেসপন্স ফরম্যাট**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0` মানে সফল
 - **এরর কোড**: `400` প্যারামিটার এরর / `401` লগইন নেই / `403` অনুমতি নেই / `404` নেই / `422` ভ্যালিডেশন ব্যর্থ / `429` রেট লিমিট / `500` সার্ভার এরর

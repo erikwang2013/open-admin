@@ -1,17 +1,17 @@
 # Open Admin (open-admin)
 
 <p align="center">
-  <img src="public/img/pet.svg" width="150" height="200" alt="Xiao An — open-admin project pet">
+  <img src="../../public/img/pet.svg" width="150" height="200" alt="Xiao An — open-admin project pet">
 </p>
 
 A full-stack admin dashboard built on **webman v2 + Flutter**: authentication and RBAC permissions, 18 layers of defense in depth, Prometheus observability, and multi-platform clients (Flutter Web / HarmonyOS).
 
 > The project pet "**Xiao An**" is a shield-shaped guard robot, standing guard at the "protection" and "authentication" checkpoints of the middleware chain.
-> Asset [`public/img/pet.svg`](public/img/pet.svg): pure SVG (no scripts, no external dependencies, supports dark backgrounds and `prefers-reduced-motion`), also used as the site icon.
+> Asset [`public/img/pet.svg`](../../public/img/pet.svg): pure SVG (no scripts, no external dependencies, supports dark backgrounds and `prefers-reduced-motion`), also used as the site icon.
 >
-> Design diagrams: [System Architecture](docs/diagrams/architecture.svg) · [Feature Design](docs/diagrams/features.svg) · [Lifecycle](docs/diagrams/lifecycle.svg)
+> Design diagrams: [System Architecture](../../docs/diagrams/architecture.svg) · [Feature Design](../../docs/diagrams/features.svg) · [Lifecycle](../../docs/diagrams/lifecycle.svg)
 
-> [中文](../README.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md) | [Architecture Diagrams](docs/ARCHITECTURE.en.md) | [Design Doc](docs/DESIGN.en.md) | [Security](docs/SECURITY.en.md) | [API Reference](docs/API.en.md)
+> [中文](../../README.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md) | [Architecture Diagrams](../ARCHITECTURE.en.md) | [Design Doc](../DESIGN.en.md) | [Security](../SECURITY.en.md) | [API Reference](../API.en.md)
 
 ## Features
 
@@ -35,7 +35,7 @@ A full-stack admin dashboard built on **webman v2 + Flutter**: authentication an
 
 <table>
 <tr>
-<td width="170"><img src="public/img/pet.svg" width="150" height="200" alt="Xiao An"></td>
+<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="Xiao An"></td>
 <td>
 
 **Xiao An** (小安) is the open-admin project pet, named after 「**安**全」 (security) and 「管理后**台**」 (admin dashboard) — a shield-shaped guard robot.
@@ -48,12 +48,12 @@ A full-stack admin dashboard built on **webman v2 + Flutter**: authentication an
 
 | Location | Form |
 |------|------|
-| Site home page `GET /` | Main mascot + project intro and entry navigation ([`app/view/index/view.html`](app/view/index/view.html)) |
+| Site home page `GET /` | Main mascot + project intro and entry navigation ([`app/view/index/view.html`](../../app/view/index/view.html)) |
 | Install wizard `/install` | Header mascot of the three-step wizard (`InstallController::layout()`) |
 | Browser tab | Site icon `rel="icon" type="image/svg+xml"` |
 | This document and the design diagrams | Project avatar + the pet card in the bottom-right corner of the architecture diagram |
 
-> Single source of the asset: [`public/img/pet.svg`](public/img/pet.svg). Editing it updates every location above at once.
+> Single source of the asset: [`public/img/pet.svg`](../../public/img/pet.svg). Editing it updates every location above at once.
 
 </td>
 </tr>
@@ -149,17 +149,17 @@ All three diagrams are **pure hand-written SVG** (no scripts, no external font d
 
 | Diagram | Content | File |
 |---|------|------|
-| System Architecture | Four-layer topology: client layer → gateway layer → webman application layer (middleware chain / controllers / common services) → storage layer, with security and observability on the right | [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg) |
-| Feature Design | 12 feature domains → controller entry points → key capabilities, with the middleware execution chain and data interface conventions at the bottom | [`docs/diagrams/features.svg`](docs/diagrams/features.svg) |
-| Lifecycle | Install → startup → request intake → protection → authentication → processing → persistence → response audit, including exception branches and token lifecycle | [`docs/diagrams/lifecycle.svg`](docs/diagrams/lifecycle.svg) |
+| System Architecture | Four-layer topology: client layer → gateway layer → webman application layer (middleware chain / controllers / common services) → storage layer, with security and observability on the right | [`docs/diagrams/architecture.svg`](../../docs/diagrams/architecture.svg) |
+| Feature Design | 12 feature domains → controller entry points → key capabilities, with the middleware execution chain and data interface conventions at the bottom | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
+| Lifecycle | Install → startup → request intake → protection → authentication → processing → persistence → response audit, including exception branches and token lifecycle | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="docs/diagrams/architecture.svg" width="1100" alt="open-admin system architecture design diagram">
+<img src="../../docs/diagrams/architecture.svg" width="1100" alt="open-admin system architecture design diagram">
 
-<img src="docs/diagrams/features.svg" width="1100" alt="open-admin feature design diagram">
+<img src="../../docs/diagrams/features.svg" width="1100" alt="open-admin feature design diagram">
 
-<img src="docs/diagrams/lifecycle.svg" width="1100" alt="open-admin lifecycle diagram">
+<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="open-admin lifecycle diagram">
 
-> For editable source-level diagrams, see [`docs/ARCHITECTURE.en.md`](docs/ARCHITECTURE.en.md) and [`docs/diagrams/`](docs/diagrams/) (Mermaid, can be pasted into [Mermaid Live](https://mermaid.live/) for editing).
+> For editable source-level diagrams, see [`docs/ARCHITECTURE.en.md`](../ARCHITECTURE.en.md) and [`docs/diagrams/`](../../docs/diagrams/) (Mermaid, can be pasted into [Mermaid Live](https://mermaid.live/) for editing).
 ```
 
 ## Requirements
@@ -272,7 +272,7 @@ docker-compose up -d
 
 ## API Documentation
 
-The complete API reference (response format, error codes, all endpoint details, auth flow, rate limiting, middleware chain) lives in **[docs/API.en.md](docs/API.en.md)**. Highlights:
+The complete API reference (response format, error codes, all endpoint details, auth flow, rate limiting, middleware chain) lives in **[docs/API.en.md](../API.en.md)**. Highlights:
 
 - **Response format**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0` means success
 - **Error codes**: `400` bad request / `401` unauthenticated / `403` forbidden / `404` not found / `422` validation failed / `429` rate limited / `500` server error

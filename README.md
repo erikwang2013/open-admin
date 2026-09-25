@@ -58,7 +58,7 @@
 | 📋 操作审计 | 日志查询 + 来源端检测 | 8 平台自动识别 |
 | 📁 文件管理 | 上传/Excel 导出/PDF 导出 | 敏感数据自动脱敏 |
 | 🛡 安全防护 | 18 层纵深防御 | XSS/SQL注入/路径遍历/命令注入/CSRF/限流/CSP... |
-| 🏥 运维 | 健康检查/metrics/API 文档/security.txt | Prometheus + OpenAPI 3.0 + hg/apidoc 交互文档 |
+| 🏥 运维 | 健康检查/metrics/API 文档/security.txt | Prometheus + OpenAPI 3.0 + erikwang2013/apidoc-php 交互文档 |
 | 🌐 国际化 | 中英文切换 | Accept-Language 头 / ?lang= 参数 |
 
 ## 技术栈

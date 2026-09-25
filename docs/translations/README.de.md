@@ -1,27 +1,27 @@
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 >
-> [中文](../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
+> [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
 
 # Offenes Admin-Panel (open-admin)
 
 <p align="center">
-  <img src="public/img/pet.svg" width="150" height="200" alt="Xiao An — Projekt-Maskottchen von open-admin">
+  <img src="../../public/img/pet.svg" width="150" height="200" alt="Xiao An — Projekt-Maskottchen von open-admin">
 </p>
 
 Ein Full-Stack-Administrations-Backend auf Basis von **webman v2 + Flutter**: Authentifizierung und RBAC-Berechtigungen, 18-stufige Tiefenverteidigung, Prometheus-Observability, Multi-Client-Unterstützung (Flutter Web / HarmonyOS).
 
 > Das Projekt-Maskottchen „**Xiao An**" ist ein schildförmiger Wachroboter, der die beiden Stationen „Schutz" und „Authentifizierung" der Middleware-Kette bewacht.
-> Material [`public/img/pet.svg`](public/img/pet.svg): reines SVG (keine Skripte, keine externen Abhängigkeiten, unterstützt dunklen Hintergrund und `prefers-reduced-motion`), dient zugleich als Site-Icon.
+> Material [`public/img/pet.svg`](../../public/img/pet.svg): reines SVG (keine Skripte, keine externen Abhängigkeiten, unterstützt dunklen Hintergrund und `prefers-reduced-motion`), dient zugleich als Site-Icon.
 >
-> Design-Diagramme: [Systemarchitektur](docs/diagrams/architecture.svg) · [Funktionsdesign](docs/diagrams/features.svg) · [Lebenszyklus](docs/diagrams/lifecycle.svg)
+> Design-Diagramme: [Systemarchitektur](../../docs/diagrams/architecture.svg) · [Funktionsdesign](../../docs/diagrams/features.svg) · [Lebenszyklus](../../docs/diagrams/lifecycle.svg)
 
-> [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md) | [Architekturdiagramm](docs/ARCHITECTURE.de.md) | [Design-Dokument](docs/DESIGN.de.md) | [Sicherheitsarchitektur](docs/SECURITY.de.md) | [API-Referenz](docs/API.de.md)
+> [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md) | [Architekturdiagramm](../ARCHITECTURE.de.md) | [Design-Dokument](../DESIGN.de.md) | [Sicherheitsarchitektur](../SECURITY.de.md) | [API-Referenz](../API.de.md)
 
 ## Projekt-Maskottchen · Xiao An
 
 <table>
 <tr>
-<td width="170"><img src="public/img/pet.svg" width="150" height="200" alt="Xiao An"></td>
+<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="Xiao An"></td>
 <td>
 
 **Xiao An** (小安) ist das Projekt-Maskottchen von open-admin, abgeleitet aus „**安**全" (Sicherheit) und „管理后**台**" (Admin-Panel) — ein schildförmiger Wachroboter.
@@ -34,12 +34,12 @@ Ein Full-Stack-Administrations-Backend auf Basis von **webman v2 + Flutter**: Au
 
 | Stelle | Form |
 |------|------|
-| Startseite `GET /` | Hauptfigur + Projektvorstellung und Einstiegsnavigation ([`app/view/index/view.html`](app/view/index/view.html)) |
+| Startseite `GET /` | Hauptfigur + Projektvorstellung und Einstiegsnavigation ([`app/view/index/view.html`](../../app/view/index/view.html)) |
 | Installationsassistent `/install` | Kopffigur des Drei-Schritte-Assistenten (`InstallController::layout()`) |
 | Browser-Tab | Site-Icon `rel="icon" type="image/svg+xml"` |
 | Dieses Dokument und die Design-Diagramme | Projekt-Avatar + Maskottchen-Karte unten rechts im Architekturdiagramm |
 
-> Einzige Materialquelle: [`public/img/pet.svg`](public/img/pet.svg). Eine Änderung daran aktualisiert zugleich alle oben genannten Stellen.
+> Einzige Materialquelle: [`public/img/pet.svg`](../../public/img/pet.svg). Eine Änderung daran aktualisiert zugleich alle oben genannten Stellen.
 
 </td>
 </tr>
@@ -171,17 +171,17 @@ Alle drei Diagramme sind **reine handgeschriebene SVGs** (keine Skripte, keine e
 
 | Diagramm | Inhalt | Datei |
 |---|------|------|
-| Systemarchitektur-Design | Vierschichtige Topologie: Client-Ebene → Gateway-Ebene → webman-Anwendungsebene (Middleware-Kette / Controller / gemeinsame Services) → Speicherebene, rechts mit Sicherheit und Observability | [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg) |
-| Funktionsdesign | 12 Funktionsbereiche → Controller-Einstieg → Kernfähigkeiten, unten die Middleware-Ausführungskette und die Daten-Interface-Spezifikation | [`docs/diagrams/features.svg`](docs/diagrams/features.svg) |
-| Lebenszyklus | Installation → Start → Anbindung → Schutz → Authentifizierung → Verarbeitung → Persistenz → Response-Audit, inkl. Ausnahmezweigen und Token-Lebenszyklus | [`docs/diagrams/lifecycle.svg`](docs/diagrams/lifecycle.svg) |
+| Systemarchitektur-Design | Vierschichtige Topologie: Client-Ebene → Gateway-Ebene → webman-Anwendungsebene (Middleware-Kette / Controller / gemeinsame Services) → Speicherebene, rechts mit Sicherheit und Observability | [`docs/diagrams/architecture.svg`](../../docs/diagrams/architecture.svg) |
+| Funktionsdesign | 12 Funktionsbereiche → Controller-Einstieg → Kernfähigkeiten, unten die Middleware-Ausführungskette und die Daten-Interface-Spezifikation | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
+| Lebenszyklus | Installation → Start → Anbindung → Schutz → Authentifizierung → Verarbeitung → Persistenz → Response-Audit, inkl. Ausnahmezweigen und Token-Lebenszyklus | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="docs/diagrams/architecture.svg" width="1100" alt="open-admin Systemarchitektur-Design">
+<img src="../../docs/diagrams/architecture.svg" width="1100" alt="open-admin Systemarchitektur-Design">
 
-<img src="docs/diagrams/features.svg" width="1100" alt="open-admin Funktionsdesign">
+<img src="../../docs/diagrams/features.svg" width="1100" alt="open-admin Funktionsdesign">
 
-<img src="docs/diagrams/lifecycle.svg" width="1100" alt="open-admin Lebenszyklusdiagramm">
+<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="open-admin Lebenszyklusdiagramm">
 
-> Für editierbare Diagramme auf Quelltext-Ebene siehe [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) und [`docs/diagrams/`](docs/diagrams/) (Mermaid, kann in den [Mermaid Live](https://mermaid.live/) Editor eingefügt werden).
+> Für editierbare Diagramme auf Quelltext-Ebene siehe [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) und [`docs/diagrams/`](../../docs/diagrams/) (Mermaid, kann in den [Mermaid Live](https://mermaid.live/) Editor eingefügt werden).
 
 ## Umgebungsanforderungen
 
@@ -295,7 +295,7 @@ docker-compose up -d
 
 ## API-Dokumentation
 
-Die vollständige API-Referenz (einheitliches Antwortformat, Fehlercodes, alle Endpunkt-Details, Authentifizierungsablauf, Rate-Limiting-Strategie, Middleware-Kette) finden Sie in **[docs/API.de.md](docs/API.de.md)**. Die wichtigsten Punkte:
+Die vollständige API-Referenz (einheitliches Antwortformat, Fehlercodes, alle Endpunkt-Details, Authentifizierungsablauf, Rate-Limiting-Strategie, Middleware-Kette) finden Sie in **[docs/API.de.md](../API.de.md)**. Die wichtigsten Punkte:
 
 - **Einheitliches Antwortformat**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0` bedeutet Erfolg
 - **Fehlercodes**: `400` Parameterfehler / `401` nicht angemeldet / `403` keine Berechtigung / `404` nicht vorhanden / `422` Validierungsfehler / `429` Rate-Limit / `500` Serverfehler
