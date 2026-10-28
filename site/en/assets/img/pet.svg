@@ -1,0 +1,82 @@
+<!--
+  Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+  小安 — open-admin 项目宠物（盾形守卫机器人）
+  配色取自项目图表规范：#1677FF 主色 / #FA8C16 暖色天线 / #52C41A 校验徽章
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320" width="240" height="320"
+     role="img" aria-labelledby="petTitle petDesc">
+  <title id="petTitle">小安 — open-admin 项目宠物</title>
+  <desc id="petDesc">盾形守卫机器人小安，手持校验徽章，守护开放管理后台的 18 层纵深防御</desc>
+
+  <defs>
+    <linearGradient id="ptShield" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6FB4FF"/>
+      <stop offset="0.42" stop-color="#1677FF"/>
+      <stop offset="1" stop-color="#0B3E9E"/>
+    </linearGradient>
+    <linearGradient id="ptScreen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0B1F45"/>
+      <stop offset="1" stop-color="#16305F"/>
+    </linearGradient>
+    <radialGradient id="ptGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFD591" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#FA8C16" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="ptDrop" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#1677FF" flood-opacity="0.26"/>
+    </filter>
+    <style>
+      .ptBlink { transform-box: fill-box; transform-origin: center; animation: ptBlink 4.6s ease-in-out infinite; }
+      .ptFloat { animation: ptFloat 6s ease-in-out infinite; }
+      .ptSpark { transform-box: fill-box; transform-origin: center; animation: ptSpark 2.4s ease-in-out infinite; }
+      @keyframes ptBlink { 0%, 90%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+      @keyframes ptFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+      @keyframes ptSpark { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.55; transform: scale(0.78); } }
+      @media (prefers-reduced-motion: reduce) {
+        .ptBlink, .ptFloat, .ptSpark { animation: none; }
+      }
+    </style>
+  </defs>
+
+  <!-- 地面投影 -->
+  <ellipse cx="120" cy="288" rx="74" ry="11" fill="#1677FF" opacity="0.12"/>
+
+  <g class="ptFloat">
+    <!-- 手臂（绘制在盾体之后，形成收拢在身后的效果） -->
+    <rect x="12" y="158" width="38" height="70" rx="19" fill="url(#ptShield)"/>
+    <rect x="190" y="158" width="38" height="70" rx="19" fill="url(#ptShield)"/>
+
+    <!-- 天线 -->
+    <line x1="120" y1="48" x2="120" y2="30" stroke="#1677FF" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="120" cy="28" r="13" fill="url(#ptGlow)"/>
+    <circle class="ptSpark" cx="120" cy="28" r="7" fill="#FA8C16"/>
+
+    <!-- 盾形身体 -->
+    <path d="M 60 46 H 180 A 26 26 0 0 1 206 72 V 160 C 206 210 170 244 120 272
+             C 70 244 34 210 34 160 V 72 A 26 26 0 0 1 60 46 Z"
+          fill="url(#ptShield)" filter="url(#ptDrop)"/>
+    <path d="M 74 60 H 166 A 22 22 0 0 1 188 82 V 160 C 188 202 160 228 120 252
+             C 80 228 52 202 52 160 V 82 A 22 22 0 0 1 74 60 Z"
+          fill="none" stroke="#FFFFFF" stroke-opacity="0.34" stroke-width="2"/>
+
+    <!-- 面屏 -->
+    <rect x="68" y="104" width="104" height="80" rx="24" fill="#0A1B3D"/>
+    <rect x="73" y="109" width="94" height="70" rx="20" fill="url(#ptScreen)"/>
+
+    <!-- 眼睛 -->
+    <rect class="ptBlink" x="93" y="132" width="16" height="24" rx="8" fill="#7CD4FF"/>
+    <rect class="ptBlink" x="131" y="132" width="16" height="24" rx="8" fill="#7CD4FF"/>
+    <circle cx="98" cy="139" r="2.6" fill="#FFFFFF" opacity="0.75"/>
+    <circle cx="136" cy="139" r="2.6" fill="#FFFFFF" opacity="0.75"/>
+
+    <!-- 微笑 -->
+    <path d="M 106 160 Q 120 171 134 160" fill="none" stroke="#4C9AFF" stroke-width="3"
+          stroke-linecap="round"/>
+
+    <!-- 校验徽章（绿色对勾） -->
+    <circle cx="120" cy="216" r="23" fill="#52C41A"/>
+    <circle cx="120" cy="216" r="27" fill="none" stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="2"/>
+    <path d="M 109 216 l 8 8 l 15 -16" fill="none" stroke="#FFFFFF" stroke-width="5"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

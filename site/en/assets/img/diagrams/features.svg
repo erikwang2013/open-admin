@@ -1,0 +1,253 @@
+<!--
+  Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+  open-admin · 功能设计图（功能域 → 入口 → 能力）
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 900" width="1240" height="900"
+     role="img" aria-label="open-admin feature design diagram">
+  <defs>
+    <style>
+      text { font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Segoe UI", sans-serif; }
+      .t1 { font-size: 27px; font-weight: 700; fill: #16233A; }
+      .t2 { font-size: 13.5px; fill: #6B7B93; }
+      .card { fill: #FFFFFF; stroke: #E1E7F0; stroke-width: 1.5; }
+      .fName { font-size: 14px; font-weight: 700; fill: #16233A; }
+      .fWhere { font-size: 10.5px; fill: #9AA9BF; }
+      .fItem { font-size: 11px; fill: #5A6B84; }
+      .panelT { font-size: 13px; font-weight: 700; fill: #16233A; }
+      .chip { font-size: 11px; fill: #16233A; }
+      .chipS { font-size: 10.5px; fill: #6B7B93; }
+      .ico { fill: none; stroke: #FFFFFF; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <rect width="1240" height="900" fill="#F6F8FC"/>
+
+  <text class="t1" x="30" y="56">open-admin · Feature Design</text>
+  <text class="t2" x="30" y="82">12 feature domains → controller entry points → key capabilities (15 admin controllers + 2 API v1 controllers + 8 middleware)</text>
+
+  <!-- ===== 第 1 行 ===== -->
+  <!-- 认证 -->
+  <rect class="card" x="30" y="112" width="280" height="152" rx="14"/>
+  <rect x="50" y="132" width="36" height="36" rx="10" fill="#1677FF"/>
+  <g class="ico" transform="translate(56 138) scale(1.5)">
+    <rect x="5" y="10.5" width="14" height="9.5" rx="2"/>
+    <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>
+  </g>
+  <text class="fName" x="98" y="150">Auth</text>
+  <text class="fWhere" x="98" y="167">app/api/v1/controller</text>
+  <line x1="50" y1="184" x2="290" y2="184" stroke="#EEF2F7"/>
+  <text class="fItem" x="50" y="205">· Login / register / refresh / logout</text>
+  <text class="fItem" x="50" y="224">· Click captcha (poster-php)</text>
+  <text class="fItem" x="50" y="243">· Lockout: 5 failures × 15 min</text>
+  <text class="fItem" x="50" y="262">· Max 3 sessions, evict oldest</text>
+
+  <!-- 仪表盘 -->
+  <rect class="card" x="330" y="112" width="280" height="152" rx="14"/>
+  <rect x="350" y="132" width="36" height="36" rx="10" fill="#1677FF"/>
+  <g class="ico" transform="translate(356 138) scale(1.5)">
+    <path d="M5 19V12"/><path d="M12 19V6"/><path d="M19 19v-4"/>
+  </g>
+  <text class="fName" x="398" y="150">Dashboard</text>
+  <text class="fWhere" x="398" y="167">DashboardController</text>
+  <line x1="350" y1="184" x2="590" y2="184" stroke="#EEF2F7"/>
+  <text class="fItem" x="350" y="205">· Realtime stat cards</text>
+  <text class="fItem" x="350" y="224">· Trend line (fl_chart)</text>
+  <text class="fItem" x="350" y="243">· Pie chart + recent logs</text>
+  <text class="fItem" x="350" y="262">· Redis 5-min cache</text>
+
+  <!-- 用户管理 -->
+  <rect class="card" x="630" y="112" width="280" height="152" rx="14"/>
+  <rect x="650" y="132" width="36" height="36" rx="10" fill="#52C41A"/>
+  <g class="ico" transform="translate(656 138) scale(1.5)">
+    <circle cx="12" cy="8.5" r="3.6"/>
+    <path d="M4.8 19.5a7.2 7.2 0 0 1 14.4 0"/>
+  </g>
+  <text class="fName" x="698" y="150">Users</text>
+  <text class="fWhere" x="698" y="167">UserController · ImportController</text>
+  <line x1="650" y1="184" x2="890" y2="184" stroke="#EEF2F7"/>
+  <text class="fItem" x="650" y="205">· CRUD + batch delete / status</text>
+  <text class="fItem" x="650" y="224">· Excel import + row checks</text>
+  <text class="fItem" x="650" y="243">· Soft delete + confirm sensitive</text>
+  <text class="fItem" x="650" y="262">· Argon2 password hashing</text>
+
+  <!-- 角色权限 -->
+  <rect class="card" x="930" y="112" width="280" height="152" rx="14"/>
+  <rect x="950" y="132" width="36" height="36" rx="10" fill="#722ED1"/>
+  <g class="ico" transform="translate(956 138) scale(1.5)">
+    <circle cx="8.5" cy="8.5" r="4"/>
+    <path d="m11.6 11.6 7.4 7.4"/><path d="m16.5 16.5 2-2"/><path d="m19 19 1.8-1.8"/>
+  </g>
+  <text class="fName" x="998" y="150">Roles &amp; permissions</text>
+  <text class="fWhere" x="998" y="167">RoleController · PermissionController</text>
+  <line x1="950" y1="184" x2="1190" y2="184" stroke="#EEF2F7"/>
+  <text class="fItem" x="950" y="205">· Role CRUD + permission tree</text>
+  <text class="fItem" x="950" y="224">· RBAC method.path checks</text>
+  <text class="fItem" x="950" y="243">· Redis permission cache 60s</text>
+  <text class="fItem" x="950" y="262">· super_admin protection</text>
+
+  <!-- ===== 第 2 行 ===== -->
+  <!-- 系统配置 -->
+  <rect class="card" x="30" y="284" width="280" height="152" rx="14"/>
+  <rect x="50" y="304" width="36" height="36" rx="10" fill="#13C2C2"/>
+  <g class="ico" transform="translate(56 310) scale(1.5)">
+    <path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/>
+    <circle cx="9" cy="7" r="1.9" fill="#13C2C2"/>
+    <circle cx="15.5" cy="12" r="1.9" fill="#13C2C2"/>
+    <circle cx="8" cy="17" r="1.9" fill="#13C2C2"/>
+  </g>
+  <text class="fName" x="98" y="322">Config</text>
+  <text class="fWhere" x="98" y="339">ConfigController</text>
+  <line x1="50" y1="356" x2="290" y2="356" stroke="#EEF2F7"/>
+  <text class="fItem" x="50" y="377">· Key-value CRUD</text>
+  <text class="fItem" x="50" y="396">· Grouped management (group)</text>
+  <text class="fItem" x="50" y="415">· Configurable Redis prefix</text>
+  <text class="fItem" x="50" y="434">· Sensitive values via encryptable</text>
+
+  <!-- 操作审计 -->
+  <rect class="card" x="330" y="284" width="280" height="152" rx="14"/>
+  <rect x="350" y="304" width="36" height="36" rx="10" fill="#FA8C16"/>
+  <g class="ico" transform="translate(356 310) scale(1.5)">
+    <rect x="5" y="3.5" width="14" height="17" rx="2"/>
+    <path d="M8.5 8.5h7"/><path d="M8.5 12h7"/><path d="M8.5 15.5h4"/>
+  </g>
+  <text class="fName" x="398" y="322">Audit</text>
+  <text class="fWhere" x="398" y="339">LogController · OperationLog</text>
+  <line x1="350" y1="356" x2="590" y2="356" stroke="#EEF2F7"/>
+  <text class="fItem" x="350" y="377">· Write ops auto-logged</text>
+  <text class="fItem" x="350" y="396">· Auto-detect 8 platforms</text>
+  <text class="fItem" x="350" y="415">· Log query + multi-filter</text>
+  <text class="fItem" x="350" y="434">· IP / UA / duration / result</text>
+
+  <!-- 文件 -->
+  <rect class="card" x="630" y="284" width="280" height="152" rx="14"/>
+  <rect x="650" y="304" width="36" height="36" rx="10" fill="#1890FF"/>
+  <g class="ico" transform="translate(656 310) scale(1.5)">
+    <path d="M13 3.5H7A2 2 0 0 0 5 5.5v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9.5z"/>
+    <path d="M13 3.5V9.5H19"/><path d="M12 17.5v-5"/><path d="m9.6 14.9 2.4-2.4 2.4 2.4"/>
+  </g>
+  <text class="fName" x="698" y="322">Files &amp; export</text>
+  <text class="fWhere" x="698" y="339">UploadController · ExportController</text>
+  <line x1="650" y1="356" x2="890" y2="356" stroke="#EEF2F7"/>
+  <text class="fItem" x="650" y="377">· Upload type + size checks</text>
+  <text class="fItem" x="650" y="396">· Excel export (phpspreadsheet)</text>
+  <text class="fItem" x="650" y="415">· PDF export (dompdf footer)</text>
+  <text class="fItem" x="650" y="434">· Sensitive data auto-masked</text>
+
+  <!-- 安全防御 -->
+  <rect class="card" x="930" y="284" width="280" height="152" rx="14" stroke="#FFCCC7"/>
+  <rect x="950" y="304" width="36" height="36" rx="10" fill="#F5222D"/>
+  <g class="ico" transform="translate(956 310) scale(1.5)">
+    <path d="M12 3 5 6v6c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6z"/>
+    <path d="m9 12 2.2 2.2L15.5 10"/>
+  </g>
+  <text class="fName" x="998" y="322">Security</text>
+  <text class="fWhere" x="998" y="339">security-php · 8 middleware</text>
+  <line x1="950" y1="356" x2="1190" y2="356" stroke="#EEF2F7"/>
+  <text class="fItem" x="950" y="377">· 31 detectors + IP blacklist</text>
+  <text class="fItem" x="950" y="396">· CSP / security headers</text>
+  <text class="fItem" x="950" y="415">· Rate limit 60/min/IP/route</text>
+  <text class="fItem" x="950" y="434">· security.txt (RFC 9116)</text>
+
+  <!-- ===== 第 3 行 ===== -->
+  <!-- 国际化 -->
+  <rect class="card" x="30" y="456" width="280" height="152" rx="14"/>
+  <rect x="50" y="476" width="36" height="36" rx="10" fill="#13C2C2"/>
+  <g class="ico" transform="translate(56 482) scale(1.5)">
+    <circle cx="12" cy="12" r="8.4"/>
+    <path d="M3.6 12h16.8"/>
+    <path d="M12 3.6c2.4 2.7 2.4 14.1 0 16.8"/>
+    <path d="M12 3.6c-2.4 2.7-2.4 14.1 0 16.8"/>
+  </g>
+  <text class="fName" x="98" y="494">i18n</text>
+  <text class="fWhere" x="98" y="511">Locale middleware · resource/translations</text>
+  <line x1="50" y1="528" x2="290" y2="528" stroke="#EEF2F7"/>
+  <text class="fItem" x="50" y="549">· Accept-Language negotiation</text>
+  <text class="fItem" x="50" y="568">· ?lang= override</text>
+  <text class="fItem" x="50" y="587">· zh_CN / en runtime packs</text>
+  <text class="fItem" x="50" y="606">· Docs in 12 languages</text>
+
+  <!-- 运维 -->
+  <rect class="card" x="330" y="456" width="280" height="152" rx="14"/>
+  <rect x="350" y="476" width="36" height="36" rx="10" fill="#722ED1"/>
+  <g class="ico" transform="translate(356 482) scale(1.5)">
+    <path d="M3.5 12.5h4l2.5-6 4 12 2.5-6h4"/>
+  </g>
+  <text class="fName" x="398" y="494">Ops</text>
+  <text class="fWhere" x="398" y="511">Health · Metrics · Docs</text>
+  <line x1="350" y1="528" x2="590" y2="528" stroke="#EEF2F7"/>
+  <text class="fItem" x="350" y="549">· GET /health health check</text>
+  <text class="fItem" x="350" y="568">· GET /metrics 5 Prometheus gauges</text>
+  <text class="fItem" x="350" y="587">· GET /api/docs OpenAPI docs</text>
+  <text class="fItem" x="350" y="606">· Backup + Docker + CI</text>
+
+  <!-- 安装向导 -->
+  <rect class="card" x="630" y="456" width="280" height="152" rx="14"/>
+  <rect x="650" y="476" width="36" height="36" rx="10" fill="#52C41A"/>
+  <g class="ico" transform="translate(656 482) scale(1.5)">
+    <circle cx="6" cy="7" r="2.4"/><circle cx="6" cy="15.5" r="2.4"/>
+    <path d="M11 7h9"/><path d="M11 15.5h9"/>
+  </g>
+  <text class="fName" x="698" y="494">Installer</text>
+  <text class="fWhere" x="698" y="511">InstallController</text>
+  <line x1="650" y1="528" x2="890" y2="528" stroke="#EEF2F7"/>
+  <text class="fItem" x="650" y="549">· 1. Database connection</text>
+  <text class="fItem" x="650" y="568">· 2. Admin account setup</text>
+  <text class="fItem" x="650" y="587">· 3. Tables + permissions + .env</text>
+  <text class="fItem" x="650" y="606">· runtime/install.lock guard</text>
+
+  <!-- 多端客户端 -->
+  <rect class="card" x="930" y="456" width="280" height="152" rx="14"/>
+  <rect x="950" y="476" width="36" height="36" rx="10" fill="#1677FF"/>
+  <g class="ico" transform="translate(956 482) scale(1.5)">
+    <rect x="2.5" y="5" width="13" height="9.5" rx="1.6"/>
+    <path d="M6 18h6"/><path d="M9 14.5V18"/>
+    <rect x="17" y="9" width="4.5" height="10" rx="1.4"/>
+  </g>
+  <text class="fName" x="998" y="494">Clients</text>
+  <text class="fWhere" x="998" y="511">apps/flutter · apps/harmonyos</text>
+  <line x1="950" y1="528" x2="1190" y2="528" stroke="#EEF2F7"/>
+  <text class="fItem" x="950" y="549">· Flutter Web: desktop admin UI</text>
+  <text class="fItem" x="950" y="568">· GetX + ApiService singleton (Dio)</text>
+  <text class="fItem" x="950" y="587">· HarmonyOS phone/tablet/2in1</text>
+  <text class="fItem" x="950" y="606">· 401 silent token refresh</text>
+
+  <!-- ===== 底部：横切能力 ===== -->
+  <rect class="card" x="30" y="628" width="580" height="200" rx="14"/>
+  <text class="panelT" x="50" y="656">Cross-cutting · Middleware chain</text>
+  <g>
+    <rect x="50" y="672" width="90" height="26" rx="8" fill="#EAF2FF" stroke="#BEDAFF"/>
+    <text class="chip" x="95" y="689" text-anchor="middle" font-size="11.5">Cors</text>
+    <rect x="148" y="672" width="90" height="26" rx="8" fill="#EAF2FF" stroke="#BEDAFF"/>
+    <text class="chip" x="193" y="689" text-anchor="middle" font-size="11.5">Locale</text>
+    <rect x="246" y="672" width="130" height="26" rx="8" fill="#FFF7E6" stroke="#FFD591"/>
+    <text class="chip" x="311" y="689" text-anchor="middle" font-size="11.5">SecurityFilter</text>
+    <rect x="384" y="672" width="106" height="26" rx="8" fill="#FFF7E6" stroke="#FFD591"/>
+    <text class="chip" x="437" y="689" text-anchor="middle" font-size="11.5">RateLimit</text>
+    <text class="chipS" x="500" y="689">Global</text>
+  </g>
+  <g>
+    <rect x="50" y="712" width="90" height="26" rx="8" fill="#FFF2E8" stroke="#FFBB96"/>
+    <text class="chip" x="95" y="729" text-anchor="middle" font-size="11.5">AdminAuth</text>
+    <rect x="148" y="712" width="130" height="26" rx="8" fill="#FFF2E8" stroke="#FFBB96"/>
+    <text class="chip" x="213" y="729" text-anchor="middle" font-size="11.5">AdminPermission</text>
+    <rect x="286" y="712" width="118" height="26" rx="8" fill="#FFF2E8" stroke="#FFBB96"/>
+    <text class="chip" x="345" y="729" text-anchor="middle" font-size="11.5">OperationLog</text>
+    <text class="chipS" x="414" y="729">/admin route group</text>
+  </g>
+  <text class="fItem" x="50" y="768">/api/v1 and /health run the global chain, then reach controllers directly; the version lives in the URL prefix.</text>
+  <text class="fItem" x="50" y="790">Public endpoints: /health · /metrics · /api/docs · /.well-known/security.txt · /install</text>
+  <text class="fItem" x="50" y="812">Update Cors.php and the route.php fallback Allow-Headers when adding request headers.</text>
+
+  <rect class="card" x="630" y="628" width="580" height="200" rx="14"/>
+  <text class="panelT" x="650" y="656">Data &amp; API conventions · Shared by all domains</text>
+  <text class="fItem" x="650" y="684">· Table prefix erik_; non-auto BIGINT keys generated by Snowflake</text>
+  <text class="fItem" x="650" y="708">· Every table has id / created_at / updated_at; soft delete adds deleted_at</text>
+  <text class="fItem" x="650" y="732">· IDs use hashids in and out; real database IDs stay hidden</text>
+  <text class="fItem" x="650" y="756">· Response { code, message, data }; code = 0 means success</text>
+  <text class="fItem" x="650" y="780">· Errors: 400 / 401 / 403 / 404 / 422 / 429 / 500</text>
+  <text class="fItem" x="650" y="804">· encryptable handles sensitive fields; ciphertext in VARCHAR(500)</text>
+
+  <text class="t2" x="30" y="866" font-size="11.5">
+    Guardian: Xiao An · project pet | Copyright (c) 2026 erik &lt;erik@erik.xyz&gt; — https://erik.xyz
+  </text>
+</svg>

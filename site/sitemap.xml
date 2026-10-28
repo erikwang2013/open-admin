@@ -1,10 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Copyright (c) 2026 erik <erik@erik.xyz> https://erik.xyz -->
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://package.erik.xyz/open-admin/</loc>
     <lastmod>2026-10-28</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://package.erik.xyz/open-admin/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://package.erik.xyz/open-admin/en/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://package.erik.xyz/open-admin/"/>
+  </url>
+  <url>
+    <loc>https://package.erik.xyz/open-admin/en/</loc>
+    <lastmod>2026-10-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://package.erik.xyz/open-admin/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://package.erik.xyz/open-admin/en/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://package.erik.xyz/open-admin/"/>
   </url>
 </urlset>

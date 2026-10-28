@@ -1,0 +1,161 @@
+<!--
+  Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+  open-admin · 生命周期图（安装 → 启动 → 请求处理 → 响应审计）
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 900" width="1240" height="900"
+     role="img" aria-label="open-admin lifecycle diagram">
+  <defs>
+    <marker id="lcArw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#A9B8CD"/>
+    </marker>
+    <marker id="lcArwSoft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#C9D6E6"/>
+    </marker>
+    <style>
+      text { font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Segoe UI", sans-serif; }
+      .t1 { font-size: 27px; font-weight: 700; fill: #16233A; }
+      .t2 { font-size: 13.5px; fill: #6B7B93; }
+      .card { fill: #FFFFFF; stroke: #E1E7F0; stroke-width: 1.5; }
+      .sTitle { font-size: 15px; font-weight: 700; fill: #16233A; }
+      .sWhere { font-size: 10.5px; fill: #9AA9BF; }
+      .sItem { font-size: 11px; fill: #5A6B84; }
+      .badge { font-size: 16px; font-weight: 700; fill: #FFFFFF; }
+      .railT { font-size: 13px; font-weight: 700; fill: #16233A; }
+      .railI { font-size: 10px; fill: #5A6B84; }
+      .ctr { text-anchor: middle; }
+    </style>
+  </defs>
+
+  <rect width="1240" height="900" fill="#F6F8FC"/>
+
+  <text class="t1" x="30" y="56">open-admin · Lifecycle</text>
+  <text class="t2" x="30" y="82">Install → Boot → Ingress → Filter → Auth → Handle → Persist → Respond &amp; audit (every request repeats ③→⑧)</text>
+
+  <!-- 闭环回边 -->
+  <path d="M 104 820 C 52 800 52 220 104 190" fill="none" stroke="#C9D6E6" stroke-width="1.6"
+        stroke-dasharray="6 6" marker-end="url(#lcArwSoft)"/>
+  <text class="t2" x="34" y="505" text-anchor="middle" font-size="10.5" fill="#9AA9BF"
+        transform="rotate(-90 34 505)">Next request repeats ③ → ⑧</text>
+
+  <!-- ===== ① 安装 ===== -->
+  <circle cx="150" cy="175" r="18" fill="#52C41A"/>
+  <text class="badge ctr" x="150" y="182">1</text>
+  <rect class="card" x="200" y="136" width="690" height="78" rx="12"/>
+  <text class="sTitle" x="222" y="166">Install</text>
+  <text class="sWhere" x="352" y="166">InstallController · public</text>
+  <text class="sItem" x="222" y="188">1. Database connection → 2. Admin account → 3. Tables + permissions, then write .env</text>
+  <text class="sItem" x="222" y="205">Creates runtime/install.lock; delete it to reinstall</text>
+
+  <path d="M 150 195 L 150 245" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
+
+  <!-- ===== ② 启动 ===== -->
+  <circle cx="150" cy="265" r="18" fill="#722ED1"/>
+  <text class="badge ctr" x="150" y="272">2</text>
+  <rect class="card" x="200" y="226" width="690" height="78" rx="12"/>
+  <text class="sTitle" x="222" y="256">Boot</text>
+  <text class="sWhere" x="330" y="256">php start.php start · webman v2</text>
+  <text class="sItem" x="222" y="278">Load .env and config/*.php, start Http / Monitor and keep them resident (no FPM cold start)</text>
+  <text class="sItem" x="222" y="295">Build MySQL / Redis / Elasticsearch pools, register global middleware and routes</text>
+
+  <path d="M 150 285 L 150 335" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
+
+  <!-- ===== ③ 接入 ===== -->
+  <circle cx="150" cy="355" r="18" fill="#1677FF"/>
+  <text class="badge ctr" x="150" y="362">3</text>
+  <rect class="card" x="200" y="316" width="690" height="78" rx="12"/>
+  <text class="sTitle" x="222" y="346">Ingress</text>
+  <text class="sWhere" x="340" y="346">Client → Nginx → webman</text>
+  <text class="sItem" x="222" y="368">Flutter Web / HarmonyOS send HTTPS requests with Authorization: Bearer &lt;JWT&gt;</text>
+  <text class="sItem" x="222" y="385">Nginx terminates TLS, gzips and proxies; config/route.php maps URL → controller</text>
+
+  <path d="M 150 375 L 150 425" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
+
+  <!-- ===== ④ 防护 ===== -->
+  <circle cx="150" cy="445" r="18" fill="#FA8C16"/>
+  <text class="badge ctr" x="150" y="452">4</text>
+  <rect class="card" x="200" y="406" width="690" height="78" rx="12"/>
+  <text class="sTitle" x="222" y="436">Filter</text>
+  <text class="sWhere" x="340" y="436">Global middleware chain</text>
+  <text class="sItem" x="222" y="458">Cors → Locale → SecurityFilter (31 detectors / method allowlist; non-standard methods 405)</text>
+  <text class="sItem" x="222" y="475">RateLimit: Redis Lua sliding window; writes X-RateLimit-Limit / Remaining / Reset</text>
+
+  <path d="M 150 465 L 150 515" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
+
+  <!-- ===== ⑤ 鉴权 ===== -->
+  <circle cx="150" cy="535" r="18" fill="#FA541C"/>
+  <text class="badge ctr" x="150" y="542">5</text>
+  <rect class="card" x="200" y="496" width="690" height="78" rx="12"/>
+  <text class="sTitle" x="222" y="526">Auth</text>
+  <text class="sWhere" x="322" y="526">/admin route group</text>
+  <text class="sItem" x="222" y="548">AdminAuth: JWT verify + token blacklist; failure returns 401 Unauthorized</text>
+  <text class="sItem" x="222" y="565">AdminPermission: compare method.path against Redis cache (TTL 60s); forbidden returns 403</text>
+
+  <path d="M 150 555 L 150 605" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
+
+  <!-- ===== ⑥ 处理 ===== -->
+  <circle cx="150" cy="625" r="18" fill="#13C2C2"/>
+  <text class="badge ctr" x="150" y="632">6</text>
+  <rect class="card" x="200" y="586" width="690" height="78" rx="12"/>
+  <text class="sTitle" x="222" y="616">Handle</text>
+  <text class="sWhere" x="332" y="616">Controller</text>
+  <text class="sItem" x="222" y="638">Validate (422 on failure) → hashids decode ID → business logic → Model query</text>
+  <text class="sItem" x="222" y="655">Sensitive ops require a password again; uncaught errors return masked 500 responses</text>
+
+  <path d="M 150 645 L 150 695" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
+
+  <!-- ===== ⑦ 持久化 ===== -->
+  <circle cx="150" cy="715" r="18" fill="#1890FF"/>
+  <text class="badge ctr" x="150" y="722">7</text>
+  <rect class="card" x="200" y="676" width="690" height="78" rx="12"/>
+  <text class="sTitle" x="222" y="706">Persist</text>
+  <text class="sWhere" x="342" y="706">Model / Service</text>
+  <text class="sItem" x="222" y="728">Snowflake BIGINT key → encryptable sensitive fields → MySQL write</text>
+  <text class="sItem" x="222" y="745">webman-scout syncs Elasticsearch; Redis stores cache / captcha / permissions / rate counts</text>
+
+  <path d="M 150 735 L 150 785" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
+
+  <!-- ===== ⑧ 响应与审计 ===== -->
+  <circle cx="150" cy="805" r="18" fill="#52C41A"/>
+  <text class="badge ctr" x="150" y="812">8</text>
+  <rect class="card" x="200" y="766" width="690" height="78" rx="12"/>
+  <text class="sTitle" x="222" y="796">Respond &amp; audit</text>
+  <text class="sWhere" x="382" y="796">Unified response + OperationLog</text>
+  <text class="sItem" x="222" y="818">encodeId (hashids) → { code, message, data } → rate-limit headers → 200</text>
+  <text class="sItem" x="222" y="835">OperationLog stores actor / action / IP / source (8 platforms) / duration / result</text>
+
+  <!-- ===== 右栏 ===== -->
+  <rect class="card" x="920" y="136" width="280" height="340" rx="14" stroke="#FFD8BF"/>
+  <text class="railT" x="942" y="166" fill="#AD4E00">Exceptions &amp; edge cases</text>
+  <g class="railI">
+    <text x="942" y="194">401 No login / token expired → refresh</text>
+    <text x="942" y="222">403 Forbidden → RBAC denies; audit log</text>
+    <text x="942" y="250">405 Bad HTTP method → SecurityFilter</text>
+    <text x="942" y="278">422 Validation failed → field errors</text>
+    <text x="942" y="306">429 Rate limited → Retry-After</text>
+    <text x="942" y="334">500 Server error → masked + logged</text>
+    <text x="942" y="376">Lockout: 5 failures, 15-minute lock</text>
+    <text x="942" y="404">IP ban after detector threshold</text>
+    <text x="942" y="446" fill="#8C9AAF">Exception branches pass ⑧ audit</text>
+  </g>
+  <line x1="942" y1="360" x2="1178" y2="360" stroke="#EEF2F7"/>
+
+  <rect class="card" x="920" y="492" width="280" height="352" rx="14" stroke="#BEDAFF"/>
+  <text class="railT" x="942" y="522" fill="#1677FF">Token &amp; session lifecycle</text>
+  <g class="railI">
+    <text x="942" y="550">access_token: 2 hours</text>
+    <text x="942" y="578">refresh_token: 14 days</text>
+    <text x="942" y="606">Refresh: POST /api/v1/auth/refresh</text>
+    <text x="942" y="634">Logout: token goes to Redis blacklist</text>
+    <text x="942" y="662">Sessions: max 3 active tokens per user</text>
+    <text x="942" y="690">Over limit: oldest token banned</text>
+    <text x="942" y="718">Permission cache: Redis TTL 60s</text>
+    <text x="942" y="746">Rate window: 60 / min / IP / route</text>
+    <text x="942" y="774">Login 10/min · register 5/min</text>
+    <text x="942" y="816" fill="#8C9AAF">Stateless; blacklist + counters in Redis</text>
+  </g>
+  <line x1="942" y1="790" x2="1178" y2="790" stroke="#EEF2F7"/>
+
+  <text class="t2" x="30" y="872" font-size="11.5">
+    Guardian: Xiao An · project pet (guards ④ Filter and ⑤ Auth) | Copyright (c) 2026 erik &lt;erik@erik.xyz&gt; — https://erik.xyz
+  </text>
+</svg>

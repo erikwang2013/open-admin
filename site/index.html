@@ -14,6 +14,9 @@
   <meta name="application-name" content="open-admin">
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <link rel="canonical" href="https://package.erik.xyz/open-admin/">
+  <link rel="alternate" hreflang="zh-CN" href="https://package.erik.xyz/open-admin/">
+  <link rel="alternate" hreflang="en" href="https://package.erik.xyz/open-admin/en/">
+  <link rel="alternate" hreflang="x-default" href="https://package.erik.xyz/open-admin/">
   <link rel="sitemap" type="application/xml" href="https://package.erik.xyz/open-admin/sitemap.xml">
   <link rel="preload" href="./assets/img/pet.svg" as="image" type="image/svg+xml">
   <meta name="theme-color" content="#f4f7fb" media="(prefers-color-scheme: light)">
@@ -21,6 +24,7 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="open-admin">
   <meta property="og:locale" content="zh_CN">
+  <meta property="og:locale:alternate" content="en_US">
   <meta property="og:url" content="https://package.erik.xyz/open-admin/">
   <meta property="og:title" content="open-admin 开放管理后台">
   <meta property="og:description" content="webman v2 + Flutter 全栈管理后台，认证、RBAC、审计与 18 层纵深防御开箱即用。">
@@ -35,7 +39,7 @@
   <meta name="twitter:image" content="https://package.erik.xyz/open-admin/assets/img/og-cover.png">
   <meta name="twitter:image:alt" content="open-admin 开放管理后台，webman v2 + Flutter">
   <link rel="icon" type="image/svg+xml" href="./assets/img/pet.svg">
-  <link rel="stylesheet" href="./assets/css/site.css?v=20261028e">
+  <link rel="stylesheet" href="./assets/css/site.css?v=20261028g">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -63,8 +67,8 @@
   }
   </script>
   <script>document.documentElement.classList.add('js');</script>
-  <script type="module" src="./assets/js/hero.js?v=20261028e"></script>
-  <script defer src="./assets/js/site.js?v=20261028e"></script>
+  <script type="module" src="./assets/js/hero.js?v=20261028g"></script>
+  <script defer src="./assets/js/site.js?v=20261028g"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳到正文</a>
@@ -88,6 +92,8 @@
       </nav>
 
       <div class="nav-actions">
+        <button class="search-trigger" type="button" data-search-open aria-haspopup="dialog" aria-controls="site-search">搜索</button>
+        <a class="lang-switch" href="./en/" hreflang="en" lang="en">EN</a>
         <a class="nav-github" href="https://github.com/erikwang2013/open-admin" target="_blank" rel="noopener">GitHub</a>
         <button class="menu-toggle" type="button" aria-controls="primary-nav" aria-expanded="false">
           <span class="sr-only">打开导航</span>
@@ -98,7 +104,7 @@
   </header>
 
   <main id="main">
-    <section class="hero" aria-labelledby="hero-title">
+    <section class="hero" id="home" aria-labelledby="hero-title">
       <div class="hero-glow" aria-hidden="true"></div>
       <div class="hero-copy">
         <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>open-admin / 开放管理后台</p>
@@ -575,6 +581,20 @@ docker compose up -d
   <button class="back-to-top" id="back-to-top" type="button" aria-label="返回顶部">
     <img src="./assets/img/pet.svg" width="48" height="64" alt="">
   </button>
+
+
+  <dialog class="search-dialog" id="site-search" aria-labelledby="search-title"
+    data-hint-label="输入关键词开始搜索"
+    data-empty-label="没有找到匹配内容"
+    data-results-label="找到 {n} 个结果">
+    <div class="search-head">
+      <h2 class="sr-only" id="search-title">站内搜索</h2>
+      <input class="search-input" id="search-input" type="search" placeholder="搜索功能、安装、架构、版本..." aria-label="搜索站点" autocomplete="off" spellcheck="false" enterkeyhint="search">
+      <button class="search-close" type="button" aria-label="关闭搜索">关闭</button>
+    </div>
+    <p class="search-status" id="search-status" aria-live="polite">输入关键词开始搜索</p>
+    <ul class="search-results" id="search-results"></ul>
+  </dialog>
 
   <dialog class="lightbox" id="image-lightbox" aria-label="图片预览">
     <div class="lightbox-frame">

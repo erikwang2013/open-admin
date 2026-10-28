@@ -2,7 +2,7 @@
 
 Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 
-`site/` 是项目的独立静态官网，线上地址：https://package.erik.xyz/open-admin/。纯 HTML、CSS、JavaScript，无服务端渲染、无数据库依赖，包含独立的 404 页面、微信/支付宝打赏二维码与图片点击放大。
+`site/` 是项目的独立静态官网，线上地址：https://package.erik.xyz/open-admin/。纯 HTML、CSS、JavaScript，无服务端渲染、无数据库依赖，包含中英文独立页面、站内搜索、独立的 404 页面、微信/支付宝打赏二维码与图片点击放大。
 
 ## 本地预览
 
@@ -10,7 +10,7 @@ Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 python3 -m http.server 8800 --directory site
 ```
 
-打开 `http://localhost:8800/`。
+打开 `http://localhost:8800/`（中文）或 `http://localhost:8800/en/`（English）。
 
 ## 部署
 
@@ -19,7 +19,7 @@ python3 -m http.server 8800 --directory site
 - 主站页面使用相对路径；404 页面使用 `/open-admin/` 绝对路径。
 - 除 Busuanzi 阅读统计脚本外，three.js、图片、样式与脚本全部位于本站点内。
 - 项目自带的 `docs/nginx-security.conf` 已将 `/open-admin/` 直接交给 Nginx 返回，并设置静态缓存与 404 回退。
-- 已配置 canonical、Open Graph、Twitter Card、JSON-LD 与社交分享封面 `assets/img/og-cover.png`；canonical、分享图与 sitemap 均指向线上域名，更换部署地址时需同步修改。
+- 已配置 canonical、hreflang、Open Graph、Twitter Card、JSON-LD 与中英文分享封面；canonical、分享图与 sitemap 均指向线上域名，更换部署地址时需同步修改。
 
 ## 缓存策略
 
@@ -36,10 +36,14 @@ python3 -m http.server 8800 --directory site
 
 ```text
 site/
-├── index.html
+├── index.html          # 中文
 ├── 404.html
 ├── sitemap.xml
 ├── README.md
+├── en/
+│   ├── index.html      # English
+│   ├── 404.html
+│   └── assets/img/     # English-only images
 └── assets/
     ├── css/site.css
     ├── js/site.js
@@ -50,6 +54,8 @@ site/
     ├── img/diagrams/
     ├── img/support/
     └── vendor/three.module.min.js
+
+英文页使用 `en/assets/img/` 中独立的图片副本与英文版架构图；中文页使用 `assets/img/`。
 ```
 
 ## 第三方组件

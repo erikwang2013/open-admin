@@ -9,8 +9,7 @@
 >
 > 设计图：[系统架构](docs/diagrams/architecture.svg) · [功能设计](docs/diagrams/features.svg) · [生命周期](docs/diagrams/lifecycle.svg)
 >
-> 项目官网：[`site/index.html`](site/index.html)（响应式静态站点，无后端依赖）
-> 在线地址：https://package.erik.xyz/open-admin/
+> 项目官网：[中文](https://package.erik.xyz/open-admin/) · [English](https://package.erik.xyz/open-admin/en/) · [本地源码](site/index.html)（响应式静态站点，无后端依赖）
 
 > [English](docs/translations/README.en.md) | [한국어](docs/translations/README.ko.md) | [Русский](docs/translations/README.ru.md) | [Deutsch](docs/translations/README.de.md) | [Français](docs/translations/README.fr.md) | [Español](docs/translations/README.es.md) | [Português](docs/translations/README.pt.md) | [हिन्दी](docs/translations/README.hi.md) | [العربية](docs/translations/README.ar.md) | [বাংলা](docs/translations/README.bn.md) | [Bahasa Indonesia](docs/translations/README.id.md) | [日本語](docs/translations/README.ja.md) | [架构设计图](docs/ARCHITECTURE.md) | [设计文档](docs/DESIGN.md) | [安全架构](docs/SECURITY.md) | [API 参考](docs/API.md)
 
@@ -307,12 +306,12 @@ docker-compose up -d
 
 ## 静态官网
 
-`site/` 是本项目的响应式静态官网，内容涵盖项目介绍、功能矩阵、小安表情、架构图、安装与使用说明、版本日志与 404 页面。
+`site/` 是本项目的响应式静态官网，中英文独立页面，内容涵盖项目介绍、功能矩阵、小安表情、架构图、安装与使用说明、版本日志、站内搜索、打赏与 404 页面。
 
 - 纯静态 HTML/CSS/JS，无服务端渲染与数据库依赖。
 - three.js、图片、样式与脚本均放在 `site/assets/`，不依赖外部 CDN；仅 Busuanzi 统计脚本异步加载。
 - 本地预览：`python3 -m http.server 8800 --directory site`，浏览器打开 `http://localhost:8800/`。
-- 生产环境地址：https://package.erik.xyz/open-admin/；本地请用上面的静态服务器预览。
+- 在线站点：[中文](https://package.erik.xyz/open-admin/) / [English](https://package.erik.xyz/open-admin/en/)；本地请用上面的静态服务器预览。
 - Nginx 参考配置将 `/open-admin/` 直接映射到根目录 `site/`。
 
 ## 数据库规范

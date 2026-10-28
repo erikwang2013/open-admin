@@ -1,0 +1,73 @@
+<!doctype html>
+<!--
+  Copyright (c) 2026 erik <erik@erik.xyz> https://erik.xyz
+  open-admin 404 page
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title>404 Page Not Found | open-admin</title>
+  <meta name="theme-color" content="#f4f7fb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#07111f" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/svg+xml" href="/open-admin/en/assets/img/pet.svg">
+  <link rel="stylesheet" href="/open-admin/assets/css/site.css?v=20261028g">
+  <script defer src="/open-admin/assets/js/site.js?v=20261028g"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="nav-shell">
+      <a class="brand" href="/open-admin/en/" aria-label="open-admin home">
+        <img src="/open-admin/en/assets/img/pet.svg" width="30" height="40" alt="">
+        <span>open-admin</span>
+      </a>
+      <div class="nav-actions not-found-nav">
+        <a class="nav-github" href="/open-admin/en/">Home</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="not-found-title">
+      <div class="hero-glow" aria-hidden="true"></div>
+
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>404 / Page not found</p>
+        <h1 id="not-found-title">This route<br><span class="hero-accent">did not pass validation.</span></h1>
+        <p class="hero-lead">The URL may be wrong, or the page has moved. Xiao An stopped this request.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="/open-admin/en/">Back home</a>
+          <a class="button button-secondary" href="/open-admin/en/#features">Explore features</a>
+        </div>
+      </div>
+
+      <div class="hero-visual" aria-label="Xiao An stopped this request">
+        <div class="hero-halo" aria-hidden="true"></div>
+        <img class="hero-pet" data-lightbox src="/open-admin/en/assets/img/pet-expressions/terrified.svg" width="280" height="373" alt="Xiao An looking worried: page not found" fetchpriority="high">
+        <div class="hero-orbit hero-orbit-a" aria-hidden="true"></div>
+        <div class="hero-orbit hero-orbit-b" aria-hidden="true"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer not-found-footer">
+    <div class="footer-bottom">
+      <p>Copyright &copy; 2026 erik erik@erik.xyz. Code is MIT licensed; visual assets use ASSETS-LICENSE.md.</p>
+      <div class="footer-info">
+        <a href="https://erik.xyz" target="_blank" rel="noopener">Erik</a>
+      </div>
+    </div>
+  </footer>
+
+  <dialog class="lightbox" id="image-lightbox" aria-label="Image preview">
+    <div class="lightbox-frame">
+      <button class="lightbox-close" type="button" aria-label="Close image preview">Close</button>
+      <img class="lightbox-image" id="lightbox-image" alt="" decoding="async">
+      <p class="lightbox-caption" id="lightbox-caption"></p>
+    </div>
+  </dialog>
+</body>
+</html>
