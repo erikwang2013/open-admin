@@ -1994,3 +1994,70 @@ body.lightbox-open {
   color: var(--accent-strong);
   font-weight: 700;
 }
+
+/* Support */
+.support-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: clamp(24px, 4vw, 48px);
+  align-items: center;
+  padding: clamp(24px, 4vw, 42px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(520px 280px at 8% 0%, var(--accent-soft), transparent 72%),
+    linear-gradient(120deg, var(--surface), var(--surface-soft));
+}
+
+.support-copy h2 {
+  font-size: clamp(1.8rem, 3vw, 2.6rem);
+}
+
+.support-copy .section-lead {
+  margin-top: 12px;
+}
+
+.support-grid {
+  display: flex;
+  gap: 14px;
+}
+
+.support-card {
+  width: 172px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  text-align: center;
+}
+
+.support-card img {
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.support-card figcaption {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+@media (max-width: 760px) {
+  .support-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .support-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .support-card {
+    width: auto;
+  }
+}

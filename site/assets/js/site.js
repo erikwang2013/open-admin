@@ -135,6 +135,7 @@
       image.setAttribute('role', 'button');
       image.setAttribute('aria-haspopup', 'dialog');
       image.setAttribute('aria-label', `放大查看：${image.alt || '图片'}`);
+      if (!image.title) image.title = '点击放大';
       image.addEventListener('click', () => openLightbox(image));
       image.addEventListener('keydown', (event) => {
         if (event.key !== 'Enter' && event.key !== ' ') return;

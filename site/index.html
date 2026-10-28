@@ -7,19 +7,64 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>open-admin 开放管理后台 | webman v2 + Flutter</title>
-  <meta name="description" content="基于 webman v2 + Flutter 的全栈管理后台：认证、RBAC、操作审计、18 层纵深防御与多端客户端。">
+  <title>open-admin 开放管理后台 | webman v2 + Flutter 全栈后台</title>
+  <meta name="description" content="open-admin 是基于 webman v2 + Flutter 的开源管理后台，内置 JWT 认证、RBAC 权限、操作审计、18 层纵深防御、Prometheus 指标与多端客户端。">
+  <meta name="author" content="erik">
+  <meta name="keywords" content="open-admin,开放管理后台,webman,Flutter,RBAC,权限管理,操作审计,管理后台,开源">
+  <meta name="application-name" content="open-admin">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+  <link rel="canonical" href="https://package.erik.xyz/open-admin/">
+  <link rel="sitemap" type="application/xml" href="https://package.erik.xyz/open-admin/sitemap.xml">
+  <link rel="preload" href="./assets/img/pet.svg" as="image" type="image/svg+xml">
   <meta name="theme-color" content="#f4f7fb" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#07111f" media="(prefers-color-scheme: dark)">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="open-admin">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:url" content="https://package.erik.xyz/open-admin/">
   <meta property="og:title" content="open-admin 开放管理后台">
   <meta property="og:description" content="webman v2 + Flutter 全栈管理后台，认证、RBAC、审计与 18 层纵深防御开箱即用。">
-  <meta property="og:type" content="website">
-  <meta property="og:image" content="./assets/img/pet.svg">
+  <meta property="og:image" content="https://package.erik.xyz/open-admin/assets/img/og-cover.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="open-admin 开放管理后台，webman v2 + Flutter">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="open-admin 开放管理后台">
+  <meta name="twitter:description" content="webman v2 + Flutter 全栈管理后台，认证、RBAC、审计与 18 层纵深防御开箱即用。">
+  <meta name="twitter:image" content="https://package.erik.xyz/open-admin/assets/img/og-cover.png">
+  <meta name="twitter:image:alt" content="open-admin 开放管理后台，webman v2 + Flutter">
   <link rel="icon" type="image/svg+xml" href="./assets/img/pet.svg">
-  <link rel="stylesheet" href="./assets/css/site.css">
+  <link rel="stylesheet" href="./assets/css/site.css?v=20261028e">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "open-admin",
+    "alternateName": "开放管理后台",
+    "applicationCategory": "DeveloperApplication",
+    "url": "https://package.erik.xyz/open-admin/",
+    "operatingSystem": "Web, Linux, macOS, Windows, HarmonyOS",
+    "description": "基于 webman v2 + Flutter 的开源管理后台，内置 JWT 认证、RBAC 权限、操作审计、18 层纵深防御、Prometheus 指标与多端客户端。",
+    "codeRepository": "https://github.com/erikwang2013/open-admin",
+    "license": "https://github.com/erikwang2013/open-admin/blob/main/LICENSE",
+    "author": {
+      "@type": "Person",
+      "name": "erik",
+      "url": "https://erik.xyz"
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "CNY"
+    },
+    "isAccessibleForFree": true,
+    "keywords": "webman, Flutter, RBAC, 管理后台, 操作审计, 开源"
+  }
+  </script>
   <script>document.documentElement.classList.add('js');</script>
-  <script type="module" src="./assets/js/hero.js"></script>
-  <script defer src="./assets/js/site.js"></script>
+  <script type="module" src="./assets/js/hero.js?v=20261028e"></script>
+  <script defer src="./assets/js/site.js?v=20261028e"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳到正文</a>
@@ -221,7 +266,7 @@
         </div>
 
         <div class="pet-controls" data-reveal>
-          <p class="pet-hint">点选表情，切换小安的形态。</p>
+          <p class="pet-hint">点选表情切换形态，点击大图可放大。</p>
           <div class="expression-grid" role="group" aria-label="小安表情形态">
             <button class="expression is-active" type="button" data-pet="smile" data-name="笑" aria-pressed="true">
               <img src="./assets/img/pet-expressions/smile.svg" width="58" height="77" alt="" loading="lazy" decoding="async"><span>笑</span>
@@ -268,7 +313,7 @@
     <section class="section architecture" id="architecture">
       <div class="section-heading" data-reveal>
         <h2>四层拓扑，一条中间件链</h2>
-        <p class="section-lead">客户端经 Nginx 进入 webman，全局链先做防护与限流，/admin 路由组再完成认证、授权与审计。</p>
+        <p class="section-lead">客户端经 Nginx 进入 webman，全局链先做防护与限流，/admin 路由组再完成认证、授权与审计。点击图片可放大查看。</p>
       </div>
 
       <div class="middleware-flow" data-reveal aria-label="中间件执行链">
@@ -463,6 +508,25 @@ docker compose up -d
 
       <a class="text-link" href="https://github.com/erikwang2013/open-admin/releases" target="_blank" rel="noopener">在 GitHub 查看完整发布记录</a>
     </section>
+
+    <section class="section support" id="support">
+      <div class="support-panel" data-reveal>
+        <div class="support-copy">
+          <h2>开源不易，欢迎支持</h2>
+          <p class="section-lead">如果这个项目对你有帮助，可以扫码打赏。二维码支持点击放大。</p>
+        </div>
+        <div class="support-grid">
+          <figure class="support-card">
+            <img src="./assets/img/support/wechat.png" data-lightbox width="386" height="423" alt="微信打赏二维码" loading="lazy" decoding="async">
+            <figcaption>微信</figcaption>
+          </figure>
+          <figure class="support-card">
+            <img src="./assets/img/support/alipay.png" data-lightbox width="412" height="450" alt="支付宝打赏二维码" loading="lazy" decoding="async">
+            <figcaption>支付宝</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
   </main>
 
   <footer class="site-footer">
@@ -488,6 +552,7 @@ docker compose up -d
           <a href="https://github.com/erikwang2013/open-admin" target="_blank" rel="noopener">GitHub 仓库</a>
           <a href="https://github.com/erikwang2013/open-admin/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
           <a href="https://github.com/erikwang2013/open-admin/blob/main/ASSETS-LICENSE.md" target="_blank" rel="noopener">视觉资产授权</a>
+          <a href="#support">打赏支持</a>
           <a href="mailto:erik@erik.xyz">erik@erik.xyz</a>
         </div>
         <div>
