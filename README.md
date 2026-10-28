@@ -1,8 +1,6 @@
 # 开放管理后台 (open-admin)
 
-<p align="center">
-  <img src="public/img/pet.svg" width="150" height="200" alt="小安 — open-admin 项目宠物">
-</p>
+![小安 — open-admin 项目宠物](public/img/pet.svg)
 
 基于 **webman v2 + Flutter** 的全栈管理后台系统：认证与 RBAC 权限、18 层纵深防御、Prometheus 可观测、多端客户端（Flutter Web / HarmonyOS）。
 
@@ -10,15 +8,14 @@
 > 素材 [`public/img/pet.svg`](public/img/pet.svg)：纯 SVG（无脚本、无外部依赖、支持深色底与 `prefers-reduced-motion`），同时用作站点图标。
 >
 > 设计图：[系统架构](docs/diagrams/architecture.svg) · [功能设计](docs/diagrams/features.svg) · [生命周期](docs/diagrams/lifecycle.svg)
+>
+> 项目官网：[`site/index.html`](site/index.html)（响应式静态站点，无后端依赖）
 
 > [English](docs/translations/README.en.md) | [한국어](docs/translations/README.ko.md) | [Русский](docs/translations/README.ru.md) | [Deutsch](docs/translations/README.de.md) | [Français](docs/translations/README.fr.md) | [Español](docs/translations/README.es.md) | [Português](docs/translations/README.pt.md) | [हिन्दी](docs/translations/README.hi.md) | [العربية](docs/translations/README.ar.md) | [বাংলা](docs/translations/README.bn.md) | [Bahasa Indonesia](docs/translations/README.id.md) | [日本語](docs/translations/README.ja.md) | [架构设计图](docs/ARCHITECTURE.md) | [设计文档](docs/DESIGN.md) | [安全架构](docs/SECURITY.md) | [API 参考](docs/API.md)
 
 ## 项目宠物 · 小安
 
-<table>
-<tr>
-<td width="170"><img src="public/img/pet.svg" width="150" height="200" alt="小安"></td>
-<td>
+![小安](public/img/pet.svg)
 
 **小安**（Xiao An）是 open-admin 的项目宠物，取自「**安**全」与「管理后**台**」——一只盾形守卫机器人。
 
@@ -37,25 +34,28 @@
 
 > 素材单一来源：[`public/img/pet.svg`](public/img/pet.svg)。修改它即同时更新以上全部位置。
 
-</td>
-</tr>
-</table>
-
 **自己画一个？** 图标规范：主色 `#1677FF`、暖色天线 `#FA8C16`、校验绿 `#52C41A`；画布 `240 × 320`，盾形居中，最小可用尺寸 48 px。
 
 
-<!-- pet-expressions:start -->
 ## 项目宠物表情形态 · 小安
 
-<table align="center">
-<tr><td align="center"><img src="docs/pet-expressions/smile.svg" width="88" alt="笑"><br><b>笑</b><br><code>:emoji-smile:</code></td><td align="center"><img src="docs/pet-expressions/joy.svg" width="88" alt="欢乐"><br><b>欢乐</b><br><code>:emoji-joy:</code></td><td align="center"><img src="docs/pet-expressions/cry.svg" width="88" alt="哭"><br><b>哭</b><br><code>:emoji-cry:</code></td><td align="center"><img src="docs/pet-expressions/depressed.svg" width="88" alt="沮丧"><br><b>沮丧</b><br><code>:emoji-depressed:</code></td><td align="center"><img src="docs/pet-expressions/terrified.svg" width="88" alt="惊恐"><br><b>惊恐</b><br><code>:emoji-terrified:</code></td><td align="center"><img src="docs/pet-expressions/angry.svg" width="88" alt="愤怒"><br><b>愤怒</b><br><code>:emoji-angry:</code></td></tr>
-<tr><td align="center"><img src="docs/pet-expressions/coquettish.svg" width="88" alt="撒娇"><br><b>撒娇</b><br><code>:emoji-coquettish:</code></td><td align="center"><img src="docs/pet-expressions/cute.svg" width="88" alt="卖萌"><br><b>卖萌</b><br><code>:emoji-cute:</code></td><td align="center"><img src="docs/pet-expressions/pleasing.svg" width="88" alt="讨好"><br><b>讨好</b><br><code>:emoji-pleasing:</code></td><td align="center"><img src="docs/pet-expressions/knocking.svg" width="88" alt="敲打"><br><b>敲打</b><br><code>:emoji-knocking:</code></td><td align="center"><img src="docs/pet-expressions/facepalm.svg" width="88" alt="捂脸"><br><b>捂脸</b><br><code>:emoji-facepalm:</code></td><td align="center"><img src="docs/pet-expressions/tongue.svg" width="88" alt="吐舌头"><br><b>吐舌头</b><br><code>:emoji-tongue:</code></td></tr>
-</table>
+| 表情 | 预览 | 短码 |
+|---|---|---|
+| 笑 | ![笑](docs/pet-expressions/smile.svg) | `:emoji-smile:` |
+| 欢乐 | ![欢乐](docs/pet-expressions/joy.svg) | `:emoji-joy:` |
+| 哭 | ![哭](docs/pet-expressions/cry.svg) | `:emoji-cry:` |
+| 沮丧 | ![沮丧](docs/pet-expressions/depressed.svg) | `:emoji-depressed:` |
+| 惊恐 | ![惊恐](docs/pet-expressions/terrified.svg) | `:emoji-terrified:` |
+| 愤怒 | ![愤怒](docs/pet-expressions/angry.svg) | `:emoji-angry:` |
+| 撒娇 | ![撒娇](docs/pet-expressions/coquettish.svg) | `:emoji-coquettish:` |
+| 卖萌 | ![卖萌](docs/pet-expressions/cute.svg) | `:emoji-cute:` |
+| 讨好 | ![讨好](docs/pet-expressions/pleasing.svg) | `:emoji-pleasing:` |
+| 敲打 | ![敲打](docs/pet-expressions/knocking.svg) | `:emoji-knocking:` |
+| 捂脸 | ![捂脸](docs/pet-expressions/facepalm.svg) | `:emoji-facepalm:` |
+| 吐舌头 | ![吐舌头](docs/pet-expressions/tongue.svg) | `:emoji-tongue:` |
 
 > 12 种彩色动态形态：笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒 / 撒娇 / 卖萌 / 讨好 / 敲打 / 捂脸 / 吐舌头。每个 SVG 自带表情、情绪特效与整体动效，并遵循 `prefers-reduced-motion`。
-<!-- pet-expressions:end -->
 
-<!-- assets-license:start -->
 ## 视觉资产授权 / Visual Assets License
 
 本项目的项目宠物、图片、图标、表情（包括 `docs/pet-expressions/` 等目录下的
@@ -63,9 +63,7 @@ SVG / PNG）**不是开源资产**，版权归作者所有。未经书面许可�
 用于商业用途；商业使用需取得商业授权，联系 **erik@erik.xyz**。详见
 [ASSETS-LICENSE.md](ASSETS-LICENSE.md)。
 
-> 代码部分仍遵循仓库原有 `LICENSE`；第三方素材（如明确标注的 Go Gopher 等）仍遵循其原许可证。
-<!-- assets-license:end -->
-
+> 代码部分采用 [MIT License](LICENSE) 开源；第三方素材（如明确标注的 Go Gopher 等）仍遵循其原许可证。
 
 ## 功能清单
 
@@ -179,6 +177,7 @@ open-admin/
 ├── public/                     # 公共入口（Web 根目录）
 │   ├── img/pet.svg             # 项目宠物「小安」（SVG，兼作站点图标）
 │   └── favicon.ico             # 兼容旧浏览器的 .ico 兜底
+├── site/                       # 响应式静态官网（HTML/CSS/JS + 本地资源）
 ├── resource/translations/      # 运行时语言包（zh_CN / en）
 ├── tests/                      # PHPUnit 测试
 ├── runtime/                    # 运行时文件
@@ -195,11 +194,11 @@ open-admin/
 | 功能设计 | 12 个功能域 → 控制器入口 → 关键能力，底部为中间件执行链与数据接口规范 | [`docs/diagrams/features.svg`](docs/diagrams/features.svg) |
 | 生命周期 | 安装 → 启动 → 接入 → 防护 → 鉴权 → 处理 → 持久化 → 响应审计，含异常分支与令牌生命周期 | [`docs/diagrams/lifecycle.svg`](docs/diagrams/lifecycle.svg) |
 
-<img src="docs/diagrams/architecture.svg" width="1100" alt="open-admin 系统架构设计图">
+![open-admin 系统架构设计图](docs/diagrams/architecture.svg)
 
-<img src="docs/diagrams/features.svg" width="1100" alt="open-admin 功能设计图">
+![open-admin 功能设计图](docs/diagrams/features.svg)
 
-<img src="docs/diagrams/lifecycle.svg" width="1100" alt="open-admin 生命周期图">
+![open-admin 生命周期图](docs/diagrams/lifecycle.svg)
 
 > 需要可编辑的源码级图表时，见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) 与 [`docs/diagrams/`](docs/diagrams/)（Mermaid，可粘贴到 [Mermaid Live](https://mermaid.live/) 编辑）。
 
@@ -305,6 +304,15 @@ docker-compose up -d
 - `.env.docker`: Docker 环境专用环境变量
 
 
+## 静态官网
+
+`site/` 是本项目的响应式静态官网，内容涵盖项目介绍、功能矩阵、小安表情、架构图、安装与使用说明、版本日志与 404 页面。
+
+- 纯静态 HTML/CSS/JS，无服务端渲染与数据库依赖。
+- three.js、图片、样式与脚本均放在 `site/assets/`，不依赖外部 CDN；仅 Busuanzi 统计脚本异步加载。
+- 本地预览：`python3 -m http.server 8800 --directory site`，浏览器打开 `http://localhost:8800/`。
+- 生产环境由 Nginx 直接返回 `/site/`；本地请用上面的静态服务器预览。
+
 ## 数据库规范
 
 - **表前缀**: `erik_`
@@ -321,7 +329,7 @@ docker-compose up -d
 - **统一响应格式**: `{ "code": 0, "message": "success", "data": {...} }`，`code=0` 表示成功
 - **错误码**: `400` 参数错误 / `401` 未登录 / `403` 无权限 / `404` 不存在 / `422` 验证失败 / `429` 限流 / `500` 服务器错误
 - **API 版本**: 版本号体现在 URL 前缀中（如 `/api/v1/...`），不使用请求头
-- **认证**: `Authorization: Bearer <token>`；access_token 有效期 2 小时，refresh_token 14 天
+- **认证**: `Authorization: Bearer {token}`；access_token 有效期 2 小时，refresh_token 14 天
 - **ID 处理**: 请求/响应中的 ID 为 hashids 加密字符串，不暴露真实数据库 ID
 
 ## 前端说明
@@ -397,57 +405,14 @@ GitHub Actions 持续集成流水线：`.github/workflows/ci.yml`
 |:---:|:---:|
 | ![微信](./docs/weixinpay.png "微信") | ![支付宝](./docs/alipay.png "支付宝") |
 
-### 全球转账打赏（跨境汇款）
+## 项目授权 / Project License
 
-**收款人信息**
+代码以 [MIT License](LICENSE) 开源。
 
-- 收款人姓名：WANG KEXUN
-- 收款账户号码：881015918251
+Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 
-**收款银行**
+- 可自由使用、复制、修改、合并、发布、分发、再许可和销售本项目代码，需保留版权与许可声明。
+- 视觉资产（项目宠物、图片、图标、表情等）不随代码的 MIT 许可开源，适用 [ASSETS-LICENSE.md](ASSETS-LICENSE.md)。
+- 第三方组件仍遵循其各自原有的许可证。
 
-- ZA Bank SWIFT Code：AABLHKHHXXX
-- 银行名称：ZA Bank Limited
-- 银行编号：387
-- 银行地址：Core F, Cyberport 3, 100 Cyberport Road, Hong Kong
-
-**跨境汇款代理银行（如需）**
-
-> 此为跨境汇款代理银行（中转银行）信息，非收款银行信息。请向汇款银行查询是否需要提供跨境汇款代理银行信息。
-
-- **汇入港元、人民币及美元**，代理银行为 Citibank：
-  - 银行名称：Citibank N.A. Hong Kong
-  - SWIFT Code：CITIHKHXXXX
-  - 银行编号：006
-  - 分行名称：Hong Kong Branch
-  - 分行编号：391
-  - 银行地址：Citibank Tower, Citibank Plaza, 3 Garden Road, Central, Hong Kong
-- **汇入其他币种**，代理银行为 BNY Mellon：
-  - 银行名称：THE BANK OF NEW YORK MELLON
-  - SWIFT Code：IRVTUS3NXXX
-  - 银行地址：THE BANK OF NEW YORK MELLON, 240 GREENWICH STREET, NEW YORK, United States
-
-### 虚拟币打赏 (Crypto Donation)
-
-如果这个项目对你有帮助，欢迎扫描二维码打赏支持，谢谢！
-
-| 主网 (Network) | 二维码 (QR Code) | 钱包地址 (Wallet Address) |
-|---|---|---|
-| BNB Smart Chain (BEP20) | [<img src="docs/coin/1.jpg" width="150" alt="BNB Smart Chain (BEP20)">](docs/coin/1.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Tron (TRC20) | [<img src="docs/coin/2.jpg" width="150" alt="Tron (TRC20)">](docs/coin/2.jpg) | `TEdDHWLajt1XvqtPDWmQctdrJaC3pzZZzz` |
-| Ethereum (ERC20) | [<img src="docs/coin/3.jpg" width="150" alt="Ethereum (ERC20)">](docs/coin/3.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Aptos | [<img src="docs/coin/4.jpg" width="150" alt="Aptos">](docs/coin/4.jpg) | `0x836e3780edfc3f7b2372b39e2a1a3a5d7adfaccd96c726f21cfde1b50dd68030` |
-| Plasma | [<img src="docs/coin/5.jpg" width="150" alt="Plasma">](docs/coin/5.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Polygon POS | [<img src="docs/coin/6.jpg" width="150" alt="Polygon POS">](docs/coin/6.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Solana | [<img src="docs/coin/7.jpg" width="150" alt="Solana">](docs/coin/7.jpg) | `2hfhboHdmdrYsY25XfQSsEWxq5ip4EQsR7f4AzSRMUyr` |
-| The Open Network (TON) | [<img src="docs/coin/8.jpg" width="150" alt="The Open Network (TON)">](docs/coin/8.jpg) | `UQB9kFQohzmXUir9QSSZq01iwl9aQZIDdBpNmDklljRtCoGK` |
-| Arbitrum One | [<img src="docs/coin/9.jpg" width="150" alt="Arbitrum One">](docs/coin/9.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| AVAX C-Chain | [<img src="docs/coin/10.jpg" width="150" alt="AVAX C-Chain">](docs/coin/10.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-
----
-
-## License
-
-MIT
-
-Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+**English:** The source code is released under the [MIT License](LICENSE). Visual assets are not covered by the MIT license and remain under [ASSETS-LICENSE.md](ASSETS-LICENSE.md). Third-party components retain their original licenses.

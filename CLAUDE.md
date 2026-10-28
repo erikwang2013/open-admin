@@ -23,6 +23,7 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 | 文件 | 上传 + Excel/PDF 导出（敏感数据脱敏）|
 | 安全 | 18 层纵深防御（XSS/SQL注入/CSRF/限流/CSP...）|
 | 运维 | 健康检查/Prometheus 指标/API 文档/security.txt + Docker + CI/CD |
+| 官网 | `site/` 响应式静态站点：项目介绍/功能/小安表情/架构图/安装/使用/版本日志 |
 
 ## 项目宠物 · 小安
 
@@ -133,6 +134,7 @@ open-admin/
 │       └── plans/              # 实现计划
 ├── public/                     # 公共入口
 │   └── img/pet.svg             # 项目宠物「小安」（SVG，兼作站点图标）
+├── site/                       # 响应式静态官网（项目介绍/功能/架构/安装/版本日志）
 ├── runtime/                    # 运行时文件
 ├── tests/                      # 测试
 ├── vendor/                     # Composer 依赖

@@ -1,12 +1,10 @@
-> Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+> Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 >
 > [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md) | [مخطط العمارة](../ARCHITECTURE.ar.md) | [وثيقة التصميم](../DESIGN.ar.md) | [بنية الأمان](../SECURITY.ar.md) | [مرجع API](../API.ar.md)
 
 # نظام إدارة مفتوح (open-admin)
 
-<p align="center">
-  <img src="../../public/img/pet.svg" width="150" height="200" alt="شياو آن — حيوان مشروع open-admin">
-</p>
+![شياو آن — حيوان مشروع open-admin](../../public/img/pet.svg)
 
 نظام إدارة خلفي متكامل مبني على **webman v2 + Flutter**: المصادقة وصلاحيات RBAC، ودفاع متعمق من 18 طبقة، وقابلية مراقبة عبر Prometheus، وعملاء متعددو المنصات (Flutter Web / HarmonyOS).
 
@@ -17,10 +15,7 @@
 
 ## حيوان المشروع · شياو آن
 
-<table>
-<tr>
-<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="شياو آن"></td>
-<td>
+![شياو آن](../../public/img/pet.svg)
 
 **شياو آن** (Xiao An) هو حيوان مشروع open-admin، مأخوذ من «**الأمان**» و«**لوحة الإدارة**» — روبوت حارس درعي الشكل.
 
@@ -38,10 +33,6 @@
 | هذه الوثيقة ورسوم التصميم | صورة المشروع + بطاقة الحيوان في أسفل يمين مخطط العمارة |
 
 > مصدر واحد للمواد: [`public/img/pet.svg`](../../public/img/pet.svg). تعديله يحدّث جميع المواضع أعلاه في الوقت نفسه.
-
-</td>
-</tr>
-</table>
 
 **أترسم واحدًا بنفسك؟** مواصفات الأيقونة: اللون الأساسي `#1677FF`، الهوائي الدافئ `#FA8C16`، أخضر التحقق `#52C41A`؛ لوحة الرسم `240 × 320`، والدرع في المنتصف، وأصغر حجم صالح 48 px.
 
@@ -167,11 +158,11 @@ open-admin/
 | التصميم الوظيفي | 12 مجالًا وظيفيًا → مداخل وحدات التحكم → القدرات الرئيسية، وفي الأسفل سلسلة تنفيذ الوسائط ومواصفات واجهات البيانات | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
 | دورة الحياة | التثبيت → الإقلاع → الاتصال → الحماية → التحقق من الهوية → المعالجة → الاستمرارية → تدقيق الاستجابة، مع الفروع الاستثنائية ودورة حياة الرمز | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="../../docs/diagrams/architecture.svg" width="1100" alt="رسم تصميم عمارة نظام open-admin">
+![رسم تصميم عمارة نظام open-admin](../../docs/diagrams/architecture.svg)
 
-<img src="../../docs/diagrams/features.svg" width="1100" alt="رسم التصميم الوظيفي لـ open-admin">
+![رسم التصميم الوظيفي لـ open-admin](../../docs/diagrams/features.svg)
 
-<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="رسم دورة حياة open-admin">
+![رسم دورة حياة open-admin](../../docs/diagrams/lifecycle.svg)
 
 > للحصول على رسوم قابلة للتحرير على مستوى المصدر، راجع [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) و[`docs/diagrams/`](../../docs/diagrams/) (Mermaid، قابلة للصق في [Mermaid Live](https://mermaid.live/) للتحرير).
 
@@ -293,7 +284,7 @@ docker-compose up -d
 - **تنسيق الاستجابة الموحد**: `{ "code": 0, "message": "success", "data": {...} }`، `code=0` تعني النجاح
 - **أكواد الأخطاء**: `400` خطأ في المعاملات / `401` غير مسجّل الدخول / `403` لا صلاحية / `404` غير موجود / `422` فشل التحقق / `429` تجاوز معدل الطلبات / `500` خطأ في الخادم
 - **إصدار API**: يظهر رقم الإصدار في بادئة URL (مثل `/api/v1/...`)، ولا يُستخدم ترويسة الطلب
-- **المصادقة**: `Authorization: Bearer <token>`؛ صلاحية access_token ساعتان، وrefresh_token 14 يومًا
+- **المصادقة**: `Authorization: Bearer {token}`؛ صلاحية access_token ساعتان، وrefresh_token 14 يومًا
 - **معالجة المعرفات**: المعرفات في الطلبات/الاستجابات عبارة عن سلاسل مشفرة بـ hashids، ولا تكشف معرفات قاعدة البيانات الحقيقية
 
 ## ملاحظات الواجهة الأمامية
@@ -369,57 +360,14 @@ docker-compose up -d
 |:---:|:---:|
 | ![WeChat](./docs/weixinpay.png "WeChat") | ![Alipay](./docs/alipay.png "Alipay") |
 
-### تبرع بالتحويل الدولي (حوالة عبر الحدود)
+## 项目授权 / Project License
 
-**معلومات المستلم**
+代码以 [MIT License](../../LICENSE) 开源。
 
-- اسم المستلم: WANG KEXUN
-- رقم حساب الاستلام: 881015918251
+Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 
-**البنك المستلم**
+- 可自由使用、复制、修改、合并、发布、分发、再许可和销售本项目代码，需保留版权与许可声明。
+- 视觉资产（项目宠物、图片、图标、表情等）不随代码的 MIT 许可开源，适用 [ASSETS-LICENSE.md](../../ASSETS-LICENSE.md)。
+- 第三方组件仍遵循其各自原有的许可证。
 
-- رمز SWIFT لبنك ZA Bank: AABLHKHHXXX
-- اسم البنك: ZA Bank Limited
-- رقم البنك: 387
-- عنوان البنك: Core F, Cyberport 3, 100 Cyberport Road, Hong Kong
-
-**البنك الوكيل للتحويلات عبر الحدود (عند الحاجة)**
-
-> هذه معلومات البنك الوكيل للتحويلات عبر الحدود (البنك الوسيط)، وليست معلومات البنك المستلم. يُرجى الاستفسار من البنك المُرسِل عما إذا كان يتطلب توفير معلومات البنك الوكيل للتحويلات عبر الحدود.
-
-- **لإيداع دولار هونغ كونغ واليوان الصيني والدولار الأمريكي**، البنك الوكيل هو Citibank:
-  - اسم البنك: Citibank N.A. Hong Kong
-  - رمز SWIFT: CITIHKHXXXX
-  - رقم البنك: 006
-  - اسم الفرع: Hong Kong Branch
-  - رقم الفرع: 391
-  - عنوان البنك: Citibank Tower, Citibank Plaza, 3 Garden Road, Central, Hong Kong
-- **للعملات الأخرى**، البنك الوكيل هو BNY Mellon:
-  - اسم البنك: THE BANK OF NEW YORK MELLON
-  - رمز SWIFT: IRVTUS3NXXX
-  - عنوان البنك: THE BANK OF NEW YORK MELLON, 240 GREENWICH STREET, NEW YORK, United States
-
-### التبرع بالعملات الرقمية (Crypto Donation)
-
-إذا كان هذا المشروع مفيدًا لك، فمرحبًا بمسح رمز الاستجابة السريعة للتبرع، شكرًا لك!
-
-| الشبكة (Network) | رمز QR (QR Code) | عنوان المحفظة (Wallet Address) |
-|---|---|---|
-| BNB Smart Chain (BEP20) | [<img src="../../docs/coin/1.jpg" width="150" alt="BNB Smart Chain (BEP20)">](../../docs/coin/1.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Tron (TRC20) | [<img src="../../docs/coin/2.jpg" width="150" alt="Tron (TRC20)">](../../docs/coin/2.jpg) | `TEdDHWLajt1XvqtPDWmQctdrJaC3pzZZzz` |
-| Ethereum (ERC20) | [<img src="../../docs/coin/3.jpg" width="150" alt="Ethereum (ERC20)">](../../docs/coin/3.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Aptos | [<img src="../../docs/coin/4.jpg" width="150" alt="Aptos">](../../docs/coin/4.jpg) | `0x836e3780edfc3f7b2372b39e2a1a3a5d7adfaccd96c726f21cfde1b50dd68030` |
-| Plasma | [<img src="../../docs/coin/5.jpg" width="150" alt="Plasma">](../../docs/coin/5.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Polygon POS | [<img src="../../docs/coin/6.jpg" width="150" alt="Polygon POS">](../../docs/coin/6.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Solana | [<img src="../../docs/coin/7.jpg" width="150" alt="Solana">](../../docs/coin/7.jpg) | `2hfhboHdmdrYsY25XfQSsEWxq5ip4EQsR7f4AzSRMUyr` |
-| The Open Network (TON) | [<img src="../../docs/coin/8.jpg" width="150" alt="The Open Network (TON)">](../../docs/coin/8.jpg) | `UQB9kFQohzmXUir9QSSZq01iwl9aQZIDdBpNmDklljRtCoGK` |
-| Arbitrum One | [<img src="../../docs/coin/9.jpg" width="150" alt="Arbitrum One">](../../docs/coin/9.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| AVAX C-Chain | [<img src="../../docs/coin/10.jpg" width="150" alt="AVAX C-Chain">](../../docs/coin/10.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-
----
-
-## الترخيص
-
-MIT
-
-Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+**English:** The source code is released under the [MIT License](../../LICENSE). Visual assets are not covered by the MIT license and remain under [ASSETS-LICENSE.md](../../ASSETS-LICENSE.md). Third-party components retain their original licenses.

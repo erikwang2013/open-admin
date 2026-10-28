@@ -1,0 +1,253 @@
+<!--
+  Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+  open-admin · 功能设计图（功能域 → 入口 → 能力）
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 900" width="1240" height="900"
+     role="img" aria-label="open-admin 功能设计图">
+  <defs>
+    <style>
+      text { font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Segoe UI", sans-serif; }
+      .t1 { font-size: 27px; font-weight: 700; fill: #16233A; }
+      .t2 { font-size: 13.5px; fill: #6B7B93; }
+      .card { fill: #FFFFFF; stroke: #E1E7F0; stroke-width: 1.5; }
+      .fName { font-size: 14px; font-weight: 700; fill: #16233A; }
+      .fWhere { font-size: 10.5px; fill: #9AA9BF; }
+      .fItem { font-size: 11px; fill: #5A6B84; }
+      .panelT { font-size: 13px; font-weight: 700; fill: #16233A; }
+      .chip { font-size: 11px; fill: #16233A; }
+      .chipS { font-size: 10.5px; fill: #6B7B93; }
+      .ico { fill: none; stroke: #FFFFFF; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <rect width="1240" height="900" fill="#F6F8FC"/>
+
+  <text class="t1" x="30" y="56">open-admin · 功能设计</text>
+  <text class="t2" x="30" y="82">12 个功能域 → 控制器入口 → 关键能力（15 个管理端控制器 + 2 个 API v1 控制器 + 8 个中间件）</text>
+
+  <!-- ===== 第 1 行 ===== -->
+  <!-- 认证 -->
+  <rect class="card" x="30" y="112" width="280" height="152" rx="14"/>
+  <rect x="50" y="132" width="36" height="36" rx="10" fill="#1677FF"/>
+  <g class="ico" transform="translate(56 138) scale(1.5)">
+    <rect x="5" y="10.5" width="14" height="9.5" rx="2"/>
+    <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>
+  </g>
+  <text class="fName" x="98" y="150">认证</text>
+  <text class="fWhere" x="98" y="167">app/api/v1/controller</text>
+  <line x1="50" y1="184" x2="290" y2="184" stroke="#EEF2F7"/>
+  <text class="fItem" x="50" y="205">· 登录 / 注册 / 刷新 / 登出</text>
+  <text class="fItem" x="50" y="224">· 点击验证码（poster-php）</text>
+  <text class="fItem" x="50" y="243">· 账号锁定 5 次 × 15 分钟</text>
+  <text class="fItem" x="50" y="262">· 并发会话上限 3，超出踢最旧</text>
+
+  <!-- 仪表盘 -->
+  <rect class="card" x="330" y="112" width="280" height="152" rx="14"/>
+  <rect x="350" y="132" width="36" height="36" rx="10" fill="#1677FF"/>
+  <g class="ico" transform="translate(356 138) scale(1.5)">
+    <path d="M5 19V12"/><path d="M12 19V6"/><path d="M19 19v-4"/>
+  </g>
+  <text class="fName" x="398" y="150">仪表盘</text>
+  <text class="fWhere" x="398" y="167">DashboardController</text>
+  <line x1="350" y1="184" x2="590" y2="184" stroke="#EEF2F7"/>
+  <text class="fItem" x="350" y="205">· 实时统计卡片</text>
+  <text class="fItem" x="350" y="224">· 趋势折线（fl_chart）</text>
+  <text class="fItem" x="350" y="243">· 分类饼图 + 最近操作日志</text>
+  <text class="fItem" x="350" y="262">· Redis 5 分钟缓存</text>
+
+  <!-- 用户管理 -->
+  <rect class="card" x="630" y="112" width="280" height="152" rx="14"/>
+  <rect x="650" y="132" width="36" height="36" rx="10" fill="#52C41A"/>
+  <g class="ico" transform="translate(656 138) scale(1.5)">
+    <circle cx="12" cy="8.5" r="3.6"/>
+    <path d="M4.8 19.5a7.2 7.2 0 0 1 14.4 0"/>
+  </g>
+  <text class="fName" x="698" y="150">用户管理</text>
+  <text class="fWhere" x="698" y="167">UserController · ImportController</text>
+  <line x1="650" y1="184" x2="890" y2="184" stroke="#EEF2F7"/>
+  <text class="fItem" x="650" y="205">· CRUD + 批量删除 / 启禁用</text>
+  <text class="fItem" x="650" y="224">· Excel 导入逐行校验 + 错误报告</text>
+  <text class="fItem" x="650" y="243">· 软删除 + 敏感操作二次确认</text>
+  <text class="fItem" x="650" y="262">· 密码 Argon2 哈希存储</text>
+
+  <!-- 角色权限 -->
+  <rect class="card" x="930" y="112" width="280" height="152" rx="14"/>
+  <rect x="950" y="132" width="36" height="36" rx="10" fill="#722ED1"/>
+  <g class="ico" transform="translate(956 138) scale(1.5)">
+    <circle cx="8.5" cy="8.5" r="4"/>
+    <path d="m11.6 11.6 7.4 7.4"/><path d="m16.5 16.5 2-2"/><path d="m19 19 1.8-1.8"/>
+  </g>
+  <text class="fName" x="998" y="150">角色权限</text>
+  <text class="fWhere" x="998" y="167">RoleController · PermissionController</text>
+  <line x1="950" y1="184" x2="1190" y2="184" stroke="#EEF2F7"/>
+  <text class="fItem" x="950" y="205">· 角色 CRUD + 权限树</text>
+  <text class="fItem" x="950" y="224">· RBAC 校验 method.path 粒度</text>
+  <text class="fItem" x="950" y="243">· 权限缓存 Redis TTL 60s</text>
+  <text class="fItem" x="950" y="262">· super_admin 角色保护</text>
+
+  <!-- ===== 第 2 行 ===== -->
+  <!-- 系统配置 -->
+  <rect class="card" x="30" y="284" width="280" height="152" rx="14"/>
+  <rect x="50" y="304" width="36" height="36" rx="10" fill="#13C2C2"/>
+  <g class="ico" transform="translate(56 310) scale(1.5)">
+    <path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/>
+    <circle cx="9" cy="7" r="1.9" fill="#13C2C2"/>
+    <circle cx="15.5" cy="12" r="1.9" fill="#13C2C2"/>
+    <circle cx="8" cy="17" r="1.9" fill="#13C2C2"/>
+  </g>
+  <text class="fName" x="98" y="322">系统配置</text>
+  <text class="fWhere" x="98" y="339">ConfigController</text>
+  <line x1="50" y1="356" x2="290" y2="356" stroke="#EEF2F7"/>
+  <text class="fItem" x="50" y="377">· 键值对 CRUD</text>
+  <text class="fItem" x="50" y="396">· 分组管理（group）</text>
+  <text class="fItem" x="50" y="415">· Redis 前缀可配置（REDIS_PREFIX）</text>
+  <text class="fItem" x="50" y="434">· 敏感值走 encryptable</text>
+
+  <!-- 操作审计 -->
+  <rect class="card" x="330" y="284" width="280" height="152" rx="14"/>
+  <rect x="350" y="304" width="36" height="36" rx="10" fill="#FA8C16"/>
+  <g class="ico" transform="translate(356 310) scale(1.5)">
+    <rect x="5" y="3.5" width="14" height="17" rx="2"/>
+    <path d="M8.5 8.5h7"/><path d="M8.5 12h7"/><path d="M8.5 15.5h4"/>
+  </g>
+  <text class="fName" x="398" y="322">操作审计</text>
+  <text class="fWhere" x="398" y="339">LogController · OperationLog</text>
+  <line x1="350" y1="356" x2="590" y2="356" stroke="#EEF2F7"/>
+  <text class="fItem" x="350" y="377">· 写操作自动落库（中间件）</text>
+  <text class="fItem" x="350" y="396">· 8 平台来源端自动检测</text>
+  <text class="fItem" x="350" y="415">· 日志查询 + 多条件筛选</text>
+  <text class="fItem" x="350" y="434">· 记录 IP / UA / 耗时 / 结果</text>
+
+  <!-- 文件 -->
+  <rect class="card" x="630" y="284" width="280" height="152" rx="14"/>
+  <rect x="650" y="304" width="36" height="36" rx="10" fill="#1890FF"/>
+  <g class="ico" transform="translate(656 310) scale(1.5)">
+    <path d="M13 3.5H7A2 2 0 0 0 5 5.5v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9.5z"/>
+    <path d="M13 3.5V9.5H19"/><path d="M12 17.5v-5"/><path d="m9.6 14.9 2.4-2.4 2.4 2.4"/>
+  </g>
+  <text class="fName" x="698" y="322">文件与导出</text>
+  <text class="fWhere" x="698" y="339">UploadController · ExportController</text>
+  <line x1="650" y1="356" x2="890" y2="356" stroke="#EEF2F7"/>
+  <text class="fItem" x="650" y="377">· 文件上传（类型 + 大小校验）</text>
+  <text class="fItem" x="650" y="396">· Excel 导出（phpspreadsheet）</text>
+  <text class="fItem" x="650" y="415">· PDF 导出（dompdf，含版权页脚）</text>
+  <text class="fItem" x="650" y="434">· 敏感数据自动脱敏</text>
+
+  <!-- 安全防御 -->
+  <rect class="card" x="930" y="284" width="280" height="152" rx="14" stroke="#FFCCC7"/>
+  <rect x="950" y="304" width="36" height="36" rx="10" fill="#F5222D"/>
+  <g class="ico" transform="translate(956 310) scale(1.5)">
+    <path d="M12 3 5 6v6c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6z"/>
+    <path d="m9 12 2.2 2.2L15.5 10"/>
+  </g>
+  <text class="fName" x="998" y="322">安全防御</text>
+  <text class="fWhere" x="998" y="339">security-php · 8 个中间件</text>
+  <line x1="950" y1="356" x2="1190" y2="356" stroke="#EEF2F7"/>
+  <text class="fItem" x="950" y="377">· 31 种攻击检测器 + IP 升级黑名单</text>
+  <text class="fItem" x="950" y="396">· CSP / 安全响应头注入</text>
+  <text class="fItem" x="950" y="415">· 限流 60 次/分/IP/路由（Lua）</text>
+  <text class="fItem" x="950" y="434">· security.txt（RFC 9116）</text>
+
+  <!-- ===== 第 3 行 ===== -->
+  <!-- 国际化 -->
+  <rect class="card" x="30" y="456" width="280" height="152" rx="14"/>
+  <rect x="50" y="476" width="36" height="36" rx="10" fill="#13C2C2"/>
+  <g class="ico" transform="translate(56 482) scale(1.5)">
+    <circle cx="12" cy="12" r="8.4"/>
+    <path d="M3.6 12h16.8"/>
+    <path d="M12 3.6c2.4 2.7 2.4 14.1 0 16.8"/>
+    <path d="M12 3.6c-2.4 2.7-2.4 14.1 0 16.8"/>
+  </g>
+  <text class="fName" x="98" y="494">国际化</text>
+  <text class="fWhere" x="98" y="511">Locale 中间件 · resource/translations</text>
+  <line x1="50" y1="528" x2="290" y2="528" stroke="#EEF2F7"/>
+  <text class="fItem" x="50" y="549">· Accept-Language 自动协商</text>
+  <text class="fItem" x="50" y="568">· ?lang= 显式覆盖</text>
+  <text class="fItem" x="50" y="587">· zh_CN / en 运行时语言包</text>
+  <text class="fItem" x="50" y="606">· 文档 12 种语言译本</text>
+
+  <!-- 运维 -->
+  <rect class="card" x="330" y="456" width="280" height="152" rx="14"/>
+  <rect x="350" y="476" width="36" height="36" rx="10" fill="#722ED1"/>
+  <g class="ico" transform="translate(356 482) scale(1.5)">
+    <path d="M3.5 12.5h4l2.5-6 4 12 2.5-6h4"/>
+  </g>
+  <text class="fName" x="398" y="494">运维观测</text>
+  <text class="fWhere" x="398" y="511">Health · Metrics · Docs</text>
+  <line x1="350" y1="528" x2="590" y2="528" stroke="#EEF2F7"/>
+  <text class="fItem" x="350" y="549">· GET /health 健康检查</text>
+  <text class="fItem" x="350" y="568">· GET /metrics 5 项 Prometheus 指标</text>
+  <text class="fItem" x="350" y="587">· GET /api/docs OpenAPI 文档</text>
+  <text class="fItem" x="350" y="606">· 备份脚本 + Docker + CI</text>
+
+  <!-- 安装向导 -->
+  <rect class="card" x="630" y="456" width="280" height="152" rx="14"/>
+  <rect x="650" y="476" width="36" height="36" rx="10" fill="#52C41A"/>
+  <g class="ico" transform="translate(656 482) scale(1.5)">
+    <circle cx="6" cy="7" r="2.4"/><circle cx="6" cy="15.5" r="2.4"/>
+    <path d="M11 7h9"/><path d="M11 15.5h9"/>
+  </g>
+  <text class="fName" x="698" y="494">安装向导</text>
+  <text class="fWhere" x="698" y="511">InstallController</text>
+  <line x1="650" y1="528" x2="890" y2="528" stroke="#EEF2F7"/>
+  <text class="fItem" x="650" y="549">· ① 数据库连接配置</text>
+  <text class="fItem" x="650" y="568">· ② 管理员账号设置</text>
+  <text class="fItem" x="650" y="587">· ③ 建表 + 播种权限 + 写 .env</text>
+  <text class="fItem" x="650" y="606">· runtime/install.lock 锁安装</text>
+
+  <!-- 多端客户端 -->
+  <rect class="card" x="930" y="456" width="280" height="152" rx="14"/>
+  <rect x="950" y="476" width="36" height="36" rx="10" fill="#1677FF"/>
+  <g class="ico" transform="translate(956 482) scale(1.5)">
+    <rect x="2.5" y="5" width="13" height="9.5" rx="1.6"/>
+    <path d="M6 18h6"/><path d="M9 14.5V18"/>
+    <rect x="17" y="9" width="4.5" height="10" rx="1.4"/>
+  </g>
+  <text class="fName" x="998" y="494">多端客户端</text>
+  <text class="fWhere" x="998" y="511">apps/flutter · apps/harmonyos</text>
+  <line x1="950" y1="528" x2="1190" y2="528" stroke="#EEF2F7"/>
+  <text class="fItem" x="950" y="549">· Flutter Web：PC 管理后台风格</text>
+  <text class="fItem" x="950" y="568">· GetX + ApiService 单例（Dio）</text>
+  <text class="fItem" x="950" y="587">· HarmonyOS ArkTS 手机/平板/2in1</text>
+  <text class="fItem" x="950" y="606">· 401 无感刷新 Token</text>
+
+  <!-- ===== 底部：横切能力 ===== -->
+  <rect class="card" x="30" y="628" width="580" height="200" rx="14"/>
+  <text class="panelT" x="50" y="656">横切能力 · 中间件执行链</text>
+  <g>
+    <rect x="50" y="672" width="90" height="26" rx="8" fill="#EAF2FF" stroke="#BEDAFF"/>
+    <text class="chip" x="95" y="689" text-anchor="middle" font-size="11.5">Cors</text>
+    <rect x="148" y="672" width="90" height="26" rx="8" fill="#EAF2FF" stroke="#BEDAFF"/>
+    <text class="chip" x="193" y="689" text-anchor="middle" font-size="11.5">Locale</text>
+    <rect x="246" y="672" width="130" height="26" rx="8" fill="#FFF7E6" stroke="#FFD591"/>
+    <text class="chip" x="311" y="689" text-anchor="middle" font-size="11.5">SecurityFilter</text>
+    <rect x="384" y="672" width="106" height="26" rx="8" fill="#FFF7E6" stroke="#FFD591"/>
+    <text class="chip" x="437" y="689" text-anchor="middle" font-size="11.5">RateLimit</text>
+    <text class="chipS" x="500" y="689">全局</text>
+  </g>
+  <g>
+    <rect x="50" y="712" width="90" height="26" rx="8" fill="#FFF2E8" stroke="#FFBB96"/>
+    <text class="chip" x="95" y="729" text-anchor="middle" font-size="11.5">AdminAuth</text>
+    <rect x="148" y="712" width="130" height="26" rx="8" fill="#FFF2E8" stroke="#FFBB96"/>
+    <text class="chip" x="213" y="729" text-anchor="middle" font-size="11.5">AdminPermission</text>
+    <rect x="286" y="712" width="118" height="26" rx="8" fill="#FFF2E8" stroke="#FFBB96"/>
+    <text class="chip" x="345" y="729" text-anchor="middle" font-size="11.5">OperationLog</text>
+    <text class="chipS" x="414" y="729">/admin 路由组</text>
+  </g>
+  <text class="fItem" x="50" y="768">/api/v1 与 /health 路由组走全局链后直连控制器；版本号体现在 URL 前缀。</text>
+  <text class="fItem" x="50" y="790">免认证端点：/health · /metrics · /api/docs · /.well-known/security.txt · /install</text>
+  <text class="fItem" x="50" y="812">新增请求头时需同步更新 Cors.php 与 route.php fallback 的 Allow-Headers。</text>
+
+  <rect class="card" x="630" y="628" width="580" height="200" rx="14"/>
+  <text class="panelT" x="650" y="656">数据与接口规范 · 全功能域共用</text>
+  <text class="fItem" x="650" y="684">· 表前缀 erik_；主键 BIGINT 非自增，由 Snowflake 在应用层生成</text>
+  <text class="fItem" x="650" y="708">· 每张表必备 id / created_at / updated_at；软删除表加 deleted_at</text>
+  <text class="fItem" x="650" y="732">· ID 出入参一律 hashids 加解密，不暴露真实数据库 ID</text>
+  <text class="fItem" x="650" y="756">· 统一响应 { code, message, data }，code = 0 为成功</text>
+  <text class="fItem" x="650" y="780">· 错误码：400 / 401 / 403 / 404 / 422 / 429 / 500</text>
+  <text class="fItem" x="650" y="804">· 敏感字段 encryptable 自动加解密，密文存 VARCHAR(500)</text>
+
+  <text class="t2" x="30" y="866" font-size="11.5">
+    守护者：小安 · 项目宠物 ｜ Copyright (c) 2026 erik &lt;erik@erik.xyz&gt; — https://erik.xyz
+  </text>
+</svg>

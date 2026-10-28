@@ -1,12 +1,10 @@
-> Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+> Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 >
 > [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
 
 # Открытая админ-панель (open-admin)
 
-<p align="center">
-  <img src="../../public/img/pet.svg" width="150" height="200" alt="Сяо Ань — талисман проекта open-admin">
-</p>
+![Сяо Ань — талисман проекта open-admin](../../public/img/pet.svg)
 
 Полнофункциональная система администрирования на базе **webman v2 + Flutter**: аутентификация и права RBAC, 18 уровней эшелонированной обороны, наблюдаемость Prometheus, клиенты для нескольких платформ (Flutter Web / HarmonyOS).
 
@@ -19,10 +17,7 @@
 
 ## Талисман проекта · Сяо Ань
 
-<table>
-<tr>
-<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="Сяо Ань"></td>
-<td>
+![Сяо Ань](../../public/img/pet.svg)
 
 **Сяо Ань** (Xiao An) — талисман проекта open-admin; имя взято от слов «**безопас**ность» и «админ-**панель**» — это робот-страж в форме щита.
 
@@ -40,10 +35,6 @@
 | Данный документ и схемы | Аватар проекта + карточка талисмана в правом нижнем углу схемы архитектуры |
 
 > Единый источник материала: [`public/img/pet.svg`](../../public/img/pet.svg). Изменение этого файла обновляет все перечисленные места сразу.
-
-</td>
-</tr>
-</table>
 
 **Нарисовать своего?** Спецификация иконки: основной цвет `#1677FF`, тёплая антенна `#FA8C16`, зелёный «проверено» `#52C41A`; холст `240 × 320`, щит по центру, минимальный рабочий размер 48 px.
 
@@ -175,11 +166,11 @@ open-admin/
 | Проектирование функциональности | 12 функциональных доменов → точки входа контроллеров → ключевые возможности; внизу — цепочка выполнения промежуточного ПО и спецификация интерфейсов данных | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
 | Жизненный цикл | Установка → запуск → подключение → защита → аутентификация → обработка → персистентность → аудит ответа, включая ветви исключений и жизненный цикл токена | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="../../docs/diagrams/architecture.svg" width="1100" alt="Схема архитектуры системы open-admin">
+![Схема архитектуры системы open-admin](../../docs/diagrams/architecture.svg)
 
-<img src="../../docs/diagrams/features.svg" width="1100" alt="Схема функционального проектирования open-admin">
+![Схема функционального проектирования open-admin](../../docs/diagrams/features.svg)
 
-<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="Схема жизненного цикла open-admin">
+![Схема жизненного цикла open-admin](../../docs/diagrams/lifecycle.svg)
 
 > Если нужны редактируемые схемы уровня исходников, см. [`docs/ARCHITECTURE.ru.md`](../ARCHITECTURE.ru.md) и [`docs/diagrams/`](../../docs/diagrams/) (Mermaid, можно вставить в [Mermaid Live](https://mermaid.live/) для редактирования).
 
@@ -301,7 +292,7 @@ docker-compose up -d
 - **Единый формат ответа**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0` означает успех
 - **Коды ошибок**: `400` ошибка параметров / `401` не авторизован / `403` нет прав / `404` не найдено / `422` ошибка валидации / `429` превышен лимит запросов / `500` ошибка сервера
 - **Версия API**: номер версии отражается в префиксе URL (например `/api/v1/...`), заголовки не используются
-- **Аутентификация**: `Authorization: Bearer <token>`; access_token действует 2 часа, refresh_token — 14 дней
+- **Аутентификация**: `Authorization: Bearer {token}`; access_token действует 2 часа, refresh_token — 14 дней
 - **Работа с ID**: ID в запросах/ответах — строки, зашифрованные hashids; реальные ID БД не раскрываются
 
 ## О фронтенде
@@ -377,57 +368,14 @@ docker-compose up -d
 |:---:|:---:|
 | ![WeChat](./docs/weixinpay.png "WeChat") | ![Alipay](./docs/alipay.png "Alipay") |
 
-### Донат международным переводом (кросс-граничный перевод)
+## 项目授权 / Project License
 
-**Информация о получателе**
+代码以 [MIT License](../../LICENSE) 开源。
 
-- Имя получателя: WANG KEXUN
-- Номер счёта получателя: 881015918251
+Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 
-**Банк получателя**
+- 可自由使用、复制、修改、合并、发布、分发、再许可和销售本项目代码，需保留版权与许可声明。
+- 视觉资产（项目宠物、图片、图标、表情等）不随代码的 MIT 许可开源，适用 [ASSETS-LICENSE.md](../../ASSETS-LICENSE.md)。
+- 第三方组件仍遵循其各自原有的许可证。
 
-- SWIFT-код ZA Bank: AABLHKHHXXX
-- Название банка: ZA Bank Limited
-- Код банка: 387
-- Адрес банка: Core F, Cyberport 3, 100 Cyberport Road, Hong Kong
-
-**Банк-посредник для международных переводов (при необходимости)**
-
-> Это информация о банке-посреднике (транзитном банке), а не о банке получателя. Уточните в банке отправителя, требуется ли предоставлять данные банка-посредника.
-
-- **Для переводов в гонконгских долларах, юанях и долларах США** банк-посредник — Citibank:
-  - Название банка: Citibank N.A. Hong Kong
-  - SWIFT-код: CITIHKHXXXX
-  - Код банка: 006
-  - Название отделения: Hong Kong Branch
-  - Код отделения: 391
-  - Адрес банка: Citibank Tower, Citibank Plaza, 3 Garden Road, Central, Hong Kong
-- **Для переводов в других валютах** банк-посредник — BNY Mellon:
-  - Название банка: THE BANK OF NEW YORK MELLON
-  - SWIFT-код: IRVTUS3NXXX
-  - Адрес банка: THE BANK OF NEW YORK MELLON, 240 GREENWICH STREET, NEW YORK, United States
-
-### Пожертвование в криптовалюте (Crypto Donation)
-
-Если этот проект помог вам, отсканируйте QR-код, чтобы сделать пожертвование, спасибо!
-
-| Сеть (Network) | QR-код (QR Code) | Адрес кошелька (Wallet Address) |
-|---|---|---|
-| BNB Smart Chain (BEP20) | [<img src="../../docs/coin/1.jpg" width="150" alt="BNB Smart Chain (BEP20)">](../../docs/coin/1.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Tron (TRC20) | [<img src="../../docs/coin/2.jpg" width="150" alt="Tron (TRC20)">](../../docs/coin/2.jpg) | `TEdDHWLajt1XvqtPDWmQctdrJaC3pzZZzz` |
-| Ethereum (ERC20) | [<img src="../../docs/coin/3.jpg" width="150" alt="Ethereum (ERC20)">](../../docs/coin/3.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Aptos | [<img src="../../docs/coin/4.jpg" width="150" alt="Aptos">](../../docs/coin/4.jpg) | `0x836e3780edfc3f7b2372b39e2a1a3a5d7adfaccd96c726f21cfde1b50dd68030` |
-| Plasma | [<img src="../../docs/coin/5.jpg" width="150" alt="Plasma">](../../docs/coin/5.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Polygon POS | [<img src="../../docs/coin/6.jpg" width="150" alt="Polygon POS">](../../docs/coin/6.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Solana | [<img src="../../docs/coin/7.jpg" width="150" alt="Solana">](../../docs/coin/7.jpg) | `2hfhboHdmdrYsY25XfQSsEWxq5ip4EQsR7f4AzSRMUyr` |
-| The Open Network (TON) | [<img src="../../docs/coin/8.jpg" width="150" alt="The Open Network (TON)">](../../docs/coin/8.jpg) | `UQB9kFQohzmXUir9QSSZq01iwl9aQZIDdBpNmDklljRtCoGK` |
-| Arbitrum One | [<img src="../../docs/coin/9.jpg" width="150" alt="Arbitrum One">](../../docs/coin/9.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| AVAX C-Chain | [<img src="../../docs/coin/10.jpg" width="150" alt="AVAX C-Chain">](../../docs/coin/10.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-
----
-
-## Лицензия
-
-MIT
-
-Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+**English:** The source code is released under the [MIT License](../../LICENSE). Visual assets are not covered by the MIT license and remain under [ASSETS-LICENSE.md](../../ASSETS-LICENSE.md). Third-party components retain their original licenses.

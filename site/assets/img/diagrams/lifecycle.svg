@@ -1,0 +1,161 @@
+<!--
+  Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+  open-admin · 生命周期图（安装 → 启动 → 请求处理 → 响应审计）
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 900" width="1240" height="900"
+     role="img" aria-label="open-admin 生命周期图">
+  <defs>
+    <marker id="lcArw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#A9B8CD"/>
+    </marker>
+    <marker id="lcArwSoft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#C9D6E6"/>
+    </marker>
+    <style>
+      text { font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Segoe UI", sans-serif; }
+      .t1 { font-size: 27px; font-weight: 700; fill: #16233A; }
+      .t2 { font-size: 13.5px; fill: #6B7B93; }
+      .card { fill: #FFFFFF; stroke: #E1E7F0; stroke-width: 1.5; }
+      .sTitle { font-size: 15px; font-weight: 700; fill: #16233A; }
+      .sWhere { font-size: 10.5px; fill: #9AA9BF; }
+      .sItem { font-size: 11px; fill: #5A6B84; }
+      .badge { font-size: 16px; font-weight: 700; fill: #FFFFFF; }
+      .railT { font-size: 13px; font-weight: 700; fill: #16233A; }
+      .railI { font-size: 11.5px; fill: #5A6B84; }
+      .ctr { text-anchor: middle; }
+    </style>
+  </defs>
+
+  <rect width="1240" height="900" fill="#F6F8FC"/>
+
+  <text class="t1" x="30" y="56">open-admin · 生命周期</text>
+  <text class="t2" x="30" y="82">安装 → 启动 → 接入 → 防护 → 鉴权 → 处理 → 持久化 → 响应审计（每次请求重走 ③→⑧）</text>
+
+  <!-- 闭环回边 -->
+  <path d="M 104 820 C 52 800 52 220 104 190" fill="none" stroke="#C9D6E6" stroke-width="1.6"
+        stroke-dasharray="6 6" marker-end="url(#lcArwSoft)"/>
+  <text class="t2" x="34" y="505" text-anchor="middle" font-size="10.5" fill="#9AA9BF"
+        transform="rotate(-90 34 505)">下一次请求重走 ③ → ⑧</text>
+
+  <!-- ===== ① 安装 ===== -->
+  <circle cx="150" cy="175" r="18" fill="#52C41A"/>
+  <text class="badge ctr" x="150" y="182">1</text>
+  <rect class="card" x="200" y="136" width="690" height="78" rx="12"/>
+  <text class="sTitle" x="222" y="166">安装 Install</text>
+  <text class="sWhere" x="352" y="166">InstallController · 免认证</text>
+  <text class="sItem" x="222" y="188">① 数据库连接 → ② 管理员账号 → ③ 建表 + 播种权限，并写入 .env 数据库配置</text>
+  <text class="sItem" x="222" y="205">完成后生成 runtime/install.lock 锁定安装；需重装时删除该文件即可</text>
+
+  <path d="M 150 195 L 150 245" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
+
+  <!-- ===== ② 启动 ===== -->
+  <circle cx="150" cy="265" r="18" fill="#722ED1"/>
+  <text class="badge ctr" x="150" y="272">2</text>
+  <rect class="card" x="200" y="226" width="690" height="78" rx="12"/>
+  <text class="sTitle" x="222" y="256">启动 Boot</text>
+  <text class="sWhere" x="330" y="256">php start.php start · webman v2</text>
+  <text class="sItem" x="222" y="278">加载 .env 与 config/*.php，启动 Http / Monitor 进程并常驻内存（无 FPM 冷启动）</text>
+  <text class="sItem" x="222" y="295">建立 MySQL / Redis / Elasticsearch 连接池，注册全局中间件与路由表</text>
+
+  <path d="M 150 285 L 150 335" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
+
+  <!-- ===== ③ 接入 ===== -->
+  <circle cx="150" cy="355" r="18" fill="#1677FF"/>
+  <text class="badge ctr" x="150" y="362">3</text>
+  <rect class="card" x="200" y="316" width="690" height="78" rx="12"/>
+  <text class="sTitle" x="222" y="346">接入 Ingress</text>
+  <text class="sWhere" x="340" y="346">客户端 → Nginx → webman</text>
+  <text class="sItem" x="222" y="368">Flutter Web / HarmonyOS 发起 HTTPS 请求，携带 Authorization: Bearer &lt;JWT&gt;</text>
+  <text class="sItem" x="222" y="385">Nginx 终止 TLS、Gzip、转发，config/route.php 完成 URL → 控制器匹配</text>
+
+  <path d="M 150 375 L 150 425" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
+
+  <!-- ===== ④ 防护 ===== -->
+  <circle cx="150" cy="445" r="18" fill="#FA8C16"/>
+  <text class="badge ctr" x="150" y="452">4</text>
+  <rect class="card" x="200" y="406" width="690" height="78" rx="12"/>
+  <text class="sTitle" x="222" y="436">防护 Filter</text>
+  <text class="sWhere" x="340" y="436">全局中间件链</text>
+  <text class="sItem" x="222" y="458">Cors 跨域 → Locale 语言协商 → SecurityFilter（31 种检测器 / 方法白名单，非标准方法 405）</text>
+  <text class="sItem" x="222" y="475">RateLimit：Redis Lua 滑动窗口计数，回写 X-RateLimit-Limit / Remaining / Reset</text>
+
+  <path d="M 150 465 L 150 515" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
+
+  <!-- ===== ⑤ 鉴权 ===== -->
+  <circle cx="150" cy="535" r="18" fill="#FA541C"/>
+  <text class="badge ctr" x="150" y="542">5</text>
+  <rect class="card" x="200" y="496" width="690" height="78" rx="12"/>
+  <text class="sTitle" x="222" y="526">鉴权 Auth</text>
+  <text class="sWhere" x="322" y="526">/admin 路由组</text>
+  <text class="sItem" x="222" y="548">AdminAuth：JWT 验签 + Token 黑名单比对，失败返回 401 Unauthorized</text>
+  <text class="sItem" x="222" y="565">AdminPermission：读 Redis 权限缓存（TTL 60s）比对 method.path，越权返回 403 Forbidden</text>
+
+  <path d="M 150 555 L 150 605" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
+
+  <!-- ===== ⑥ 处理 ===== -->
+  <circle cx="150" cy="625" r="18" fill="#13C2C2"/>
+  <text class="badge ctr" x="150" y="632">6</text>
+  <rect class="card" x="200" y="586" width="690" height="78" rx="12"/>
+  <text class="sTitle" x="222" y="616">处理 Handle</text>
+  <text class="sWhere" x="332" y="616">Controller</text>
+  <text class="sItem" x="222" y="638">参数校验（失败 422）→ hashids 解码 ID → 业务逻辑 → Model 查询</text>
+  <text class="sItem" x="222" y="655">敏感操作需二次密码确认；未捕获异常统一 500 兜底并脱敏堆栈</text>
+
+  <path d="M 150 645 L 150 695" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
+
+  <!-- ===== ⑦ 持久化 ===== -->
+  <circle cx="150" cy="715" r="18" fill="#1890FF"/>
+  <text class="badge ctr" x="150" y="722">7</text>
+  <rect class="card" x="200" y="676" width="690" height="78" rx="12"/>
+  <text class="sTitle" x="222" y="706">持久化 Persist</text>
+  <text class="sWhere" x="342" y="706">Model / Service</text>
+  <text class="sItem" x="222" y="728">Snowflake 生成 BIGINT 主键 → encryptable 敏感字段加解密 → MySQL 落库</text>
+  <text class="sItem" x="222" y="745">webman-scout 同步 Elasticsearch；Redis 写缓存 / 验证码 / 权限 / 限流计数</text>
+
+  <path d="M 150 735 L 150 785" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
+
+  <!-- ===== ⑧ 响应与审计 ===== -->
+  <circle cx="150" cy="805" r="18" fill="#52C41A"/>
+  <text class="badge ctr" x="150" y="812">8</text>
+  <rect class="card" x="200" y="766" width="690" height="78" rx="12"/>
+  <text class="sTitle" x="222" y="796">响应与审计 Respond</text>
+  <text class="sWhere" x="382" y="796">统一响应 + OperationLog</text>
+  <text class="sItem" x="222" y="818">encodeId（hashids）→ { code, message, data } → 回写限流响应头 → 客户端 200</text>
+  <text class="sItem" x="222" y="835">OperationLog 落库：操作人 / 动作 / IP / 来源端（8 平台）/ 耗时 / 结果</text>
+
+  <!-- ===== 右栏 ===== -->
+  <rect class="card" x="920" y="136" width="280" height="340" rx="14" stroke="#FFD8BF"/>
+  <text class="railT" x="942" y="166" fill="#AD4E00">异常与边界分支</text>
+  <g class="railI">
+    <text x="942" y="194">401　未登录 / Token 过期 → 客户端无感刷新</text>
+    <text x="942" y="222">403　无权限 → RBAC 拒绝并记录审计</text>
+    <text x="942" y="250">405　非标准 HTTP 方法 → SecurityFilter</text>
+    <text x="942" y="278">422　参数校验失败 → 返回字段级错误</text>
+    <text x="942" y="306">429　触发限流 → 附 Retry-After 头</text>
+    <text x="942" y="334">500　服务器异常 → 脱敏返回 + 日志堆栈</text>
+    <text x="942" y="376">账号锁定：连续 5 次登录失败，锁定 15 分钟</text>
+    <text x="942" y="404">IP 升级黑名单：命中检测器达阈值自动封禁</text>
+    <text x="942" y="446" fill="#8C9AAF">异常分支同样会流经 ⑧ 审计环节</text>
+  </g>
+  <line x1="942" y1="360" x2="1178" y2="360" stroke="#EEF2F7"/>
+
+  <rect class="card" x="920" y="492" width="280" height="352" rx="14" stroke="#BEDAFF"/>
+  <text class="railT" x="942" y="522" fill="#1677FF">令牌与会话生命周期</text>
+  <g class="railI">
+    <text x="942" y="550">access_token：有效期 2 小时</text>
+    <text x="942" y="578">refresh_token：有效期 14 天</text>
+    <text x="942" y="606">刷新：POST /api/v1/auth/refresh</text>
+    <text x="942" y="634">登出：Token 写入 Redis 黑名单</text>
+    <text x="942" y="662">并发会话：同一用户上限 3 个有效 Token</text>
+    <text x="942" y="690">超限策略：最旧 Token 立即拉黑</text>
+    <text x="942" y="718">权限缓存：Redis TTL 60 秒</text>
+    <text x="942" y="746">限流窗口：60 次 / 分钟 / IP / 路由</text>
+    <text x="942" y="774">登录限流 10 次/分 · 注册限流 5 次/分</text>
+    <text x="942" y="816" fill="#8C9AAF">令牌无状态，黑名单与计数集中在 Redis</text>
+  </g>
+  <line x1="942" y1="790" x2="1178" y2="790" stroke="#EEF2F7"/>
+
+  <text class="t2" x="30" y="872" font-size="11.5">
+    守护者：小安 · 项目宠物（守 ④ 防护与 ⑤ 鉴权两道关卡） ｜ Copyright (c) 2026 erik &lt;erik@erik.xyz&gt; — https://erik.xyz
+  </text>
+</svg>

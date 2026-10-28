@@ -1,12 +1,10 @@
-> Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+> Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 >
 > [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
 
 # Open Admin (open-admin)
 
-<p align="center">
-  <img src="../../public/img/pet.svg" width="150" height="200" alt="Xiao An — mascotte du projet open-admin">
-</p>
+![Xiao An — mascotte du projet open-admin](../../public/img/pet.svg)
 
 Système de panneau d'administration full-stack basé sur **webman v2 + Flutter** : authentification et permissions RBAC, 18 couches de défense en profondeur, observabilité Prometheus, clients multi-plateformes (Flutter Web / HarmonyOS).
 
@@ -37,10 +35,7 @@ Système de panneau d'administration full-stack basé sur **webman v2 + Flutter*
 
 ## Mascotte du projet · Xiao An
 
-<table>
-<tr>
-<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="Xiao An"></td>
-<td>
+![Xiao An](../../public/img/pet.svg)
 
 **Xiao An** (小安) est la mascotte du projet open-admin, tirée de « **安**全 » (sécurité) et de « 管理后**台** » (panneau d'administration) — un rover gardien en forme de bouclier.
 
@@ -58,10 +53,6 @@ Système de panneau d'administration full-stack basé sur **webman v2 + Flutter*
 | Cette documentation et les diagrammes | Avatar du projet + carte de la mascotte en bas à droite des diagrammes d'architecture |
 
 > Source unique de la ressource : [`public/img/pet.svg`](../../public/img/pet.svg). La modifier met simultanément à jour tous les emplacements ci-dessus.
-
-</td>
-</tr>
-</table>
 
 **Envie de la dessiner vous-même ?** Spécifications de l'icône : couleur principale `#1677FF`, antenne chaude `#FA8C16`, vert de validation `#52C41A` ; toile `240 × 320`, bouclier centré, taille minimale utilisable 48 px.
 
@@ -174,11 +165,11 @@ Les trois diagrammes sont des **SVG entièrement écrits à la main** (sans scri
 | Conception fonctionnelle | 12 domaines fonctionnels → points d'entrée des contrôleurs → capacités clés, en bas la chaîne d'exécution des middlewares et les spécifications d'interface de données | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
 | Cycle de vie | Installation → démarrage → accès → protection → authentification → traitement → persistance → audit de la réponse, avec les branches d'exception et le cycle de vie des jetons | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="../../docs/diagrams/architecture.svg" width="1100" alt="Diagramme de conception de l'architecture système open-admin">
+![Diagramme de conception de l'architecture système open-admin](../../docs/diagrams/architecture.svg)
 
-<img src="../../docs/diagrams/features.svg" width="1100" alt="Diagramme de conception fonctionnelle open-admin">
+![Diagramme de conception fonctionnelle open-admin](../../docs/diagrams/features.svg)
 
-<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="Diagramme du cycle de vie open-admin">
+![Diagramme du cycle de vie open-admin](../../docs/diagrams/lifecycle.svg)
 
 > Pour des diagrammes éditables au niveau source, voir [`docs/ARCHITECTURE.fr.md`](../ARCHITECTURE.fr.md) et [`docs/diagrams/`](../../docs/diagrams/) (Mermaid, à coller dans [Mermaid Live](https://mermaid.live/) pour édition).
 
@@ -300,7 +291,7 @@ La référence API complète (format de réponse unifié, codes d'erreur, détai
 - **Format de réponse unifié** : `{ "code": 0, "message": "success", "data": {...} }`, `code=0` signifie succès
 - **Codes d'erreur** : `400` erreur de paramètre / `401` non connecté / `403` accès refusé / `404` introuvable / `422` échec de validation / `429` limitation de débit / `500` erreur serveur
 - **Version API** : le numéro de version est porté par le préfixe d'URL (par exemple `/api/v1/...`), et non par un en-tête de requête
-- **Authentification** : `Authorization: Bearer <token>` ; access_token valide 2 heures, refresh_token 14 jours
+- **Authentification** : `Authorization: Bearer {token}` ; access_token valide 2 heures, refresh_token 14 jours
 - **Traitement des ID** : les ID des requêtes/réponses sont des chaînes chiffrées hashids, les ID réels de la base de données ne sont jamais exposés
 
 ## Notes sur le frontend
@@ -376,57 +367,14 @@ En production, reportez-vous à `docs/nginx-security.conf` pour le renforcement 
 |:---:|:---:|
 | ![微信](./docs/weixinpay.png "微信") | ![支付宝](./docs/alipay.png "支付宝") |
 
-### Dons par virement international (transfert transfrontalier)
+## 项目授权 / Project License
 
-**Informations sur le bénéficiaire**
+代码以 [MIT License](../../LICENSE) 开源。
 
-- Nom du bénéficiaire : WANG KEXUN
-- Numéro de compte du bénéficiaire : 881015918251
+Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 
-**Banque du bénéficiaire**
+- 可自由使用、复制、修改、合并、发布、分发、再许可和销售本项目代码，需保留版权与许可声明。
+- 视觉资产（项目宠物、图片、图标、表情等）不随代码的 MIT 许可开源，适用 [ASSETS-LICENSE.md](../../ASSETS-LICENSE.md)。
+- 第三方组件仍遵循其各自原有的许可证。
 
-- ZA Bank SWIFT Code : AABLHKHHXXX
-- Nom de la banque : ZA Bank Limited
-- Code banque : 387
-- Adresse de la banque : Core F, Cyberport 3, 100 Cyberport Road, Hong Kong
-
-**Banque correspondante pour le virement transfrontalier (si nécessaire)**
-
-> Il s'agit des informations de la banque correspondante (banque intermédiaire) pour le virement transfrontalier, et non de celles de la banque du bénéficiaire. Renseignez-vous auprès de votre banque émettrice pour savoir si les informations de la banque correspondante sont requises.
-
-- **Pour les versements en dollars de Hong Kong, en yuans renminbi et en dollars américains**, la banque correspondante est Citibank :
-  - Nom de la banque : Citibank N.A. Hong Kong
-  - SWIFT Code : CITIHKHXXXX
-  - Code banque : 006
-  - Nom de la succursale : Hong Kong Branch
-  - Code succursale : 391
-  - Adresse de la banque : Citibank Tower, Citibank Plaza, 3 Garden Road, Central, Hong Kong
-- **Pour les versements dans d'autres devises**, la banque correspondante est BNY Mellon :
-  - Nom de la banque : THE BANK OF NEW YORK MELLON
-  - SWIFT Code : IRVTUS3NXXX
-  - Adresse de la banque : THE BANK OF NEW YORK MELLON, 240 GREENWICH STREET, NEW YORK, United States
-
-### Don en cryptomonnaie (Crypto Donation)
-
-Si ce projet vous est utile, scannez le code QR pour faire un don, merci !
-
-| Réseau (Network) | Code QR (QR Code) | Adresse du portefeuille (Wallet Address) |
-|---|---|---|
-| BNB Smart Chain (BEP20) | [<img src="../../docs/coin/1.jpg" width="150" alt="BNB Smart Chain (BEP20)">](../../docs/coin/1.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Tron (TRC20) | [<img src="../../docs/coin/2.jpg" width="150" alt="Tron (TRC20)">](../../docs/coin/2.jpg) | `TEdDHWLajt1XvqtPDWmQctdrJaC3pzZZzz` |
-| Ethereum (ERC20) | [<img src="../../docs/coin/3.jpg" width="150" alt="Ethereum (ERC20)">](../../docs/coin/3.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Aptos | [<img src="../../docs/coin/4.jpg" width="150" alt="Aptos">](../../docs/coin/4.jpg) | `0x836e3780edfc3f7b2372b39e2a1a3a5d7adfaccd96c726f21cfde1b50dd68030` |
-| Plasma | [<img src="../../docs/coin/5.jpg" width="150" alt="Plasma">](../../docs/coin/5.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Polygon POS | [<img src="../../docs/coin/6.jpg" width="150" alt="Polygon POS">](../../docs/coin/6.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Solana | [<img src="../../docs/coin/7.jpg" width="150" alt="Solana">](../../docs/coin/7.jpg) | `2hfhboHdmdrYsY25XfQSsEWxq5ip4EQsR7f4AzSRMUyr` |
-| The Open Network (TON) | [<img src="../../docs/coin/8.jpg" width="150" alt="The Open Network (TON)">](../../docs/coin/8.jpg) | `UQB9kFQohzmXUir9QSSZq01iwl9aQZIDdBpNmDklljRtCoGK` |
-| Arbitrum One | [<img src="../../docs/coin/9.jpg" width="150" alt="Arbitrum One">](../../docs/coin/9.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| AVAX C-Chain | [<img src="../../docs/coin/10.jpg" width="150" alt="AVAX C-Chain">](../../docs/coin/10.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-
----
-
-## License
-
-MIT
-
-Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+**English:** The source code is released under the [MIT License](../../LICENSE). Visual assets are not covered by the MIT license and remain under [ASSETS-LICENSE.md](../../ASSETS-LICENSE.md). Third-party components retain their original licenses.

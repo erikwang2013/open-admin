@@ -16,6 +16,7 @@ services:
       - "${NGINX_SSL_PORT:-443}:443"
     volumes:
       - ./public:/app/public:ro
+      - ./site:/app/site:ro
       - ./docs/nginx-security.conf:/etc/nginx/conf.d/security.conf:ro
     depends_on:
       - app

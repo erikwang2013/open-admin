@@ -1,12 +1,10 @@
-> Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+> Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 >
 > [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
 
 # 오픈 관리 백엔드 (open-admin)
 
-<p align="center">
-  <img src="../../public/img/pet.svg" width="150" height="200" alt="샤오안 — open-admin 프로젝트 펫">
-</p>
+![샤오안 — open-admin 프로젝트 펫](../../public/img/pet.svg)
 
 **webman v2 + Flutter** 기반의 풀스택 관리 백엔드 시스템: 인증과 RBAC 권한, 18계층 심층 방어, Prometheus 관측성, 멀티 플랫폼 클라이언트 (Flutter Web / HarmonyOS).
 
@@ -19,10 +17,7 @@
 
 ## 프로젝트 펫 · 샤오안
 
-<table>
-<tr>
-<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="샤오안"></td>
-<td>
+![샤오안](../../public/img/pet.svg)
 
 **샤오안**(Xiao An)은 open-admin의 프로젝트 펫으로, 「**안**전(安全)」과 「관리 백엔드(管理后台)」에서 이름을 딴 방패형 수호 로봇입니다.
 
@@ -40,10 +35,6 @@
 | 본 문서와 설계도 | 프로젝트 아바타 + 아키텍처 다이어그램 우측 하단의 펫 카드 |
 
 > 소재 단일 소스: [`public/img/pet.svg`](../../public/img/pet.svg). 이 파일을 수정하면 위 모든 위치가 동시에 갱신됩니다.
-
-</td>
-</tr>
-</table>
 
 **직접 그려보시겠어요?** 아이콘 규격: 주 색상 `#1677FF`, 웜 색상 안테나 `#FA8C16`, 검증 그린 `#52C41A`; 캔버스 `240 × 320`, 방패형 중앙 배치, 최소 사용 크기 48 px.
 
@@ -167,11 +158,11 @@ open-admin/
 | 기능 설계 | 12개 기능 영역 → 컨트롤러 진입점 → 핵심 역량, 하단에 미들웨어 실행 체인과 데이터 인터페이스 규격 | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
 | 수명 주기 | 설치 → 시작 → 접속 → 보호 → 인증 → 처리 → 영속화 → 응답 감사, 예외 분기와 토큰 수명 주기 포함 | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="../../docs/diagrams/architecture.svg" width="1100" alt="open-admin 시스템 아키텍처 설계도">
+![open-admin 시스템 아키텍처 설계도](../../docs/diagrams/architecture.svg)
 
-<img src="../../docs/diagrams/features.svg" width="1100" alt="open-admin 기능 설계도">
+![open-admin 기능 설계도](../../docs/diagrams/features.svg)
 
-<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="open-admin 수명 주기 도표">
+![open-admin 수명 주기 도표](../../docs/diagrams/lifecycle.svg)
 
 > 편집 가능한 소스 수준 다이어그램이 필요하면 [`docs/ARCHITECTURE.md`](../ARCHITECTURE.ko.md)와 [`docs/diagrams/`](../../docs/diagrams/)(Mermaid, [Mermaid Live](https://mermaid.live/)에 붙여넣어 편집 가능)를 참조하세요.
 
@@ -293,7 +284,7 @@ docker-compose up -d
 - **통합 응답 형식**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0`은 성공을 의미
 - **오류 코드**: `400` 파라미터 오류 / `401` 미로그인 / `403` 권한 없음 / `404` 존재하지 않음 / `422` 검증 실패 / `429` 레이트 리밋 / `500` 서버 오류
 - **API 버전**: 버전 번호는 URL 접두사에 포함 (예: `/api/v1/...`), 요청 헤더는 사용하지 않음
-- **인증**: `Authorization: Bearer <token>`; access_token 유효기간 2시간, refresh_token 14일
+- **인증**: `Authorization: Bearer {token}`; access_token 유효기간 2시간, refresh_token 14일
 - **ID 처리**: 요청/응답의 ID는 hashids 암호화 문자열로, 실제 DB ID가 노출되지 않음
 
 ## 프론트엔드 설명
@@ -369,57 +360,14 @@ GitHub Actions 지속적 통합 파이프라인: `.github/workflows/ci.yml`
 |:---:|:---:|
 | ![위챗](./docs/weixinpay.png "위챗") | ![알리페이](./docs/alipay.png "알리페이") |
 
-### 해외 송금 후원 (국경 간 송금)
+## 项目授权 / Project License
 
-**수취인 정보**
+代码以 [MIT License](../../LICENSE) 开源。
 
-- 수취인 성명: WANG KEXUN
-- 수취 계좌번호: 881015918251
+Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 
-**수취 은행**
+- 可自由使用、复制、修改、合并、发布、分发、再许可和销售本项目代码，需保留版权与许可声明。
+- 视觉资产（项目宠物、图片、图标、表情等）不随代码的 MIT 许可开源，适用 [ASSETS-LICENSE.md](../../ASSETS-LICENSE.md)。
+- 第三方组件仍遵循其各自原有的许可证。
 
-- ZA Bank SWIFT Code: AABLHKHHXXX
-- 은행명: ZA Bank Limited
-- 은행 번호: 387
-- 은행 주소: Core F, Cyberport 3, 100 Cyberport Road, Hong Kong
-
-**국경 간 송금 대리 은행 (필요 시)**
-
-> 이 정보는 국경 간 송금 대리 은행(중계 은행) 정보이며, 수취 은행 정보가 아닙니다. 송금 은행에 국경 간 송금 대리 은행 정보 제공이 필요한지 문의하시기 바랍니다.
-
-- **홍콩 달러, 위안화, 미국 달러 송금 시** 대리 은행은 Citibank입니다:
-  - 은행명: Citibank N.A. Hong Kong
-  - SWIFT Code: CITIHKHXXXX
-  - 은행 번호: 006
-  - 지점명: Hong Kong Branch
-  - 지점 번호: 391
-  - 은행 주소: Citibank Tower, Citibank Plaza, 3 Garden Road, Central, Hong Kong
-- **기타 통화 송금 시** 대리 은행은 BNY Mellon입니다:
-  - 은행명: THE BANK OF NEW YORK MELLON
-  - SWIFT Code: IRVTUS3NXXX
-  - 은행 주소: THE BANK OF NEW YORK MELLON, 240 GREENWICH STREET, NEW YORK, United States
-
-### 암호화폐 후원 (Crypto Donation)
-
-이 프로젝트가 도움이 되셨다면, QR 코드를 스캔하여 후원해 주세요. 감사합니다!
-
-| 네트워크 (Network) | QR 코드 (QR Code) | 지갑 주소 (Wallet Address) |
-|---|---|---|
-| BNB Smart Chain (BEP20) | [<img src="../../docs/coin/1.jpg" width="150" alt="BNB Smart Chain (BEP20)">](../../docs/coin/1.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Tron (TRC20) | [<img src="../../docs/coin/2.jpg" width="150" alt="Tron (TRC20)">](../../docs/coin/2.jpg) | `TEdDHWLajt1XvqtPDWmQctdrJaC3pzZZzz` |
-| Ethereum (ERC20) | [<img src="../../docs/coin/3.jpg" width="150" alt="Ethereum (ERC20)">](../../docs/coin/3.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Aptos | [<img src="../../docs/coin/4.jpg" width="150" alt="Aptos">](../../docs/coin/4.jpg) | `0x836e3780edfc3f7b2372b39e2a1a3a5d7adfaccd96c726f21cfde1b50dd68030` |
-| Plasma | [<img src="../../docs/coin/5.jpg" width="150" alt="Plasma">](../../docs/coin/5.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Polygon POS | [<img src="../../docs/coin/6.jpg" width="150" alt="Polygon POS">](../../docs/coin/6.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Solana | [<img src="../../docs/coin/7.jpg" width="150" alt="Solana">](../../docs/coin/7.jpg) | `2hfhboHdmdrYsY25XfQSsEWxq5ip4EQsR7f4AzSRMUyr` |
-| The Open Network (TON) | [<img src="../../docs/coin/8.jpg" width="150" alt="The Open Network (TON)">](../../docs/coin/8.jpg) | `UQB9kFQohzmXUir9QSSZq01iwl9aQZIDdBpNmDklljRtCoGK` |
-| Arbitrum One | [<img src="../../docs/coin/9.jpg" width="150" alt="Arbitrum One">](../../docs/coin/9.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| AVAX C-Chain | [<img src="../../docs/coin/10.jpg" width="150" alt="AVAX C-Chain">](../../docs/coin/10.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-
----
-
-## 라이선스
-
-MIT
-
-Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+**English:** The source code is released under the [MIT License](../../LICENSE). Visual assets are not covered by the MIT license and remain under [ASSETS-LICENSE.md](../../ASSETS-LICENSE.md). Third-party components retain their original licenses.

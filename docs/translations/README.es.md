@@ -1,12 +1,10 @@
-> Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+> Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 >
 > [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
 
 # Panel de administración abierto (open-admin)
 
-<p align="center">
-  <img src="../../public/img/pet.svg" width="150" height="200" alt="Xiao An — mascota del proyecto open-admin">
-</p>
+![Xiao An — mascota del proyecto open-admin](../../public/img/pet.svg)
 
 Sistema de panel de administración full-stack basado en **webman v2 + Flutter**: autenticación y permisos RBAC, defensa en profundidad de 18 capas, observabilidad con Prometheus y clientes multiplataforma (Flutter Web / HarmonyOS).
 
@@ -19,10 +17,7 @@ Sistema de panel de administración full-stack basado en **webman v2 + Flutter**
 
 ## Mascota del proyecto · Xiao An
 
-<table>
-<tr>
-<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="Xiao An"></td>
-<td>
+![Xiao An](../../public/img/pet.svg)
 
 **Xiao An** (小安) es la mascota del proyecto open-admin, nombre tomado de «**安**全» (seguridad) y «管理后**台**» (panel de administración): un robot guardián con forma de escudo.
 
@@ -40,10 +35,6 @@ Sistema de panel de administración full-stack basado en **webman v2 + Flutter**
 | Este documento y los diagramas de diseño | Avatar del proyecto + tarjeta de la mascota en la esquina inferior derecha del diagrama de arquitectura |
 
 > Fuente única del material: [`../../public/img/pet.svg`](../../public/img/pet.svg). Modificarlo actualiza a la vez todas las ubicaciones anteriores.
-
-</td>
-</tr>
-</table>
 
 **¿Dibujar uno propio?** Especificación del icono: color principal `#1677FF`, antena cálida `#FA8C16`, verde de validación `#52C41A`; lienzo `240 × 320`, escudo centrado, tamaño mínimo utilizable 48 px.
 
@@ -175,11 +166,11 @@ Los tres diagramas son **SVG escritos íntegramente a mano** (sin scripts, sin d
 | Diseño de funciones | 12 dominios funcionales → entrada de controladores → capacidades clave, con la cadena de ejecución de middleware y la especificación de interfaces de datos en la parte inferior | [`../../docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
 | Ciclo de vida | Instalación → arranque → acceso → protección → autenticación → procesamiento → persistencia → auditoría de respuesta, con ramas de excepción y ciclo de vida del token | [`../../docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="../../docs/diagrams/architecture.svg" width="1100" alt="Diagrama de arquitectura del sistema de open-admin">
+![Diagrama de arquitectura del sistema de open-admin](../../docs/diagrams/architecture.svg)
 
-<img src="../../docs/diagrams/features.svg" width="1100" alt="Diagrama de diseño de funciones de open-admin">
+![Diagrama de diseño de funciones de open-admin](../../docs/diagrams/features.svg)
 
-<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="Diagrama de ciclo de vida de open-admin">
+![Diagrama de ciclo de vida de open-admin](../../docs/diagrams/lifecycle.svg)
 
 > Si necesita diagramas editables a nivel de código fuente, consulte [`../../docs/ARCHITECTURE.es.md`](../../docs/ARCHITECTURE.es.md) y [`../../docs/diagrams/`](../../docs/diagrams/) (Mermaid, se puede pegar en [Mermaid Live](https://mermaid.live/) para editarlo).
 
@@ -301,7 +292,7 @@ La referencia completa de la API (formato de respuesta unificado, códigos de er
 - **Formato de respuesta unificado**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0` significa éxito
 - **Códigos de error**: `400` error de parámetros / `401` no autenticado / `403` sin permiso / `404` no existe / `422` error de validación / `429` límite de peticiones / `500` error del servidor
 - **Versión de la API**: el número de versión se refleja en el prefijo de la URL (por ejemplo `/api/v1/...`); no se usan cabeceras de petición
-- **Autenticación**: `Authorization: Bearer <token>`; el access_token tiene una validez de 2 horas y el refresh_token de 14 días
+- **Autenticación**: `Authorization: Bearer {token}`; el access_token tiene una validez de 2 horas y el refresh_token de 14 días
 - **Tratamiento de IDs**: los IDs de las peticiones/respuestas son cadenas cifradas con hashids; no se exponen los IDs reales de la base de datos
 
 ## Notas sobre el frontend
@@ -377,57 +368,14 @@ Para el despliegue en producción, consulte `docs/nginx-security.conf` para el e
 |:---:|:---:|
 | ![WeChat](./docs/weixinpay.png "WeChat") | ![Alipay](./docs/alipay.png "Alipay") |
 
-### Donación por transferencia internacional (remesa transfronteriza)
+## 项目授权 / Project License
 
-**Información del beneficiario**
+代码以 [MIT License](../../LICENSE) 开源。
 
-- Nombre del beneficiario: WANG KEXUN
-- Número de cuenta del beneficiario: 881015918251
+Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 
-**Banco receptor**
+- 可自由使用、复制、修改、合并、发布、分发、再许可和销售本项目代码，需保留版权与许可声明。
+- 视觉资产（项目宠物、图片、图标、表情等）不随代码的 MIT 许可开源，适用 [ASSETS-LICENSE.md](../../ASSETS-LICENSE.md)。
+- 第三方组件仍遵循其各自原有的许可证。
 
-- Código SWIFT de ZA Bank: AABLHKHHXXX
-- Nombre del banco: ZA Bank Limited
-- Código bancario: 387
-- Dirección del banco: Core F, Cyberport 3, 100 Cyberport Road, Hong Kong
-
-**Banco intermediario para remesas transfronterizas (si es necesario)**
-
-> Esta es la información del banco intermediario (banco corresponsal) para remesas transfronterizas; no es la información del banco receptor. Consulte a su banco remitente si es necesario proporcionar los datos del banco intermediario.
-
-- **Para transferencias en dólares de Hong Kong (HKD), renminbi (RMB) y dólares estadounidenses (USD)**, el banco intermediario es Citibank:
-  - Nombre del banco: Citibank N.A. Hong Kong
-  - Código SWIFT: CITIHKHXXXX
-  - Código bancario: 006
-  - Nombre de la sucursal: Hong Kong Branch
-  - Código de sucursal: 391
-  - Dirección del banco: Citibank Tower, Citibank Plaza, 3 Garden Road, Central, Hong Kong
-- **Para transferencias en otras divisas**, el banco intermediario es BNY Mellon:
-  - Nombre del banco: THE BANK OF NEW YORK MELLON
-  - Código SWIFT: IRVTUS3NXXX
-  - Dirección del banco: THE BANK OF NEW YORK MELLON, 240 GREENWICH STREET, NEW YORK, United States
-
-### Donación en criptomonedas (Crypto Donation)
-
-Si este proyecto te resulta útil, escanea el código QR para donar, ¡gracias!
-
-| Red (Network) | Código QR (QR Code) | Dirección de billetera (Wallet Address) |
-|---|---|---|
-| BNB Smart Chain (BEP20) | [<img src="../../docs/coin/1.jpg" width="150" alt="BNB Smart Chain (BEP20)">](../../docs/coin/1.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Tron (TRC20) | [<img src="../../docs/coin/2.jpg" width="150" alt="Tron (TRC20)">](../../docs/coin/2.jpg) | `TEdDHWLajt1XvqtPDWmQctdrJaC3pzZZzz` |
-| Ethereum (ERC20) | [<img src="../../docs/coin/3.jpg" width="150" alt="Ethereum (ERC20)">](../../docs/coin/3.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Aptos | [<img src="../../docs/coin/4.jpg" width="150" alt="Aptos">](../../docs/coin/4.jpg) | `0x836e3780edfc3f7b2372b39e2a1a3a5d7adfaccd96c726f21cfde1b50dd68030` |
-| Plasma | [<img src="../../docs/coin/5.jpg" width="150" alt="Plasma">](../../docs/coin/5.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Polygon POS | [<img src="../../docs/coin/6.jpg" width="150" alt="Polygon POS">](../../docs/coin/6.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Solana | [<img src="../../docs/coin/7.jpg" width="150" alt="Solana">](../../docs/coin/7.jpg) | `2hfhboHdmdrYsY25XfQSsEWxq5ip4EQsR7f4AzSRMUyr` |
-| The Open Network (TON) | [<img src="../../docs/coin/8.jpg" width="150" alt="The Open Network (TON)">](../../docs/coin/8.jpg) | `UQB9kFQohzmXUir9QSSZq01iwl9aQZIDdBpNmDklljRtCoGK` |
-| Arbitrum One | [<img src="../../docs/coin/9.jpg" width="150" alt="Arbitrum One">](../../docs/coin/9.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| AVAX C-Chain | [<img src="../../docs/coin/10.jpg" width="150" alt="AVAX C-Chain">](../../docs/coin/10.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-
----
-
-## Licencia
-
-MIT
-
-Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+**English:** The source code is released under the [MIT License](../../LICENSE). Visual assets are not covered by the MIT license and remain under [ASSETS-LICENSE.md](../../ASSETS-LICENSE.md). Third-party components retain their original licenses.

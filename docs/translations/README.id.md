@@ -1,12 +1,10 @@
-> Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+> Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 >
 > [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
 
 # Panel Admin Terbuka (open-admin)
 
-<p align="center">
-  <img src="../../public/img/pet.svg" width="150" height="200" alt="Xiao An — hewan peliharaan proyek open-admin">
-</p>
+![Xiao An — hewan peliharaan proyek open-admin](../../public/img/pet.svg)
 
 Sistem panel admin full-stack berbasis **webman v2 + Flutter**: autentikasi dan hak akses RBAC, 18 lapis pertahanan berlapis, observabilitas Prometheus, klien multi-platform (Flutter Web / HarmonyOS).
 
@@ -19,10 +17,7 @@ Sistem panel admin full-stack berbasis **webman v2 + Flutter**: autentikasi dan 
 
 ## Hewan Peliharaan Proyek · Xiao An (小安)
 
-<table>
-<tr>
-<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="Xiao An"></td>
-<td>
+![Xiao An](../../public/img/pet.svg)
 
 **Xiao An (小安)** adalah hewan peliharaan proyek open-admin, diambil dari 「**安**全」(keamanan) dan 「管理后**台**」(panel admin) — seekor robot penjaga berbentuk perisai.
 
@@ -40,10 +35,6 @@ Sistem panel admin full-stack berbasis **webman v2 + Flutter**: autentikasi dan 
 | Dokumentasi ini dan diagram desain | Avatar proyek + kartu hewan peliharaan di sudut kanan bawah diagram arsitektur |
 
 > Sumber aset tunggal: [`public/img/pet.svg`](../../public/img/pet.svg). Memodifikasinya sekaligus memperbarui semua lokasi di atas.
-
-</td>
-</tr>
-</table>
 
 **Ingin menggambar sendiri?** Spesifikasi ikon: warna utama `#1677FF`, antena hangat `#FA8C16`, hijau verifikasi `#52C41A`; kanvas `240 × 320`, perisai di tengah, ukuran minimum yang dapat digunakan 48 px.
 
@@ -175,11 +166,11 @@ Ketiga diagram tersebut adalah **SVG tulis tangan murni** (tanpa skrip, tanpa de
 | Desain Fitur | 12 domain fitur → titik masuk kontroler → kemampuan kunci, di bagian bawah terdapat rantai eksekusi middleware dan spesifikasi antarmuka data | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
 | Siklus Hidup | Instalasi → Startup → Akses → Perlindungan → Autentikasi → Pemrosesan → Persistensi → Audit respons, termasuk cabang pengecualian dan siklus hidup token | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="../../docs/diagrams/architecture.svg" width="1100" alt="Diagram desain arsitektur sistem open-admin">
+![Diagram desain arsitektur sistem open-admin](../../docs/diagrams/architecture.svg)
 
-<img src="../../docs/diagrams/features.svg" width="1100" alt="Diagram desain fitur open-admin">
+![Diagram desain fitur open-admin](../../docs/diagrams/features.svg)
 
-<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="Diagram siklus hidup open-admin">
+![Diagram siklus hidup open-admin](../../docs/diagrams/lifecycle.svg)
 
 > Jika memerlukan diagram tingkat kode sumber yang dapat diedit, lihat [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) dan [`docs/diagrams/`](../../docs/diagrams/) (Mermaid, dapat ditempel ke [Mermaid Live](https://mermaid.live/) untuk diedit).
 
@@ -301,7 +292,7 @@ Referensi API lengkap (format respons terpadu, kode kesalahan, detail semua endp
 - **Format respons terpadu**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0` berarti sukses
 - **Kode kesalahan**: `400` kesalahan parameter / `401` belum login / `403` tanpa izin / `404` tidak ditemukan / `422` gagal validasi / `429` rate limit / `500` kesalahan server
 - **Versi API**: Nomor versi tercermin pada prefiks URL (seperti `/api/v1/...`), tidak menggunakan header permintaan
-- **Autentikasi**: `Authorization: Bearer <token>`; masa berlaku access_token 2 jam, refresh_token 14 hari
+- **Autentikasi**: `Authorization: Bearer {token}`; masa berlaku access_token 2 jam, refresh_token 14 hari
 - **Penanganan ID**: ID pada permintaan/respons adalah string terenkripsi hashids, tidak mengekspos ID basis data asli
 
 ## Catatan Frontend
@@ -377,57 +368,14 @@ Untuk deployment produksi, lihat `docs/nginx-security.conf` untuk konfigurasi pe
 |:---:|:---:|
 | ![WeChat](./docs/weixinpay.png "WeChat") | ![Alipay](./docs/alipay.png "Alipay") |
 
-### Donasi Transfer Global (Remitansi Lintas Negara)
+## 项目授权 / Project License
 
-**Informasi Penerima**
+代码以 [MIT License](../../LICENSE) 开源。
 
-- Nama penerima: WANG KEXUN
-- Nomor rekening penerima: 881015918251
+Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 
-**Bank Penerima**
+- 可自由使用、复制、修改、合并、发布、分发、再许可和销售本项目代码，需保留版权与许可声明。
+- 视觉资产（项目宠物、图片、图标、表情等）不随代码的 MIT 许可开源，适用 [ASSETS-LICENSE.md](../../ASSETS-LICENSE.md)。
+- 第三方组件仍遵循其各自原有的许可证。
 
-- Kode SWIFT ZA Bank: AABLHKHHXXX
-- Nama bank: ZA Bank Limited
-- Kode bank: 387
-- Alamat bank: Core F, Cyberport 3, 100 Cyberport Road, Hong Kong
-
-**Bank Perantara Remitansi Lintas Negara (jika diperlukan)**
-
-> Ini adalah informasi bank perantara (bank koresponden) untuk remitansi lintas negara, bukan informasi bank penerima. Silakan tanyakan kepada bank pengirim apakah informasi bank perantara diperlukan.
-
-- **Untuk kiriman HKD, CNY, dan USD**, bank perantaranya adalah Citibank:
-  - Nama bank: Citibank N.A. Hong Kong
-  - Kode SWIFT: CITIHKHXXXX
-  - Kode bank: 006
-  - Nama cabang: Hong Kong Branch
-  - Kode cabang: 391
-  - Alamat bank: Citibank Tower, Citibank Plaza, 3 Garden Road, Central, Hong Kong
-- **Untuk mata uang lainnya**, bank perantaranya adalah BNY Mellon:
-  - Nama bank: THE BANK OF NEW YORK MELLON
-  - Kode SWIFT: IRVTUS3NXXX
-  - Alamat bank: THE BANK OF NEW YORK MELLON, 240 GREENWICH STREET, NEW YORK, United States
-
-### Donasi Kripto (Crypto Donation)
-
-Jika proyek ini membantu Anda, silakan pindai kode QR untuk berdonasi, terima kasih!
-
-| Jaringan (Network) | Kode QR (QR Code) | Alamat dompet (Wallet Address) |
-|---|---|---|
-| BNB Smart Chain (BEP20) | [<img src="../../docs/coin/1.jpg" width="150" alt="BNB Smart Chain (BEP20)">](../../docs/coin/1.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Tron (TRC20) | [<img src="../../docs/coin/2.jpg" width="150" alt="Tron (TRC20)">](../../docs/coin/2.jpg) | `TEdDHWLajt1XvqtPDWmQctdrJaC3pzZZzz` |
-| Ethereum (ERC20) | [<img src="../../docs/coin/3.jpg" width="150" alt="Ethereum (ERC20)">](../../docs/coin/3.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Aptos | [<img src="../../docs/coin/4.jpg" width="150" alt="Aptos">](../../docs/coin/4.jpg) | `0x836e3780edfc3f7b2372b39e2a1a3a5d7adfaccd96c726f21cfde1b50dd68030` |
-| Plasma | [<img src="../../docs/coin/5.jpg" width="150" alt="Plasma">](../../docs/coin/5.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Polygon POS | [<img src="../../docs/coin/6.jpg" width="150" alt="Polygon POS">](../../docs/coin/6.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Solana | [<img src="../../docs/coin/7.jpg" width="150" alt="Solana">](../../docs/coin/7.jpg) | `2hfhboHdmdrYsY25XfQSsEWxq5ip4EQsR7f4AzSRMUyr` |
-| The Open Network (TON) | [<img src="../../docs/coin/8.jpg" width="150" alt="The Open Network (TON)">](../../docs/coin/8.jpg) | `UQB9kFQohzmXUir9QSSZq01iwl9aQZIDdBpNmDklljRtCoGK` |
-| Arbitrum One | [<img src="../../docs/coin/9.jpg" width="150" alt="Arbitrum One">](../../docs/coin/9.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| AVAX C-Chain | [<img src="../../docs/coin/10.jpg" width="150" alt="AVAX C-Chain">](../../docs/coin/10.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-
----
-
-## Lisensi
-
-MIT
-
-Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+**English:** The source code is released under the [MIT License](../../LICENSE). Visual assets are not covered by the MIT license and remain under [ASSETS-LICENSE.md](../../ASSETS-LICENSE.md). Third-party components retain their original licenses.

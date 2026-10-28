@@ -1,12 +1,10 @@
-> Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+> Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 >
 > [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
 
 # 开放管理后台 (open-admin)
 
-<p align="center">
-  <img src="../../public/img/pet.svg" width="150" height="200" alt="小安 — open-admin のプロジェクトペット">
-</p>
+![小安 — open-admin のプロジェクトペット](../../public/img/pet.svg)
 
 **webman v2 + Flutter** ベースのフルスタック管理バックエンドシステム：認証と RBAC 権限、18 層の多層防御、Prometheus による可観測性、マルチクライアント（Flutter Web / HarmonyOS）。
 
@@ -19,10 +17,7 @@
 
 ## プロジェクトペット · 小安
 
-<table>
-<tr>
-<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="小安"></td>
-<td>
+![小安](../../public/img/pet.svg)
 
 **小安**（Xiao An）は open-admin のプロジェクトペットで、「**安**全」と「管理後**台**」に由来します——盾形のガードロボットです。
 
@@ -40,10 +35,6 @@
 | 本ドキュメントと設計図 | プロジェクトアバター + アーキテクチャ図右下のペットカード |
 
 > 素材の単一ソース：[`public/img/pet.svg`](../../public/img/pet.svg)。これを変更すれば上記すべての箇所が同時に更新されます。
-
-</td>
-</tr>
-</table>
 
 **自分で描く？** アイコン規約：メインカラー `#1677FF`、暖色アンテナ `#FA8C16`、検証グリーン `#52C41A`、キャンバス `240 × 320`、盾形を中央に配置、最小使用サイズ 48 px。
 
@@ -175,11 +166,11 @@ open-admin/
 | 機能設計 | 12 の機能ドメイン → コントローラー入口 → 主要機能、下部にミドルウェア実行チェーンとデータインターフェース仕様 | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
 | ライフサイクル | インストール → 起動 → 接続 → 防御 → 認証・認可 → 処理 → 永続化 → レスポンス監査、異常分岐とトークンライフサイクルを含む | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="../../docs/diagrams/architecture.svg" width="1100" alt="open-admin システムアーキテクチャ設計図">
+![open-admin システムアーキテクチャ設計図](../../docs/diagrams/architecture.svg)
 
-<img src="../../docs/diagrams/features.svg" width="1100" alt="open-admin 機能設計図">
+![open-admin 機能設計図](../../docs/diagrams/features.svg)
 
-<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="open-admin ライフサイクル図">
+![open-admin ライフサイクル図](../../docs/diagrams/lifecycle.svg)
 
 > 編集可能なソースレベルの図が必要な場合は、[`docs/ARCHITECTURE.md`](../ARCHITECTURE.ja.md) と [`docs/diagrams/`](../../docs/diagrams/)（Mermaid、[Mermaid Live](https://mermaid.live/) に貼り付けて編集可能）を参照してください。
 
@@ -301,7 +292,7 @@ docker-compose up -d
 - **統一レスポンス形式**: `{ "code": 0, "message": "success", "data": {...} }`、`code=0` は成功を意味
 - **エラーコード**: `400` パラメータエラー / `401` 未ログイン / `403` 権限なし / `404` 存在しない / `422` 検証失敗 / `429` レート制限 / `500` サーバーエラー
 - **API バージョン**: バージョン番号は URL プレフィックスに含まれます（例 `/api/v1/...`）、リクエストヘッダーは使用しません
-- **認証**: `Authorization: Bearer <token>`；access_token の有効期限は 2 時間、refresh_token は 14 日
+- **認証**: `Authorization: Bearer {token}`；access_token の有効期限は 2 時間、refresh_token は 14 日
 - **ID 処理**: リクエスト/レスポンス内の ID は hashids 暗号化文字列、実際のデータベース ID を公開しない
 
 ## フロントエンド説明
@@ -377,57 +368,14 @@ GitHub Actions 継続的インテグレーションパイプライン：`.github
 |:---:|:---:|
 | ![微信](./docs/weixinpay.png "微信") | ![支付宝](./docs/alipay.png "支付宝") |
 
-### 海外送金による投げ銭（クロスボーダー送金）
+## 项目授权 / Project License
 
-**受取人情報**
+代码以 [MIT License](../../LICENSE) 开源。
 
-- 受取人名：WANG KEXUN
-- 受取口座番号：881015918251
+Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 
-**受取銀行**
+- 可自由使用、复制、修改、合并、发布、分发、再许可和销售本项目代码，需保留版权与许可声明。
+- 视觉资产（项目宠物、图片、图标、表情等）不随代码的 MIT 许可开源，适用 [ASSETS-LICENSE.md](../../ASSETS-LICENSE.md)。
+- 第三方组件仍遵循其各自原有的许可证。
 
-- ZA Bank SWIFT Code：AABLHKHHXXX
-- 銀行名：ZA Bank Limited
-- 銀行番号：387
-- 銀行住所：Core F, Cyberport 3, 100 Cyberport Road, Hong Kong
-
-**クロスボーダー送金代理銀行（必要な場合）**
-
-> これはクロスボーダー送金の代理銀行（中継銀行）情報であり、受取銀行の情報ではありません。代理銀行情報の提供が必要かどうかは送金銀行にお問い合わせください。
-
-- **香港ドル・人民元・米ドルの送金**、代理銀行は Citibank：
-  - 銀行名：Citibank N.A. Hong Kong
-  - SWIFT Code：CITIHKHXXXX
-  - 銀行番号：006
-  - 支店名：Hong Kong Branch
-  - 支店番号：391
-  - 銀行住所：Citibank Tower, Citibank Plaza, 3 Garden Road, Central, Hong Kong
-- **その他の通貨の送金**、代理銀行は BNY Mellon：
-  - 銀行名：THE BANK OF NEW YORK MELLON
-  - SWIFT Code：IRVTUS3NXXX
-  - 銀行住所：THE BANK OF NEW YORK MELLON, 240 GREENWICH STREET, NEW YORK, United States
-
-### 仮想通貨の寄付 (Crypto Donation)
-
-このプロジェクトがお役に立ったら、QRコードをスキャンして寄付してください。ありがとうございます！
-
-| ネットワーク (Network) | QRコード (QR Code) | ウォレットアドレス (Wallet Address) |
-|---|---|---|
-| BNB Smart Chain (BEP20) | [<img src="../../docs/coin/1.jpg" width="150" alt="BNB Smart Chain (BEP20)">](../../docs/coin/1.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Tron (TRC20) | [<img src="../../docs/coin/2.jpg" width="150" alt="Tron (TRC20)">](../../docs/coin/2.jpg) | `TEdDHWLajt1XvqtPDWmQctdrJaC3pzZZzz` |
-| Ethereum (ERC20) | [<img src="../../docs/coin/3.jpg" width="150" alt="Ethereum (ERC20)">](../../docs/coin/3.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Aptos | [<img src="../../docs/coin/4.jpg" width="150" alt="Aptos">](../../docs/coin/4.jpg) | `0x836e3780edfc3f7b2372b39e2a1a3a5d7adfaccd96c726f21cfde1b50dd68030` |
-| Plasma | [<img src="../../docs/coin/5.jpg" width="150" alt="Plasma">](../../docs/coin/5.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Polygon POS | [<img src="../../docs/coin/6.jpg" width="150" alt="Polygon POS">](../../docs/coin/6.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Solana | [<img src="../../docs/coin/7.jpg" width="150" alt="Solana">](../../docs/coin/7.jpg) | `2hfhboHdmdrYsY25XfQSsEWxq5ip4EQsR7f4AzSRMUyr` |
-| The Open Network (TON) | [<img src="../../docs/coin/8.jpg" width="150" alt="The Open Network (TON)">](../../docs/coin/8.jpg) | `UQB9kFQohzmXUir9QSSZq01iwl9aQZIDdBpNmDklljRtCoGK` |
-| Arbitrum One | [<img src="../../docs/coin/9.jpg" width="150" alt="Arbitrum One">](../../docs/coin/9.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| AVAX C-Chain | [<img src="../../docs/coin/10.jpg" width="150" alt="AVAX C-Chain">](../../docs/coin/10.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-
----
-
-## License
-
-MIT
-
-Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+**English:** The source code is released under the [MIT License](../../LICENSE). Visual assets are not covered by the MIT license and remain under [ASSETS-LICENSE.md](../../ASSETS-LICENSE.md). Third-party components retain their original licenses.

@@ -1,0 +1,4 @@
+# Copyright (c) 2026 erik <erik@erik.xyz> https://erik.xyz
+# 站点由 Nginx/独立静态服务器发布，不进入源码发布包
+site export-ignore
+site/** export-ignore

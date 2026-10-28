@@ -1,10 +1,8 @@
 # 开放管理后台 (open-admin) — ओपन एडमिन पैनल
 
-<p align="center">
-  <img src="../../public/img/pet.svg" width="150" height="200" alt="शियाओ आन — open-admin प्रोजेक्ट पेट">
-</p>
+![शियाओ आन — open-admin प्रोजेक्ट पेट](../../public/img/pet.svg)
 
-> Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+> Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 >
 > [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
 
@@ -17,10 +15,7 @@
 
 ## प्रोजेक्ट पेट · शियाओ आन (小安)
 
-<table>
-<tr>
-<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="शियाओ आन"></td>
-<td>
+![शियाओ आन](../../public/img/pet.svg)
 
 **शियाओ आन** (Xiao An) open-admin का प्रोजेक्ट पेट है, जिसका नाम「**安**全」(सुरक्षा) और「管理后**台**」(एडमिन पैनल) से लिया गया है——एक शील्ड-आकार का गार्ड रोबोट।
 
@@ -38,10 +33,6 @@
 | यह दस्तावेज़ और डिज़ाइन चित्र | प्रोजेक्ट अवतार + आर्किटेक्चर चित्र के निचले-दाएँ कोने में पेट कार्ड |
 
 > सामग्री का एकमात्र स्रोत: [`public/img/pet.svg`](../../public/img/pet.svg)। इसे बदलने पर ऊपर बताए गए सभी स्थान एक साथ अपडेट हो जाते हैं।
-
-</td>
-</tr>
-</table>
 
 **खुद बनाना है?** आइकन मानक: मुख्य रंग `#1677FF`, गर्म एंटेना `#FA8C16`, सत्यापन हरा `#52C41A`; कैनवास `240 × 320`, शील्ड केंद्र में, न्यूनतम उपयोगी आकार 48 px।
 
@@ -173,11 +164,11 @@ open-admin/
 | फ़ीचर डिज़ाइन | 12 फ़ीचर डोमेन → कंट्रोलर प्रवेश → मुख्य क्षमताएँ, नीचे मिडलवेयर निष्पादन चेन और डेटा इंटरफ़ेस मानक | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
 | लाइफसाइकल | इंस्टॉल → स्टार्टअप → एक्सेस → सुरक्षा → प्रमाणीकरण → प्रोसेसिंग → पर्सिस्टेंस → रिस्पॉन्स ऑडिट, अपवाद शाखाओं और टोकन लाइफसाइकल सहित | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="../../docs/diagrams/architecture.svg" width="1100" alt="open-admin सिस्टम आर्किटेक्चर डिज़ाइन चित्र">
+![open-admin सिस्टम आर्किटेक्चर डिज़ाइन चित्र](../../docs/diagrams/architecture.svg)
 
-<img src="../../docs/diagrams/features.svg" width="1100" alt="open-admin फ़ीचर डिज़ाइन चित्र">
+![open-admin फ़ीचर डिज़ाइन चित्र](../../docs/diagrams/features.svg)
 
-<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="open-admin लाइफसाइकल चित्र">
+![open-admin लाइफसाइकल चित्र](../../docs/diagrams/lifecycle.svg)
 
 > संपादन-योग्य स्रोत-स्तरीय चित्र चाहिए तो [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) और [`docs/diagrams/`](../../docs/diagrams/) देखें（Mermaid, [Mermaid Live](https://mermaid.live/) में पेस्ट करके संपादित कर सकते हैं）。
 
@@ -299,7 +290,7 @@ docker-compose up -d
 - **एकीकृत रिस्पॉन्स फॉर्मेट**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0` सफलता दर्शाता है
 - **एरर कोड**: `400` पैरामीटर त्रुटि / `401` लॉगिन नहीं / `403` अनुमति नहीं / `404` मौजूद नहीं / `422` सत्यापन विफल / `429` रेट लिमिट / `500` सर्वर त्रुटि
 - **API संस्करण**: संस्करण संख्या URL प्रीफ़िक्स में व्यक्त होती है (जैसे `/api/v1/...`), रिक्वेस्ट हेडर का उपयोग नहीं होता
-- **प्रमाणीकरण**: `Authorization: Bearer <token>`; access_token की वैधता 2 घंटे, refresh_token 14 दिन
+- **प्रमाणीकरण**: `Authorization: Bearer {token}`; access_token की वैधता 2 घंटे, refresh_token 14 दिन
 - **ID हैंडलिंग**: रिक्वेस्ट/रिस्पॉन्स में ID hashids एन्क्रिप्टेड स्ट्रिंग होती है, असली डेटाबेस ID उजागर नहीं होती
 
 ## फ्रंटएंड विवरण
@@ -375,57 +366,14 @@ GitHub Actions निरंतर इंटीग्रेशन पाइपल
 |:---:|:---:|
 | ![वीचैट](./docs/weixinpay.png "वीचैट") | ![अलीपे](./docs/alipay.png "अलीपे") |
 
-### वैश्विक ट्रांसफर टिप (क्रॉस-बॉर्डर रेमिटेंस)
+## 项目授权 / Project License
 
-**प्राप्तकर्ता की जानकारी**
+代码以 [MIT License](../../LICENSE) 开源。
 
-- प्राप्तकर्ता का नाम: WANG KEXUN
-- प्राप्तकर्ता खाता संख्या: 881015918251
+Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 
-**प्राप्तकर्ता बैंक**
+- 可自由使用、复制、修改、合并、发布、分发、再许可和销售本项目代码，需保留版权与许可声明。
+- 视觉资产（项目宠物、图片、图标、表情等）不随代码的 MIT 许可开源，适用 [ASSETS-LICENSE.md](../../ASSETS-LICENSE.md)。
+- 第三方组件仍遵循其各自原有的许可证。
 
-- ZA Bank SWIFT Code: AABLHKHHXXX
-- बैंक का नाम: ZA Bank Limited
-- बैंक कोड: 387
-- बैंक का पता: Core F, Cyberport 3, 100 Cyberport Road, Hong Kong
-
-**क्रॉस-बॉर्डर रेमिटेंस कॉरस्पॉन्डेंट बैंक (यदि आवश्यक हो)**
-
-> यह क्रॉस-बॉर्डर रेमिटेंस के लिए कॉरस्पॉन्डेंट (मध्यस्थ) बैंक की जानकारी है, प्राप्तकर्ता बैंक की नहीं। कृपया अपने रेमिटेंस बैंक से पूछें कि क्या क्रॉस-बॉर्डर रेमिटेंस कॉरस्पॉन्डेंट बैंक की जानकारी देना आवश्यक है।
-
-- **हांगकांग डॉलर, चीनी युआन और अमेरिकी डॉलर में रेमिटेंस** के लिए, कॉरस्पॉन्डेंट बैंक Citibank है:
-  - बैंक का नाम: Citibank N.A. Hong Kong
-  - SWIFT Code: CITIHKHXXXX
-  - बैंक कोड: 006
-  - शाखा का नाम: Hong Kong Branch
-  - शाखा कोड: 391
-  - बैंक का पता: Citibank Tower, Citibank Plaza, 3 Garden Road, Central, Hong Kong
-- **अन्य मुद्राओं में रेमिटेंस** के लिए, कॉरस्पॉन्डेंट बैंक BNY Mellon है:
-  - बैंक का नाम: THE BANK OF NEW YORK MELLON
-  - SWIFT Code: IRVTUS3NXXX
-  - बैंक का पता: THE BANK OF NEW YORK MELLON, 240 GREENWICH STREET, NEW YORK, United States
-
-### क्रिप्टो दान (Crypto Donation)
-
-यदि यह प्रोजेक्ट आपके काम आए, तो दान करने के लिए QR कोड स्कैन करें, धन्यवाद!
-
-| नेटवर्क (Network) | QR कोड (QR Code) | वॉलेट पता (Wallet Address) |
-|---|---|---|
-| BNB Smart Chain (BEP20) | [<img src="../../docs/coin/1.jpg" width="150" alt="BNB Smart Chain (BEP20)">](../../docs/coin/1.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Tron (TRC20) | [<img src="../../docs/coin/2.jpg" width="150" alt="Tron (TRC20)">](../../docs/coin/2.jpg) | `TEdDHWLajt1XvqtPDWmQctdrJaC3pzZZzz` |
-| Ethereum (ERC20) | [<img src="../../docs/coin/3.jpg" width="150" alt="Ethereum (ERC20)">](../../docs/coin/3.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Aptos | [<img src="../../docs/coin/4.jpg" width="150" alt="Aptos">](../../docs/coin/4.jpg) | `0x836e3780edfc3f7b2372b39e2a1a3a5d7adfaccd96c726f21cfde1b50dd68030` |
-| Plasma | [<img src="../../docs/coin/5.jpg" width="150" alt="Plasma">](../../docs/coin/5.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Polygon POS | [<img src="../../docs/coin/6.jpg" width="150" alt="Polygon POS">](../../docs/coin/6.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Solana | [<img src="../../docs/coin/7.jpg" width="150" alt="Solana">](../../docs/coin/7.jpg) | `2hfhboHdmdrYsY25XfQSsEWxq5ip4EQsR7f4AzSRMUyr` |
-| The Open Network (TON) | [<img src="../../docs/coin/8.jpg" width="150" alt="The Open Network (TON)">](../../docs/coin/8.jpg) | `UQB9kFQohzmXUir9QSSZq01iwl9aQZIDdBpNmDklljRtCoGK` |
-| Arbitrum One | [<img src="../../docs/coin/9.jpg" width="150" alt="Arbitrum One">](../../docs/coin/9.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| AVAX C-Chain | [<img src="../../docs/coin/10.jpg" width="150" alt="AVAX C-Chain">](../../docs/coin/10.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-
----
-
-## License
-
-MIT
-
-Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+**English:** The source code is released under the [MIT License](../../LICENSE). Visual assets are not covered by the MIT license and remain under [ASSETS-LICENSE.md](../../ASSETS-LICENSE.md). Third-party components retain their original licenses.

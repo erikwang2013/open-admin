@@ -1,12 +1,10 @@
-> Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+> Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 >
 > [中文](../../README.md) | [English](README.en.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md)
 
 # Offenes Admin-Panel (open-admin)
 
-<p align="center">
-  <img src="../../public/img/pet.svg" width="150" height="200" alt="Xiao An — Projekt-Maskottchen von open-admin">
-</p>
+![Xiao An — Projekt-Maskottchen von open-admin](../../public/img/pet.svg)
 
 Ein Full-Stack-Administrations-Backend auf Basis von **webman v2 + Flutter**: Authentifizierung und RBAC-Berechtigungen, 18-stufige Tiefenverteidigung, Prometheus-Observability, Multi-Client-Unterstützung (Flutter Web / HarmonyOS).
 
@@ -19,10 +17,7 @@ Ein Full-Stack-Administrations-Backend auf Basis von **webman v2 + Flutter**: Au
 
 ## Projekt-Maskottchen · Xiao An
 
-<table>
-<tr>
-<td width="170"><img src="../../public/img/pet.svg" width="150" height="200" alt="Xiao An"></td>
-<td>
+![Xiao An](../../public/img/pet.svg)
 
 **Xiao An** (小安) ist das Projekt-Maskottchen von open-admin, abgeleitet aus „**安**全" (Sicherheit) und „管理后**台**" (Admin-Panel) — ein schildförmiger Wachroboter.
 
@@ -40,10 +35,6 @@ Ein Full-Stack-Administrations-Backend auf Basis von **webman v2 + Flutter**: Au
 | Dieses Dokument und die Design-Diagramme | Projekt-Avatar + Maskottchen-Karte unten rechts im Architekturdiagramm |
 
 > Einzige Materialquelle: [`public/img/pet.svg`](../../public/img/pet.svg). Eine Änderung daran aktualisiert zugleich alle oben genannten Stellen.
-
-</td>
-</tr>
-</table>
 
 **Selbst zeichnen?** Icon-Spezifikation: Hauptfarbe `#1677FF`, warme Antenne `#FA8C16`, Prüfgrün `#52C41A`; Zeichenfläche `240 × 320`, Schild zentriert, kleinste nutzbare Größe 48 px.
 
@@ -175,11 +166,11 @@ Alle drei Diagramme sind **reine handgeschriebene SVGs** (keine Skripte, keine e
 | Funktionsdesign | 12 Funktionsbereiche → Controller-Einstieg → Kernfähigkeiten, unten die Middleware-Ausführungskette und die Daten-Interface-Spezifikation | [`docs/diagrams/features.svg`](../../docs/diagrams/features.svg) |
 | Lebenszyklus | Installation → Start → Anbindung → Schutz → Authentifizierung → Verarbeitung → Persistenz → Response-Audit, inkl. Ausnahmezweigen und Token-Lebenszyklus | [`docs/diagrams/lifecycle.svg`](../../docs/diagrams/lifecycle.svg) |
 
-<img src="../../docs/diagrams/architecture.svg" width="1100" alt="open-admin Systemarchitektur-Design">
+![open-admin Systemarchitektur-Design](../../docs/diagrams/architecture.svg)
 
-<img src="../../docs/diagrams/features.svg" width="1100" alt="open-admin Funktionsdesign">
+![open-admin Funktionsdesign](../../docs/diagrams/features.svg)
 
-<img src="../../docs/diagrams/lifecycle.svg" width="1100" alt="open-admin Lebenszyklusdiagramm">
+![open-admin Lebenszyklusdiagramm](../../docs/diagrams/lifecycle.svg)
 
 > Für editierbare Diagramme auf Quelltext-Ebene siehe [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) und [`docs/diagrams/`](../../docs/diagrams/) (Mermaid, kann in den [Mermaid Live](https://mermaid.live/) Editor eingefügt werden).
 
@@ -300,26 +291,22 @@ Die vollständige API-Referenz (einheitliches Antwortformat, Fehlercodes, alle E
 - **Einheitliches Antwortformat**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0` bedeutet Erfolg
 - **Fehlercodes**: `400` Parameterfehler / `401` nicht angemeldet / `403` keine Berechtigung / `404` nicht vorhanden / `422` Validierungsfehler / `429` Rate-Limit / `500` Serverfehler
 - **API-Version**: Die Versionsnummer erscheint im URL-Präfix (z. B. `/api/v1/...`), nicht in einem Request-Header
-- **Authentifizierung**: `Authorization: Bearer <token>`; access_token gültig 2 Stunden, refresh_token 14 Tage
+- **Authentifizierung**: `Authorization: Bearer {token}`; access_token gültig 2 Stunden, refresh_token 14 Tage
 - **ID-Behandlung**: IDs in Requests/Responses sind hashids-verschlüsselte Zeichenketten, echte Datenbank-IDs werden nicht preisgegeben
 
 ## Frontend-Hinweise
 
-### Flutter-Admin-Panel (PC-Stil)
+## 项目授权 / Project License
 
-- **Layout**: Sidebar (einklappbar 64px/240px) + Topbar + Inhaltsbereich, responsive drei Breakpoints (Handy/Tablet/Desktop)
-- **Seiten**: Login, Dashboard, Benutzerverwaltung, Rollen & Berechtigungen, Systemkonfiguration, Aktionsprotokoll, Persönlicher Bereich
-- **State-Management**: GetX (`ApiService`-Singleton + `AuthService`-Token-Persistierung)
-- **Dashboard**: Statistik-Karten, Trend-Liniendiagramm (fl_chart), Kreisdiagramm, letzte Aktionsprotokolle
-- **Export**: Excel/PDF-Export, PDF enthält nicht entfernbaren Copyright-Hinweis
-- **Massenoperationen**: Mehrfachauswahl-Massenlöschung, Massenaktivierung/-deaktivierung
-- **Theme**: Material 3 mit hellem/dunklem Theme
+代码以 [MIT License](../../LICENSE) 开源。
 
-### HarmonyOS-Mobilclient
+Copyright (c) 2026 erik, erik@erik.xyz, https://erik.xyz
 
-- **Seiten**: Login, Dashboard, Benutzerliste/-details, Persönlicher Bereich
-- **Authentifizierung**: JWT Bearer + nahtlose automatische Token-Erneuerung bei 401; bei fehlgeschlagener Erneuerung automatische Weiterleitung zur Login-Seite
-- **Speicher**: Token wird über AppStorage verwaltet
+- 可自由使用、复制、修改、合并、发布、分发、再许可和销售本项目代码，需保留版权与许可声明。
+- 视觉资产（项目宠物、图片、图标、表情等）不随代码的 MIT 许可开源，适用 [ASSETS-LICENSE.md](../../ASSETS-LICENSE.md)。
+- 第三方组件仍遵循其各自原有的许可证。
+
+**English:** The source code is released under the [MIT License](../../LICENSE). Visual assets are not covered by the MIT license and remain under [ASSETS-LICENSE.md](../../ASSETS-LICENSE.md). Third-party components retain their original licenses.
 
 ## Entwicklungsrichtlinien
 
@@ -375,58 +362,3 @@ Für Produktions-Deployments siehe `docs/nginx-security.conf` zur Härtung des R
 | WeChat | Alipay |
 |:---:|:---:|
 | ![WeChat](./docs/weixinpay.png "WeChat") | ![Alipay](./docs/alipay.png "Alipay") |
-
-### Weltweite Spende per Überweisung (grenzüberschreitende Überweisung)
-
-**Empfängerinformationen**
-
-- Name des Empfängers: WANG KEXUN
-- Kontonummer des Empfängers: 881015918251
-
-**Empfängerbank**
-
-- ZA Bank SWIFT-Code: AABLHKHHXXX
-- Bankname: ZA Bank Limited
-- Bankleitzahl: 387
-- Bankadresse: Core F, Cyberport 3, 100 Cyberport Road, Hong Kong
-
-**Korrespondenzbank für grenzüberschreitende Überweisungen (falls erforderlich)**
-
-> Dies sind die Informationen der Korrespondenzbank (Zwischenbank) für grenzüberschreitende Überweisungen, nicht die der Empfängerbank. Fragen Sie Ihre Überweisungsbank, ob die Angabe der Korrespondenzbank erforderlich ist.
-
-- **Für Einzahlungen in Hongkong-Dollar, Renminbi und US-Dollar** ist die Korrespondenzbank Citibank:
-  - Bankname: Citibank N.A. Hong Kong
-  - SWIFT-Code: CITIHKHXXXX
-  - Bankleitzahl: 006
-  - Filialname: Hong Kong Branch
-  - Filialleitzahl: 391
-  - Bankadresse: Citibank Tower, Citibank Plaza, 3 Garden Road, Central, Hong Kong
-- **Für Einzahlungen in anderen Währungen** ist die Korrespondenzbank BNY Mellon:
-  - Bankname: THE BANK OF NEW YORK MELLON
-  - SWIFT-Code: IRVTUS3NXXX
-  - Bankadresse: THE BANK OF NEW YORK MELLON, 240 GREENWICH STREET, NEW YORK, United States
-
-### Krypto-Spenden (Crypto Donation)
-
-Wenn dieses Projekt Ihnen hilft, scannen Sie gerne den QR-Code, um zu spenden. Vielen Dank!
-
-| Netzwerk (Network) | QR-Code (QR Code) | Wallet-Adresse (Wallet Address) |
-|---|---|---|
-| BNB Smart Chain (BEP20) | [<img src="../../docs/coin/1.jpg" width="150" alt="BNB Smart Chain (BEP20)">](../../docs/coin/1.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Tron (TRC20) | [<img src="../../docs/coin/2.jpg" width="150" alt="Tron (TRC20)">](../../docs/coin/2.jpg) | `TEdDHWLajt1XvqtPDWmQctdrJaC3pzZZzz` |
-| Ethereum (ERC20) | [<img src="../../docs/coin/3.jpg" width="150" alt="Ethereum (ERC20)">](../../docs/coin/3.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Aptos | [<img src="../../docs/coin/4.jpg" width="150" alt="Aptos">](../../docs/coin/4.jpg) | `0x836e3780edfc3f7b2372b39e2a1a3a5d7adfaccd96c726f21cfde1b50dd68030` |
-| Plasma | [<img src="../../docs/coin/5.jpg" width="150" alt="Plasma">](../../docs/coin/5.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Polygon POS | [<img src="../../docs/coin/6.jpg" width="150" alt="Polygon POS">](../../docs/coin/6.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| Solana | [<img src="../../docs/coin/7.jpg" width="150" alt="Solana">](../../docs/coin/7.jpg) | `2hfhboHdmdrYsY25XfQSsEWxq5ip4EQsR7f4AzSRMUyr` |
-| The Open Network (TON) | [<img src="../../docs/coin/8.jpg" width="150" alt="The Open Network (TON)">](../../docs/coin/8.jpg) | `UQB9kFQohzmXUir9QSSZq01iwl9aQZIDdBpNmDklljRtCoGK` |
-| Arbitrum One | [<img src="../../docs/coin/9.jpg" width="150" alt="Arbitrum One">](../../docs/coin/9.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-| AVAX C-Chain | [<img src="../../docs/coin/10.jpg" width="150" alt="AVAX C-Chain">](../../docs/coin/10.jpg) | `0x355d429f97511897ccb4e271ec888205f9ab6629` |
-
----
-
-## Lizenz
-
-MIT
-
-Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
