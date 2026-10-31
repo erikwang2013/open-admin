@@ -302,11 +302,6 @@ done
 # ---------- 生成缺失值（已有值不变，--regenerate / --rotate-db / --reset-admin 强制换新） ----------
 
 JWT_SECRET_KEY="$(pick "$APP_ENV" JWT_SECRET_KEY "$(rand_hex 32)" "$REGENERATE")"
-if [ "$REGENERATE" = 1 ]; then
-    JWT_SECRET="$JWT_SECRET_KEY"
-else
-    JWT_SECRET="$(pick "$APP_ENV" JWT_SECRET "$JWT_SECRET_KEY" 0)"
-fi
 HASHIDS_SALT="$(pick "$APP_ENV" HASHIDS_SALT "$(rand_hex 16)" "$REGENERATE")"
 HASHIDS_ALT_SALT="$(pick "$APP_ENV" HASHIDS_ALT_SALT "$(rand_hex 16)" "$REGENERATE")"
 ENCRYPTION_KEY="$(pick "$APP_ENV" ENCRYPTION_KEY "$(rand_hex 16)" "$REGENERATE")"
@@ -422,7 +417,6 @@ APP_URL=https://$DOMAIN
 
 # ── JWT（HS256，64 位十六进制） ──
 JWT_SECRET_KEY=$JWT_SECRET_KEY
-JWT_SECRET=$JWT_SECRET
 JWT_ALGORITHM=HS256
 JWT_ISSUER=open-admin
 JWT_AUDIENCE=open-admin

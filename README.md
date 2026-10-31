@@ -228,7 +228,7 @@ cp .env.example .env
 
 | 环境变量 | 说明 | 默认值 |
 |---------|------|--------|
-| `JWT_SECRET_KEY` | JWT 签名密钥（`config/jwt.php` 实际读取；`JWT_SECRET` 为旧别名，建议保持同值） | `open-admin-jwt-secret-change-in-production` |
+| `JWT_SECRET_KEY` | JWT 签名密钥（`config/jwt.php` 读取） | `open-admin-jwt-secret-change-in-production` |
 | `HASHIDS_SALT` | Hashids 盐值 | `open-admin-hashids-salt-2026` |
 | `ENCRYPTION_KEY` | API 加密密钥 | 32 字节默认值 |
 | `SNOWFLAKE_DATACENTER_ID` | 数据中心 ID (0-31) | `1` |

@@ -374,7 +374,7 @@ Data flow: Page ← DataService ← ApiService (JWT Bearer) ← HTTP ← webman
 ### 6.2 Key Management
 
 ```
-JWT_SECRET          → 环境变量注入，64位随机字符串
+JWT_SECRET_KEY      → 环境变量注入，64位随机字符串
 HASHIDS_SALT        → 唯一盐值，泄漏后需全局更换
 ENCRYPTION_KEY      → API 传输加密密钥，32字节
 ENCRYPTABLE_KEY     → DB 存储加密密钥，与传输密钥独立

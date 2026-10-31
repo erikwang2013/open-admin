@@ -177,7 +177,7 @@ Key environment variables:
 
 | Variable | Description | Default |
 |---------|-------------|---------|
-| `JWT_SECRET_KEY` | JWT signing key (read by `config/jwt.php`; `JWT_SECRET` is a legacy alias, keep both in sync) | `open-admin-jwt-secret-change-in-production` |
+| `JWT_SECRET_KEY` | JWT signing key (read by `config/jwt.php`) | `open-admin-jwt-secret-change-in-production` |
 | `HASHIDS_SALT` | Hashids salt | `open-admin-hashids-salt-2026` |
 | `ENCRYPTION_KEY` | API encryption key | 32-byte default |
 | `SNOWFLAKE_DATACENTER_ID` | Datacenter ID (0-31) | `1` |

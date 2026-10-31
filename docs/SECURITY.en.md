@@ -195,7 +195,7 @@ Implemented by the AdminAuth middleware, mounted on route groups that require au
 | Parameter | Value | Description |
 |------|-----|------|
 | Algorithm | HS256 | HMAC-SHA256 symmetric signing |
-| Secret | `JWT_SECRET` | Injected via environment variable; must be changed in production |
+| Secret | `JWT_SECRET_KEY` | Injected via environment variable; must be changed in production |
 | access_token TTL | 7200s (2h) | `JWT_TTL` |
 | refresh_token TTL | 1209600s (14d) | `JWT_REFRESH_TTL` |
 | Issuer | `open-admin` | `JWT_ISSUER` |
@@ -384,7 +384,7 @@ All keys are injected via `.env` environment variables; config files read them w
 
 | Environment variable | Purpose | Package | Production requirement |
 |----------|------|-----|---------|
-| JWT_SECRET | JWT signing key | erikwang2013/jwt-webman | Random string of 64+ characters |
+| JWT_SECRET_KEY | JWT signing key | erikwang2013/jwt-webman | Random string of 64+ characters |
 | JWT_ALGORITHM | JWT signing algorithm | Same as above | Keep HS256 |
 | HASHIDS_SALT | ID encoding salt | erikwang2013/hashids | Random string |
 | SNOWFLAKE_DATACENTER_ID | Datacenter ID (0-31) | erikwang2013/snowflake-php | Keep default for a single datacenter |
@@ -407,7 +407,7 @@ All keys are injected via `.env` environment variables; config files read them w
 | Transport encryption | `config/encryption.php` → `key` | `ENCRYPTION_KEY` |
 | Storage encryption | `config/encryptable.php` → `key` | `ENCRYPTABLE_KEY` |
 | ID obfuscation | `config/hashids.php` → `connections.main.salt` | `HASHIDS_SALT` |
-| JWT signing | `config/plugin/erikwang2013/jwt/jwt` | `JWT_SECRET` |
+| JWT signing | `config/plugin/erikwang2013/jwt/jwt` | `JWT_SECRET_KEY` |
 
 ---
 

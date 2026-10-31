@@ -492,6 +492,10 @@ docker compose up -d --build
 
       <ol class="timeline">
         <li data-reveal>
+          <div class="timeline-meta"><span class="version-tag">v2.1.8</span><time datetime="2026-11-01">2026-11-01</time></div>
+          <div class="timeline-body"><h3>JWT 变量统一与文档收尾</h3><p>JWT 签名密钥统一使用 JWT_SECRET_KEY，移除未使用的 JWT_SECRET 别名；同步更新中英文文档、架构/生命周期图与站点内容。</p></div>
+        </li>
+        <li data-reveal>
           <div class="timeline-meta"><span class="version-tag">v2.1.7</span><time datetime="2026-11-01">2026-11-01</time></div>
           <div class="timeline-body"><h3>密钥隔离与每日备份</h3><p>密钥按服务拆分到 deploy/env/*.env；新增 backup 服务每日 mysqldump 到 deploy/data/backups（保留 30 天）；--regenerate 只轮换应用密钥，保留数据库、管理员、TLS 与 ENCRYPTABLE，数据库/证书/字段密钥需显式使用 --rotate-db、--rotate-tls、--rotate-encryptable；容器日志走 stdout 轮转；宿主机 UID 归属；修复 GD 验证码；文档与站点同步更新。</p></div>
         </li>

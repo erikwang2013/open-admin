@@ -487,6 +487,10 @@ docker compose up -d --build
 
       <ol class="timeline">
         <li data-reveal>
+          <div class="timeline-meta"><span class="version-tag">v2.1.8</span><time datetime="2026-11-01">2026-11-01</time></div>
+          <div class="timeline-body"><h3>JWT variable cleanup and docs polish</h3><p>Standardized the JWT signing key on JWT_SECRET_KEY and removed the unused JWT_SECRET alias; refreshed the Chinese/English docs, architecture/lifecycle diagrams and site content.</p></div>
+        </li>
+        <li data-reveal>
           <div class="timeline-meta"><span class="version-tag">v2.1.7</span><time datetime="2026-11-01">2026-11-01</time></div>
           <div class="timeline-body"><h3>Secret isolation and daily backups</h3><p>Secrets split per service into deploy/env/*.env; added a backup service running daily mysqldump into deploy/data/backups (30-day retention); --regenerate now rotates app keys only and preserves the database, admin, TLS and ENCRYPTABLE keys (use --rotate-db, --rotate-tls and --rotate-encryptable explicitly); container logs rotate via stdout; host UID ownership; GD captcha fix; docs and site updated.</p></div>
         </li>
