@@ -197,6 +197,7 @@ erik_system_config (系统配置) — 独立表
 上传:     /admin/upload
 批量:     /admin/user/batch/{destroy|status}
 文档:     /api/docs     (OpenAPI 3.0)
+调试页:   /apidoc/      (单文件同源调试界面，读取 /api/docs)
 健康:     /health
 ```
 
@@ -232,7 +233,7 @@ Based on the Redis Sorted Set sliding window algorithm, executed as atomic Lua s
 | Default | 60/min per IP/route |
 | POST /api/v1/auth/login | 10/min |
 
-Exceeding the limit returns 429; response headers include X-RateLimit-Limit / Remaining / Reset / Retry-After.
+Exceeding the limit returns 429; response headers include X-RateLimit-Limit / Remaining / Reset / Retry-After. When Redis fails, `/api/` and `/admin/` return 503 (fail closed), while non-API paths such as `/health` and `/metrics` pass through so monitoring stays available.
 
 ### 4.4 Unified Response
 
@@ -251,8 +252,9 @@ Exceeding the limit returns 429; response headers include X-RateLimit-Limit / Re
 | 401 | Unauthenticated | Token missing/expired/invalid |
 | 403 | Forbidden | User role lacks the required permission |
 | 404 | Not found | Resource not found |
-| 422 | Validation failed | Form params violate rules / password confirmation failed |
+| 422 | Validation failed | Form params violate rules / password confirmation failed / export over 5,000 rows |
 | 500 | Server error | Unexpected exception |
+| 503 | Service unavailable | Redis failure causes auth or rate limiting to fail closed for `/api/` and `/admin/` |
 
 ### 4.5 Authentication Flow (with Click Captcha)
 
@@ -279,6 +281,8 @@ Exceeding the limit returns 429; response headers include X-RateLimit-Limit / Re
   │◄── 200 {dashboard data}           │
 ```
 
+Refresh: `POST /api/v1/auth/refresh` rotates the token pair and immediately blacklists the old refresh_token, caching the new pair for 60 seconds under `refresh_rotation:<md5>`; resubmitting the old token within the grace period returns the same pair. A password change clears the rotation cache and logout blacklists the cached tokens; the HarmonyOS client uses single-flight refresh for concurrent 401s.
+
 ### 4.6 Permission Model (RBAC)
 
 ```
@@ -293,6 +297,8 @@ Exceeding the limit returns 429; response headers include X-RateLimit-Limit / Re
   例: get.admin/user  post.admin/user  delete.admin/user
   超级管理员标识: * (跳过所有权限检查)
 ```
+
+Super-admin protection: the currently logged-in account cannot be deleted or have its status changed; delete/disable must leave at least one enabled super administrator (otherwise 422); the built-in `super_admin` role cannot be edited or deleted (403).
 
 ### 4.7 Password Re-Confirmation for Sensitive Operations
 
@@ -359,7 +365,10 @@ Data flow: Page ← DataService ← ApiService (JWT Bearer) ← HTTP ← webman
 | Human verification | Click captcha, mandatory for login |
 | Account lockout | 5 consecutive login failures lock the account for 15 min; 429 returned while locked |
 | Session limit | Max 3 concurrent tokens per user; oldest token auto-blacklisted when exceeded |
-| Rate limiting | RateLimit middleware, Redis sliding window, atomic Lua |
+| Rate limiting | RateLimit middleware, Redis sliding window, atomic Lua; `/api/` and `/admin/` fail closed (503) when Redis fails |
+| Auth degradation | AdminAuth returns 503 when the blacklist read fails, never allowing possibly logged-out tokens |
+| Super-admin protection | The current account cannot be targeted; delete/disable keeps at least one enabled super admin; the built-in role cannot be edited or deleted |
+| Import/export | Import 5MB / 2,000 rows (oversized sheets rejected before load); export 5,000 rows, HTTP 422 over the cap |
 | CSP | Content-Security-Policy header restricts resource origins, prevents XSS and data injection |
 | Operation confirmation | Sensitive ops such as delete require the current user's password |
 | Transport | HTTPS + JWT Bearer Token |
@@ -398,11 +407,14 @@ RSA_PRIVATE_KEY     → 登录密码传输公钥对应的私钥（deploy 脚本�
 
 ```
 请求: POST /admin/export/excel { table, columns, conditions, title }
-  → fetchExportData() 查询数据 (limit 10000)
+  → fetchExportData() 查询数据 (LIMIT 5001 probe)
+  → Over 5,000 rows → HTTP 422 (no file generated)
   → 脱敏敏感字段
   → PhpSpreadsheet 构建（蓝底白字表头 + 冻结首行 + 自动筛选）
   → 写入 runtime/tmp/ → download 响应
 ```
+
+Import: `POST /admin/import/users` is limited to 5MB. `ImportController` uses `createReaderForFile` + `setReadDataOnly(true)` + `listWorksheetInfo()` before `IOFactory::load()` and rejects any workbook with a sheet over 2,001 rows with a 422, then re-checks with `getHighestDataRow()` after loading; data rows are capped at 2,000.
 
 ### 7.2 PDF Export
 
@@ -419,7 +431,7 @@ RSA_PRIVATE_KEY     → 登录密码传输公钥对应的私钥（deploy 脚本�
 
 ```
 Nginx (:80/:443, TLS + static site) → app (webman :8791) → MySQL + Redis
-init (one-shot): schema + admin user; backup (daily): mysqldump into deploy/data/backups
+init (one-shot): schema + admin user; backup (daily): mysqldump + upload tar into deploy/data/backups, deletes operation logs older than 180 days
 Data persists to deploy/data/; logs go to stdout/stderr and are rotated by Docker
 ```
 
@@ -430,11 +442,11 @@ The production stack lives in `deploy/` and runs 6 services on one machine. No f
 | Service | Image/Build | Description |
 |------|----------|------|
 | `nginx` | nginx:alpine | 80/443, TLS, static site, reverse proxy + Gzip; logs to stdout/stderr |
-| `app` | Local `Dockerfile` build | 8791 (container network only), PHP 8.3 + OPcache + webman, runs as host UID/GID |
+| `app` | Local `Dockerfile` build | 8791 (container network only), PHP 8.3 + OPcache + redis/zip/gd (FreeType/JPEG) + webman, runs as host UID/GID |
 | `init` | Same app image | One-shot schema + admin creation, then exits |
 | `mysql` | mysql:8.0 | Primary database with data on a host bind mount; error/slow logs to stderr |
 | `redis` | redis:7-alpine | Cache / rate limiting / captcha, AOF persistence |
-| `backup` | mysql:8.0 | Daily `mysqldump` into `deploy/data/backups`, 30-day retention |
+| `backup` | mysql:8.0 | Least-privilege daily `mysqldump` + upload tar into `deploy/data/backups`, 30-day retention; deletes operation logs older than 180 days |
 
 First deployment:
 
@@ -445,10 +457,13 @@ docker compose up -d --build
 ```
 
 - Per-service env isolation: `deploy/env/{app,init,mysql,redis,backup}.env` (directory `700`, files `600`); the master `deploy/.env` only holds domain, ports and `APP_UID`/`APP_GID`. The app container never holds the MySQL root password or the bootstrap admin password.
-- `generate-secrets.sh` generates all keys; it is idempotent by default. `--regenerate` archives the old `.env`, `env/` and `secrets/` to `deploy/secrets/archive/<timestamp>/` and rotates application secrets (JWT/HASHIDS/ENCRYPTION/RSA/Redis) by default, preserving `ENCRYPTABLE_KEY`, the existing TLS certificate, database and admin passwords; use `--rotate-encryptable`, `--rotate-tls`, `--rotate-db` and `--reset-admin` to rotate those explicitly.
+- `generate-secrets.sh` generates all keys; it is idempotent by default. `--regenerate` archives the old `.env`, `env/` and `secrets/` to `deploy/secrets/archive/<timestamp>/` and rotates application secrets (JWT/ENCRYPTION/RSA/Redis) by default, preserving `HASHIDS_SALT`, `ENCRYPTABLE_KEY`, the existing TLS certificate, database and admin passwords; rotate Hashids explicitly with `--rotate-hashids` (IDs in old links stop resolving), and use `--rotate-encryptable`, `--rotate-tls`, `--rotate-db` and `--reset-admin` to rotate those explicitly.
 - `app`/`init` run as `${APP_UID:-1000}:${APP_GID:-1000}`; the script writes `id -u`/`id -g` into the master `.env`, keeping `deploy/data/{runtime,upload}` writable.
 - Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; the admin password is in `deploy/secrets/admin_password.txt`; HSTS is off by default and should be enabled after a real certificate is configured.
 - Persistent directories: `deploy/data/{mysql,redis,runtime,upload,backups}`; Docker rotates logs at `10m × 3`.
+- Per-service memory limits: app 512M, init 256M, mysql 768M, redis 256M, nginx 128M, backup 256M.
+- Nginx repeats `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` and `Cache-Control` inside the static asset locations; CI runs `nginx -t` on both `deploy/nginx/default.conf` and `docs/nginx-security.conf`.
+- `backup` uses the least-privilege `backup_reader` user (`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` on the database plus `DELETE` on `erik_operation_log`). Backups share the MySQL host/disk, so copy them offsite with `rsync`/`rclone`.
 
 The root `docker-compose.yml` is only the 4-service (nginx/app/mysql/redis) local quick-start stack; its `.env.docker` defaults are public, deliberately invalid placeholders, so replace them before use and never expose it publicly — use `deploy/` for production.
 
@@ -458,10 +473,11 @@ GitHub Actions CI is defined in `.github/workflows/ci.yml`:
 - PHP syntax check (`php -l`)
 - PHPUnit unit tests
 - Flutter static analysis (`flutter analyze`)
+- Docker image build + PHP extension checks (redis/zip/gd, GD FreeType/JPEG) + root and `deploy/` Compose config validation + `nginx -t` for both Nginx configs (release depends on the php/flutter/docker jobs)
 
 ### 8.4 Database Backup
 
-The production stack's `backup` service writes a daily backup to `deploy/data/backups` (30-day retention).
+The production stack's `backup` service writes daily database and upload backups to `deploy/data/backups` (30-day retention) and deletes operation logs older than 180 days; sync offsite copies with `rsync`/`rclone`.
 `database/backup/backup.sh` — mysqldump + gzip backup, auto-clears backups older than 30 days (host with direct database access).
 `database/backup/restore.sh` — interactive selection and restore of backups.
 

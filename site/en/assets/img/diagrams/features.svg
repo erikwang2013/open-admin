@@ -36,7 +36,7 @@
   <text class="fName" x="98" y="150">Auth</text>
   <text class="fWhere" x="98" y="167">app/api/v1/controller</text>
   <line x1="50" y1="184" x2="290" y2="184" stroke="#EEF2F7"/>
-  <text class="fItem" x="50" y="205">· Login / register / refresh / logout</text>
+  <text class="fItem" x="50" y="205">· Login / refresh / logout</text>
   <text class="fItem" x="50" y="224">· Click captcha (poster-php)</text>
   <text class="fItem" x="50" y="243">· Lockout: 5 failures × 15 min</text>
   <text class="fItem" x="50" y="262">· Max 3 sessions, evict oldest</text>
@@ -68,7 +68,7 @@
   <text class="fItem" x="650" y="205">· CRUD + batch delete / status</text>
   <text class="fItem" x="650" y="224">· Excel import + row checks</text>
   <text class="fItem" x="650" y="243">· Soft delete + confirm sensitive</text>
-  <text class="fItem" x="650" y="262">· Argon2 password hashing</text>
+  <text class="fItem" x="650" y="262">· bcrypt password hashing</text>
 
   <!-- 角色权限 -->
   <rect class="card" x="930" y="112" width="280" height="152" rx="14"/>

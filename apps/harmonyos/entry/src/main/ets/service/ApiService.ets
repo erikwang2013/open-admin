@@ -12,6 +12,8 @@ import AppConfig from '../config/AppConfig';
  */
 export class ApiService {
   private httpRequest: http.HttpRequest;
+  /** 并发 401 时共享同一次刷新，避免同时轮换 refresh token 互相踢下线 */
+  private refreshPromise: Promise<boolean> | null = null;
 
   constructor() {
     this.httpRequest = http.createHttp();
@@ -67,10 +69,29 @@ export class ApiService {
   }
 
   /**
-   * 尝试用 refresh_token 刷新 access_token
+   * 并发 401 只发起一次刷新，其余请求等待同一结果
    * @returns 刷新成功返回 true
    */
   private async tryRefreshToken(): Promise<boolean> {
+    if (this.refreshPromise === null) {
+      this.refreshPromise = this.doRefreshToken();
+    }
+    const pending = this.refreshPromise;
+    try {
+      return await pending;
+    } finally {
+      // 只清理自己等待的那次刷新，避免覆盖稍后新建的刷新
+      if (this.refreshPromise === pending) {
+        this.refreshPromise = null;
+      }
+    }
+  }
+
+  /**
+   * 尝试用 refresh_token 刷新 access_token
+   * @returns 刷新成功返回 true
+   */
+  private async doRefreshToken(): Promise<boolean> {
     const refreshToken = TokenManager.getRefreshToken();
     if (!refreshToken) {
       return false;

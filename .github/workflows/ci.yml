@@ -1,5 +1,5 @@
 # ============================================================
-# CI/CD — 语法检查 → 单元测试 → 分析 → 自动发布
+# CI/CD — 语法检查 → 单元测试 → 分析 → Docker/配置校验 → 自动发布
 # Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 # ============================================================
 
@@ -99,6 +99,51 @@ jobs:
         run: flutter test
 
   # ============================================================
+  # Docker — 镜像运行依赖 + Compose/Nginx 配置校验
+  # ============================================================
+  docker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t open-admin:ci .
+
+      - name: Check PHP extensions
+        run: |
+          modules="$(docker run --rm open-admin:ci php -m)"
+          for ext in redis zip gd; do
+            echo "$modules" | grep -qix "$ext" || { echo "缺少 PHP 扩展: $ext"; exit 1; }
+          done
+          docker run --rm open-admin:ci php -r '
+            $info = gd_info();
+            if (empty($info["FreeType Support"]) || empty($info["JPEG Support"])) {
+                fwrite(STDERR, "GD 缺少 FreeType 或 JPEG 支持\n");
+                exit(1);
+            }
+            echo "PHP 扩展检查通过\n";
+          '
+
+      - name: Validate root compose
+        run: docker compose --env-file .env.docker config --quiet
+
+      - name: Validate deploy compose and nginx
+        run: |
+          TMP="$(mktemp -d)"
+          cp -a deploy "$TMP/deploy"
+          rm -rf "$TMP/deploy/env" "$TMP/deploy/secrets" "$TMP/deploy/data"
+          "$TMP/deploy/generate-secrets.sh"
+          docker compose --project-directory "$TMP/deploy" -f "$TMP/deploy/docker-compose.yml" config --quiet
+          docker run --rm \
+            -v "$TMP/deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro" \
+            -v "$TMP/deploy/secrets/tls:/etc/nginx/certs:ro" \
+            nginx:alpine nginx -t
+          docker run --rm \
+            -v "$PWD/docs/nginx-security.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:alpine nginx -t
+
+  # ============================================================
   # Release — 推送到 main 后自动打 tag + 创建 Release
   # 版本号基于最新 tag 的 patch 位增量（v2.1.0 → v2.1.1）
   # 仅创建 tag 和 Release，不打包应用
@@ -106,7 +151,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
-    needs: [php, flutter]
+    needs: [php, flutter, docker]
     permissions:
       contents: write
 

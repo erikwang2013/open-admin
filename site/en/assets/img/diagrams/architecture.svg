@@ -129,7 +129,7 @@
   <rect class="node" x="604" y="586" width="276" height="78" rx="12" fill="#F6FFED" stroke="#B7EB8F"/>
   <text class="chipT" x="622" y="608" fill="#389E0D">API v1 · app/api/v1</text>
   <text class="chipS" x="622" y="628">CaptchaController — click captcha</text>
-  <text class="chipS" x="622" y="646">AuthController — login / register / refresh</text>
+  <text class="chipS" x="622" y="646">AuthController — login / refresh / public key</text>
 
   <!-- Row D 公共服务 -->
   <line x1="64" y1="682" x2="880" y2="682" stroke="#E1E7F0" stroke-width="1"/>
@@ -165,7 +165,7 @@
   <text class="chipS" x="364" y="869">rate limits · captcha · permissions · blacklist</text>
   <rect class="node" x="624" y="830" width="256" height="52" rx="12" fill="#E6F4FF" stroke="#91CAFF"/>
   <text class="chipT" x="644" y="851">Single-machine deploy · persistence</text>
-  <text class="chipS" x="644" y="869">backup: daily mysqldump · deploy/data</text>
+  <text class="chipS" x="644" y="869">backup: daily DB + upload · 30d</text>
 
   <!-- ========== 右栏 ========== -->
   <rect class="railCard" x="948" y="112" width="252" height="190" rx="16"/>
@@ -186,8 +186,8 @@
     <text x="968" y="398">· GET /metrics 5 Prometheus gauges</text>
     <text x="968" y="420">· GET /api/docs OpenAPI docs</text>
     <text x="968" y="442">· Docker Compose: 6 services</text>
-    <text x="968" y="464">· GitHub Actions: php -l / PHPUnit</text>
-    <text x="968" y="486">· backup: mysqldump + gzip (30d)</text>
+    <text x="968" y="464">· CI: PHPUnit / Flutter / Docker</text>
+    <text x="968" y="486">· backup: mysqldump + upload (30d)</text>
   </g>
 
   <!-- 项目宠物 -->

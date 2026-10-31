@@ -30,7 +30,8 @@ services:
     env_file: ./env/mysql.env
     volumes:
       - ./data/mysql:/var/lib/mysql
-      - ./mysql/init-app-user.sh:/docker-entrypoint-initdb.d/00-app-user.sh:ro
+      # 排在 10-install.sql 之后：备份用户的表级 DELETE 授权要求表已存在
+      - ./mysql/init-app-user.sh:/docker-entrypoint-initdb.d/20-app-user.sh:ro
       - ../database/install.sql:/docker-entrypoint-initdb.d/10-install.sql:ro
     healthcheck:
       # 通过 TCP 做认证查询：mysqladmin ping 在密码错误时也可能返回 0
@@ -39,6 +40,10 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 768M
     logging: *default-logging
 
   # ============================================================
@@ -61,6 +66,10 @@ services:
       timeout: 5s
       retries: 6
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     logging: *default-logging
 
   # ============================================================
@@ -80,6 +89,10 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     logging: *default-logging
 
   # ============================================================
@@ -110,10 +123,15 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     logging: *default-logging
 
   # ============================================================
-  # backup — 每日逻辑备份，保留 30 天（写入宿主机 ./data/backups）
+  # backup — 每日逻辑备份 + 上传文件归档（保留 30 天），
+  #          并清理 180 天前的操作日志。使用最小权限备份用户。
   # ============================================================
   backup:
     image: mysql:8.0
@@ -126,14 +144,16 @@ services:
       - |
         set -eu
         mkdir -p /backups
-        # 清理异常退出遗留的临时 dump
-        find /backups -name '.backup_*.sql' -mtime +1 -delete
+        # 清理异常退出遗留的临时文件（仅本服务写入 /backups）
+        rm -f /backups/.backup_*.sql /backups/.upload_*.tar.gz
         while true; do
           ts="$$(date +%Y%m%d_%H%M%S)"
+
+          # 数据库：最小权限用户 + 一致性快照，不导出 routines
           tmp="/backups/.backup_$${ts}.sql"
           out="/backups/backup_$${ts}.sql.gz"
-          if MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysqldump -h mysql -uroot \
-              --single-transaction --routines --triggers --default-character-set=utf8mb4 \
+          if MYSQL_PWD="$$DB_BACKUP_PASSWORD" mysqldump -h mysql -u"$$DB_BACKUP_USERNAME" \
+              --single-transaction --no-tablespaces --default-character-set=utf8mb4 \
               "$$MYSQL_DATABASE" > "$$tmp"; then
             if gzip -c "$$tmp" > "$$out"; then
               echo "[backup] $$out"
@@ -145,16 +165,43 @@ services:
             echo "[backup] mysqldump 失败" >&2
           fi
           rm -f "$$tmp"
+
+          # 上传文件：只读挂载，打包失败不影响数据库备份
+          upload_tmp="/backups/.upload_$${ts}.tar.gz"
+          upload_out="/backups/upload_$${ts}.tar.gz"
+          if tar -czf "$$upload_tmp" -C /upload .; then
+            mv "$$upload_tmp" "$$upload_out"
+            echo "[backup] $$upload_out"
+          else
+            rm -f "$$upload_tmp"
+            echo "[backup] upload 打包失败" >&2
+          fi
+
+          # 操作日志保留 180 天；每轮最多删 10000 行，失败只记日志
+          if MYSQL_PWD="$$DB_BACKUP_PASSWORD" mysql -h mysql -u"$$DB_BACKUP_USERNAME" \
+              "$$MYSQL_DATABASE" \
+              -e "DELETE FROM erik_operation_log WHERE created_at < DATE_SUB(NOW(), INTERVAL 180 DAY) LIMIT 10000"; then
+            echo "[backup] 已清理 180 天前的操作日志"
+          else
+            echo "[backup] 操作日志清理失败" >&2
+          fi
+
           find /backups -name 'backup_*.sql.gz' -mtime +30 -delete
+          find /backups -name 'upload_*.tar.gz' -mtime +30 -delete
           sleep 86400
         done
     volumes:
       - ./data/backups:/backups
+      - ./data/upload:/upload:ro
     depends_on:
       mysql:
         condition: service_healthy
       init:
         condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     logging: *default-logging
 
   # ============================================================
@@ -185,4 +232,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
     logging: *default-logging

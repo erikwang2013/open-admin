@@ -1,23 +1,537 @@
-<!doctype html><html lang="en" class="theme-light"><head><script>self["MonacoEnvironment"] = (function (paths) {
-          return {
-            globalAPI: false,
-            getWorkerUrl : function (moduleId, label) {
-              var result = paths[label] || paths.editorWorkerService;
-              if (/^((http:)|(https:)|(file:)|(\/\/))/.test(result)) {
-                var currentUrl = String(window.location);
-                var currentOrigin = currentUrl.substr(0, currentUrl.length - window.location.hash.length - window.location.search.length - window.location.pathname.length);
-                if (result.substring(0, currentOrigin.length) !== currentOrigin) {
-                  var js = '/*' + label + '*/importScripts("' + result + '");';
-                  var blob = new Blob([js], { type: 'application/javascript' });
-                  return URL.createObjectURL(blob);
-                }
-              }
-              return result;
-            }
-          };
-        })({
-  "editorWorkerService": "./monacoeditorwork/editor.worker.bundle.js",
-  "json": "./monacoeditorwork/json.worker.bundle.js",
-  "typescript": "./monacoeditorwork/ts.worker.bundle.js",
-  "javascript": "./monacoeditorwork/ts.worker.bundle.js", "css": "./monacoeditorwork/editor.worker.bundle.js", "html": "./monacoeditorwork/editor.worker.bundle.js"
-});</script><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="X-UA-Compatible" content="IE=edge"><link rel="icon" href="./favicon.ico"/><title>Apidoc</title><script type="module" crossorigin src="./assets/index.5c1bd6c6.js"></script><link rel="stylesheet" href="./assets/index.10ee53fc.css"></head><body><div id="app"></div><script src="./config.js?v=3.2.0"></script></body></html>
+<!doctype html>
+<!--
+  Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+  API 文档 UI：单文件、无外部依赖，数据来自同源 GET /api/docs（OpenAPI 3.0 JSON）。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>API 文档 · open-admin</title>
+<link rel="icon" type="image/svg+xml" href="/img/pet.svg">
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --blue: #1677FF;
+    --blue-dark: #0958d9;
+    --bg: #f5f7fa;
+    --card: #fff;
+    --text: #1f2329;
+    --muted: #6b7280;
+    --line: #e5e8ee;
+    --radius: 12px;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 20px;
+    padding: 12px 20px;
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; font-size: 17px; font-weight: 600; color: var(--blue); }
+  .brand small { font-size: 12px; font-weight: 400; color: var(--muted); }
+  .token { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 12px; color: var(--muted); }
+  .token input {
+    width: min(46vw, 340px);
+    padding: 7px 10px;
+    font: 12.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--text);
+    background: #fff;
+    border: 1px solid #d5dae1;
+    border-radius: 8px;
+  }
+  input:focus, textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(22, 119, 255, .13); }
+  input.invalid { border-color: #ff4d4f; box-shadow: 0 0 0 3px rgba(255, 77, 79, .12); }
+  main { flex: 1; display: flex; min-height: 0; }
+  aside { flex: none; width: 320px; padding: 12px 10px; overflow: auto; background: var(--card); border-right: 1px solid var(--line); }
+  #load { padding: 4px 10px 10px; font-size: 12px; color: var(--muted); }
+  #load.error { color: #cf1322; }
+  aside ul { margin: 0; padding: 0; list-style: none; }
+  .op {
+    display: flex;
+    gap: 9px;
+    width: 100%;
+    padding: 9px 10px;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .op:hover { background: #f2f7ff; }
+  .op.active { background: #e8f1ff; }
+  .op-info { min-width: 0; }
+  .op-path { display: block; font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all; }
+  .op-summary { display: block; overflow: hidden; font-size: 12px; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+  .method {
+    flex: none;
+    align-self: flex-start;
+    min-width: 52px;
+    padding: 1px 0;
+    font: 600 10.5px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: .04em;
+    text-align: center;
+    text-transform: uppercase;
+    border-radius: 5px;
+    background: #eef2f7;
+    color: #334155;
+  }
+  .method.get { background: #e9f8e5; color: #2f8f16; }
+  .method.post { background: #e6f1ff; color: #0958d9; }
+  .method.put { background: #fff4e6; color: #b45309; }
+  .method.patch { background: #f3e8ff; color: #7e22ce; }
+  .method.delete { background: #ffecec; color: #c62828; }
+  .detail { flex: 1; min-width: 0; padding: 20px 24px 48px; overflow: auto; }
+  .empty { padding: 48px 8px; color: var(--muted); text-align: center; }
+  .card { margin-bottom: 14px; padding: 18px 22px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
+  .card h1 { margin: 10px 0 6px; font-size: 20px; line-height: 1.4; }
+  .card h2 { margin: 0 0 12px; font-size: 14px; }
+  .route { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .route-path {
+    padding: 2px 8px;
+    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    word-break: break-all;
+    background: #f3f6fa;
+    border-radius: 5px;
+  }
+  .desc { margin: 8px 0 0; color: #4b5563; white-space: pre-wrap; }
+  .field { display: block; margin-bottom: 12px; }
+  .field-label { display: block; font-size: 12.5px; color: #374151; }
+  .field-label code { color: var(--blue); }
+  .req { margin-left: 3px; color: #ff4d4f; }
+  .hint { margin-left: 8px; font-size: 12px; color: var(--muted); }
+  .field input {
+    display: block;
+    width: 100%;
+    margin-top: 5px;
+    padding: 8px 10px;
+    font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--text);
+    background: #fff;
+    border: 1px solid #d5dae1;
+    border-radius: 8px;
+  }
+  textarea.body {
+    display: block;
+    width: 100%;
+    min-height: 170px;
+    padding: 10px 12px;
+    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--text);
+    background: #fff;
+    border: 1px solid #d5dae1;
+    border-radius: 8px;
+    resize: vertical;
+  }
+  .actions { display: flex; align-items: center; gap: 12px; margin: 2px 0 14px; }
+  .send {
+    padding: 10px 22px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--blue);
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .send:hover { background: var(--blue-dark); }
+  .send:disabled { opacity: .6; cursor: default; }
+  .result.error { background: #fff2f0; border-color: #ffccc7; }
+  .error-text { margin: 0; font-size: 13px; color: #cf1322; white-space: pre-wrap; }
+  .binary { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .download { font-weight: 600; color: var(--blue); text-decoration: none; }
+  .download:hover { text-decoration: underline; }
+  .result-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .status { padding: 5px 9px; font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; border-radius: 6px; }
+  .status.ok { color: #389e0d; background: #f6ffed; border: 1px solid #b7eb8f; }
+  .status.bad { color: #cf1322; background: #fff1f0; border: 1px solid #ffa39e; }
+  .meta { font-size: 12px; color: var(--muted); word-break: break-all; }
+  pre.resp {
+    max-height: 520px;
+    margin: 0;
+    padding: 12px 14px;
+    overflow: auto;
+    font: 12.5px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: #f6f8fa;
+    border: 1px solid #eaeef3;
+    border-radius: 8px;
+  }
+  @media (max-width: 760px) {
+    .token { margin-left: 0; }
+    .token input { width: min(64vw, 340px); }
+    main { flex-direction: column; }
+    aside { width: 100%; max-height: 34vh; border-right: 0; border-bottom: 1px solid var(--line); }
+    .detail { padding: 16px; }
+    .card { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">API 文档 <small id="meta">加载 /api/docs …</small></div>
+  <label class="token">Bearer Token
+    <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴 JWT，仅存于本标签页">
+  </label>
+</header>
+<main>
+  <aside>
+    <div id="load">加载中…</div>
+    <ul id="list"></ul>
+  </aside>
+  <section class="detail" id="detail">
+    <div class="empty">从左侧选择一个接口查看详情</div>
+  </section>
+</main>
+<script>
+(function () {
+  'use strict';
+
+  var METHODS = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace'];
+  var BODY_METHODS = { post: true, put: true, patch: true, delete: true };
+  var NO_BODY_METHODS = { get: true, head: true };
+  var TOKEN_KEY = 'apidoc_token';
+  var TIMEOUT_MS = 30000;
+  var MAX_RESPONSE = 200000; // shortcut: 大响应只显示前 200KB，需要完整下载时改用 curl
+
+  var detailEl = document.getElementById('detail');
+  var listEl = document.getElementById('list');
+  var loadEl = document.getElementById('load');
+  var metaEl = document.getElementById('meta');
+  var tokenEl = document.getElementById('token');
+
+  var spec = null;
+  var current = null;
+  var states = {};
+  var binaryUrl = null;
+
+  function stashToken(value) {
+    try { sessionStorage.setItem(TOKEN_KEY, value); } catch (_) { /* 隐私模式禁用存储时仅保留在输入框 */ }
+  }
+  try { tokenEl.value = sessionStorage.getItem(TOKEN_KEY) || ''; } catch (_) { /* 同上 */ }
+  tokenEl.addEventListener('input', function () { stashToken(tokenEl.value); });
+
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  function methodBadge(method) {
+    return el('span', 'method ' + method, method);
+  }
+
+  function stateFor(path, method) {
+    var key = method + ' ' + path;
+    if (!states[key]) states[key] = { path: {}, query: {}, body: null };
+    return states[key];
+  }
+
+  function clearBinaryUrl() {
+    if (binaryUrl) { URL.revokeObjectURL(binaryUrl); binaryUrl = null; }
+  }
+
+  function resolveRef(ref) {
+    if (!ref || ref.slice(0, 2) !== '#/') return null;
+    return ref.slice(2).split('/').reduce(function (node, key) {
+      return node && node[key] !== undefined ? node[key] : null;
+    }, spec);
+  }
+
+  function sample(schema, depth) {
+    depth = depth || 0;
+    if (!schema || depth > 8) return null;
+    if (schema.$ref) return sample(resolveRef(schema.$ref), depth + 1);
+    if (schema.example !== undefined) return schema.example;
+    if (schema.default !== undefined) return schema.default;
+    if (schema.enum && schema.enum.length) return schema.enum[0];
+    if (schema.type === 'object') {
+      var out = {};
+      Object.keys(schema.properties || {}).forEach(function (key) {
+        out[key] = sample(schema.properties[key], depth + 1);
+      });
+      return out;
+    }
+    if (schema.type === 'array') return schema.items ? [sample(schema.items, depth + 1)] : [];
+    if (schema.type === 'integer' || schema.type === 'number') return 0;
+    if (schema.type === 'boolean') return false;
+    return '';
+  }
+
+  function renderList() {
+    listEl.replaceChildren();
+    var count = 0;
+
+    Object.keys(spec.paths || {}).forEach(function (path) {
+      var item = spec.paths[path] || {};
+      METHODS.forEach(function (method) {
+        var op = item[method];
+        if (!op || typeof op !== 'object') return;
+        count++;
+
+        var btn = el('button', 'op');
+        btn.type = 'button';
+        if (current && current.path === path && current.method === method) btn.classList.add('active');
+
+        var info = el('div', 'op-info');
+        info.append(el('span', 'op-path', path));
+        if (op.summary) info.append(el('span', 'op-summary', op.summary));
+        btn.append(methodBadge(method), info);
+
+        btn.addEventListener('click', function () {
+          current = { path: path, method: method, op: op };
+          renderList();
+          renderDetail();
+        });
+
+        var li = el('li');
+        li.append(btn);
+        listEl.append(li);
+      });
+    });
+
+    loadEl.className = '';
+    loadEl.textContent = count ? count + ' 个接口' : '文档中没有接口';
+  }
+
+  function field(kind, name, store, hint, required) {
+    var wrap = el('label', 'field');
+    var label = el('span', 'field-label');
+    label.append(el('code', null, name));
+    if (required) label.append(el('span', 'req', '*'));
+    if (hint) label.append(el('span', 'hint', hint));
+
+    var input = el('input');
+    input.value = store[name] != null ? store[name] : '';
+    input.placeholder = kind === 'path' ? '路径参数值' : '可选';
+    if (kind === 'path') input.dataset.pathParam = name;
+    else input.dataset.queryParam = name;
+    input.addEventListener('input', function () { store[name] = input.value; });
+
+    wrap.append(label, input);
+    return wrap;
+  }
+
+  function card(title) {
+    var section = el('section', 'card');
+    if (title) section.append(el('h2', null, title));
+    return section;
+  }
+
+  function renderDetail() {
+    clearBinaryUrl();
+    detailEl.replaceChildren();
+    if (!current) {
+      detailEl.append(el('div', 'empty', '从左侧选择一个接口查看详情'));
+      return;
+    }
+
+    var path = current.path;
+    var method = current.method;
+    var op = current.op;
+    var state = stateFor(path, method);
+
+    var head = el('section', 'card');
+    var route = el('div', 'route');
+    route.append(methodBadge(method), el('code', 'route-path', path));
+    head.append(el('h1', null, op.summary || (method.toUpperCase() + ' ' + path)), route);
+    if (op.description) head.append(el('p', 'desc', op.description));
+    detailEl.append(head);
+
+    var pathParams = [];
+    path.replace(/\{([^}]+)\}/g, function (_, name) { pathParams.push(name); return _; });
+    var queryParams = (op.parameters || []).filter(function (p) { return p.in === 'query'; });
+
+    if (pathParams.length || queryParams.length) {
+      var params = card('参数');
+      pathParams.forEach(function (name) {
+        params.append(field('path', name, state.path, '替换 URL 中的 {' + name + '}', true));
+      });
+      queryParams.forEach(function (p) {
+        params.append(field('query', p.name, state.query, p.description || (p.schema && p.schema.type) || '', p.required));
+      });
+      detailEl.append(params);
+    }
+
+    if (!NO_BODY_METHODS[method] && (BODY_METHODS[method] || op.requestBody)) {
+      var bodyCard = card('请求体 (JSON)');
+      var content = (op.requestBody && op.requestBody.content) || {};
+      var contentTypes = Object.keys(content);
+      if (contentTypes.length && contentTypes.indexOf('application/json') === -1) {
+        bodyCard.append(el('p', 'hint', '文档声明的请求类型为 ' + contentTypes.join(', ') + '，此处仍以 JSON 发送。'));
+      }
+      if (state.body === null) {
+        var schema = content['application/json'] && content['application/json'].schema;
+        state.body = schema ? JSON.stringify(sample(schema), null, 2) : '';
+      }
+      var body = el('textarea', 'body');
+      body.setAttribute('aria-label', 'JSON 请求体');
+      body.spellcheck = false;
+      body.placeholder = '{\n  "key": "value"\n}';
+      body.value = state.body;
+      body.addEventListener('input', function () { state.body = body.value; });
+      bodyCard.append(body);
+      detailEl.append(bodyCard);
+    }
+
+    var actions = el('div', 'actions');
+    var sendBtn = el('button', 'send', '发送请求');
+    sendBtn.type = 'button';
+    var result = el('div');
+    sendBtn.addEventListener('click', function () { send(sendBtn, result, state); });
+    actions.append(sendBtn);
+    detailEl.append(actions, result);
+  }
+
+  function errorBox(message) {
+    var box = el('section', 'card result error');
+    box.append(el('p', 'error-text', message));
+    return box;
+  }
+
+  function downloadName(res, type) {
+    var disposition = res.headers.get('content-disposition') || '';
+    var match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
+    if (match) {
+      var name = match[1].split(/[\\/]/).pop();
+      if (name) {
+        try { return decodeURIComponent(name); } catch (_) { return name; }
+      }
+    }
+    if (/pdf/i.test(type)) return 'response.pdf';
+    if (/sheet|excel/i.test(type)) return 'response.xlsx';
+    return 'response.bin';
+  }
+
+  async function send(btn, result, state) {
+    var path = current.path;
+    var method = current.method;
+    result.replaceChildren();
+    clearBinaryUrl();
+
+    if (!/^\/(?!\/)/.test(path) || path.indexOf('\\') !== -1) {
+      result.append(errorBox('拒绝发送：接口路径必须以单个 / 开头且不能包含反斜杠（' + path + '）'));
+      return;
+    }
+
+    var pathInputs = Array.prototype.slice.call(detailEl.querySelectorAll('input[data-path-param]'));
+    var missing = pathInputs.filter(function (input) { return !input.value.trim(); });
+    pathInputs.forEach(function (input) { input.classList.toggle('invalid', missing.indexOf(input) !== -1); });
+    if (missing.length) {
+      result.append(errorBox('请填写路径参数：' + missing.map(function (i) { return i.dataset.pathParam; }).join('、')));
+      return;
+    }
+
+    var url = path.replace(/\{([^}]+)\}/g, function (_, name) {
+      return encodeURIComponent((state.path[name] || '').trim());
+    });
+    var query = new URLSearchParams();
+    Array.prototype.forEach.call(detailEl.querySelectorAll('input[data-query-param]'), function (input) {
+      if (input.value.trim()) query.append(input.dataset.queryParam, input.value.trim());
+    });
+    if (Array.from(query).length) url += '?' + query.toString();
+
+    var headers = { Accept: 'application/json' };
+    var token = tokenEl.value.trim();
+    if (token) headers.Authorization = /^Bearer\s/i.test(token) ? token : 'Bearer ' + token;
+
+    var bodyInput = NO_BODY_METHODS[method] ? null : detailEl.querySelector('textarea.body');
+    var body;
+    if (bodyInput && bodyInput.value.trim()) {
+      try {
+        JSON.parse(bodyInput.value);
+      } catch (err) {
+        result.append(errorBox('请求体不是合法 JSON：' + err.message));
+        return;
+      }
+      body = bodyInput.value;
+      headers['Content-Type'] = 'application/json';
+    }
+
+    btn.disabled = true;
+    btn.textContent = '发送中…';
+    var started = performance.now();
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, TIMEOUT_MS);
+    try {
+      var res = await fetch(url, { method: method.toUpperCase(), headers: headers, body: body, signal: controller.signal });
+      var elapsed = Math.round(performance.now() - started);
+      var type = res.headers.get('content-type') || '';
+      var status = el('span', 'status ' + (res.ok ? 'ok' : 'bad'), (res.status + ' ' + res.statusText).trim());
+
+      if (/json|text|xml|javascript/i.test(type)) {
+        var text = await res.text();
+        try { text = JSON.stringify(JSON.parse(text), null, 2); } catch (_) { /* 非 JSON 文本原样显示 */ }
+        if (text.length > MAX_RESPONSE) text = text.slice(0, MAX_RESPONSE) + '\n…（响应过大，已截断）';
+
+        var box = el('section', 'card result');
+        var head = el('div', 'result-head');
+        head.append(status, el('span', 'meta', elapsed + ' ms · ' + (type || '未知类型')));
+        box.append(head, el('pre', 'resp', text));
+        result.append(box);
+      } else {
+        var blob = await res.blob();
+        var size = res.headers.get('content-length') || String(blob.size);
+        binaryUrl = URL.createObjectURL(blob);
+
+        var link = el('a', 'download', '下载响应');
+        link.href = binaryUrl;
+        link.download = downloadName(res, type);
+        var row = el('div', 'binary');
+        row.append(el('span', 'meta', '非文本响应，内容已保留为文件。'), link);
+
+        var binaryBox = el('section', 'card result');
+        var binaryHead = el('div', 'result-head');
+        binaryHead.append(status, el('span', 'meta', elapsed + ' ms · ' + (type || '未知类型') + ' · ' + size + ' 字节'));
+        binaryBox.append(binaryHead, row);
+        result.append(binaryBox);
+      }
+    } catch (err) {
+      result.append(errorBox(err && err.name === 'AbortError'
+        ? '请求超时（' + (TIMEOUT_MS / 1000) + ' 秒）'
+        : '请求失败：' + err.message));
+    } finally {
+      clearTimeout(timer);
+      btn.disabled = false;
+      btn.textContent = '发送请求';
+    }
+  }
+
+  fetch('/api/docs', { headers: { Accept: 'application/json' } })
+    .then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(function (data) {
+      spec = data;
+      var info = spec.info || {};
+      metaEl.textContent = [info.title, info.version && 'v' + info.version, 'OpenAPI ' + (spec.openapi || '')]
+        .filter(Boolean).join(' · ');
+      renderList();
+    })
+    .catch(function (err) {
+      loadEl.className = 'error';
+      loadEl.textContent = '加载 /api/docs 失败：' + err.message;
+      metaEl.textContent = '无法读取 OpenAPI 文档';
+    });
+})();
+</script>
+</body>
+</html>

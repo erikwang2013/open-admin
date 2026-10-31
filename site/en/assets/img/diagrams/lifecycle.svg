@@ -144,13 +144,13 @@
   <g class="railI">
     <text x="942" y="550">access_token: 2 hours</text>
     <text x="942" y="578">refresh_token: 14 days</text>
-    <text x="942" y="606">Refresh: POST /api/v1/auth/refresh</text>
+    <text x="942" y="606">Refresh: /auth/refresh · 60s grace</text>
     <text x="942" y="634">Logout: token goes to Redis blacklist</text>
     <text x="942" y="662">Sessions: max 3 active tokens per user</text>
     <text x="942" y="690">Over limit: oldest token banned</text>
     <text x="942" y="718">Permission cache: Redis TTL 60s</text>
     <text x="942" y="746">Rate window: 60 / min / IP / route</text>
-    <text x="942" y="774">Login 10/min · register 5/min</text>
+    <text x="942" y="774">Login 10/min · default 60/min</text>
     <text x="942" y="816" fill="#8C9AAF">Stateless; blacklist + counters in Redis</text>
   </g>
   <line x1="942" y1="790" x2="1178" y2="790" stroke="#EEF2F7"/>

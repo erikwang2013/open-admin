@@ -5,9 +5,11 @@
 #
 # 用法:
 #   ./generate-secrets.sh                 首次生成 / 补齐缺失项（保留已有值）
-#   ./generate-secrets.sh --regenerate    轮换应用密钥（JWT/Hashids/传输层加密/RSA/Redis），
-#                                         保留 DB_PASSWORD、MYSQL_ROOT_PASSWORD、ADMIN_PASSWORD、
-#                                         ENCRYPTABLE_KEY（及历史密钥）、TLS 证书
+#   ./generate-secrets.sh --regenerate    轮换应用密钥（JWT/传输层加密/RSA/Redis），
+#                                         保留 Hashids 盐值、DB_PASSWORD、MYSQL_ROOT_PASSWORD、
+#                                         ADMIN_PASSWORD、ENCRYPTABLE_KEY（及历史密钥）、TLS 证书
+#   ./generate-secrets.sh --rotate-hashids
+#                                         轮换 Hashids 盐值（旧链接中的 ID 将无法解析）
 #   ./generate-secrets.sh --rotate-db     生成新的数据库密码（会打印手动 ALTER USER 命令）
 #   ./generate-secrets.sh --reset-admin   生成新的管理员密码（会打印更新已有管理员的命令）
 #   ./generate-secrets.sh --rotate-encryptable
@@ -44,15 +46,17 @@ TLS_DIR="$SECRETS_DIR/tls"
 ARCHIVE_DIR="$SECRETS_DIR/archive"
 
 REGENERATE=0
+ROTATE_HASHIDS=0
 ROTATE_DB=0
 RESET_ADMIN=0
 ROTATE_ENCRYPTABLE=0
 ROTATE_TLS=0
 
 usage() {
-    echo "用法: $0 [--regenerate] [--rotate-db] [--reset-admin] [--rotate-encryptable] [--rotate-tls]"
+    echo "用法: $0 [--regenerate] [--rotate-hashids] [--rotate-db] [--reset-admin] [--rotate-encryptable] [--rotate-tls]"
     echo "  (无参数)              首次生成；已有值保持不变，仅补齐缺失项"
-    echo "  --regenerate          轮换应用密钥（JWT/Hashids/传输层加密/RSA/Redis），保留数据库与管理员密码、字段加密密钥与 TLS 证书"
+    echo "  --regenerate          轮换应用密钥（JWT/传输层加密/RSA/Redis），保留 Hashids 盐值、数据库与管理员密码、字段加密密钥与 TLS 证书"
+    echo "  --rotate-hashids      轮换 Hashids 盐值（旧链接中的 ID 将无法解析）"
     echo "  --rotate-db           同时生成新的数据库密码（需按输出手动 ALTER USER）"
     echo "  --reset-admin         同时生成新的管理员密码（需按输出更新已有管理员）"
     echo "  --rotate-encryptable  轮换数据库字段加密密钥，旧密钥加入 ENCRYPTION_PREVIOUS_KEYS"
@@ -62,6 +66,7 @@ usage() {
 while [ $# -gt 0 ]; do
     case "$1" in
         --regenerate) REGENERATE=1 ;;
+        --rotate-hashids) ROTATE_HASHIDS=1 ;;
         --rotate-db) ROTATE_DB=1 ;;
         --reset-admin) RESET_ADMIN=1 ;;
         --rotate-encryptable) ROTATE_ENCRYPTABLE=1 ;;
@@ -212,8 +217,9 @@ if [ -f "$ENV_FILE" ] && grep -q '^JWT_SECRET_KEY=' "$ENV_FILE"; then
 fi
 
 ARCHIVE_PATH=""
-if [ "$REGENERATE" = 1 ] || [ "$ROTATE_DB" = 1 ] || [ "$RESET_ADMIN" = 1 ] \
-    || [ "$ROTATE_ENCRYPTABLE" = 1 ] || [ "$ROTATE_TLS" = 1 ] || [ "$LEGACY_LAYOUT" = 1 ]; then
+if [ "$REGENERATE" = 1 ] || [ "$ROTATE_HASHIDS" = 1 ] || [ "$ROTATE_DB" = 1 ] \
+    || [ "$RESET_ADMIN" = 1 ] || [ "$ROTATE_ENCRYPTABLE" = 1 ] \
+    || [ "$ROTATE_TLS" = 1 ] || [ "$LEGACY_LAYOUT" = 1 ]; then
     if [ -f "$ENV_FILE" ] || [ -d "$ENV_DIR" ] || [ -d "$SECRETS_DIR" ]; then
         archive_existing
         echo "旧配置已归档: $ARCHIVE_PATH"
@@ -302,8 +308,9 @@ done
 # ---------- 生成缺失值（已有值不变，--regenerate / --rotate-db / --reset-admin 强制换新） ----------
 
 JWT_SECRET_KEY="$(pick "$APP_ENV" JWT_SECRET_KEY "$(rand_hex 32)" "$REGENERATE")"
-HASHIDS_SALT="$(pick "$APP_ENV" HASHIDS_SALT "$(rand_hex 16)" "$REGENERATE")"
-HASHIDS_ALT_SALT="$(pick "$APP_ENV" HASHIDS_ALT_SALT "$(rand_hex 16)" "$REGENERATE")"
+# Hashids 盐值影响已生成的对外 ID，--regenerate 默认保留，仅 --rotate-hashids 显式轮换
+HASHIDS_SALT="$(pick "$APP_ENV" HASHIDS_SALT "$(rand_hex 16)" "$ROTATE_HASHIDS")"
+HASHIDS_ALT_SALT="$(pick "$APP_ENV" HASHIDS_ALT_SALT "$(rand_hex 16)" "$ROTATE_HASHIDS")"
 ENCRYPTION_KEY="$(pick "$APP_ENV" ENCRYPTION_KEY "$(rand_hex 16)" "$REGENERATE")"
 # 字段加密密钥默认永不轮换（已有数据用它加密）；只有 --rotate-encryptable 显式换新
 ENCRYPTABLE_KEY_EXISTING="$(pick "$APP_ENV" ENCRYPTABLE_KEY "" 0)"
@@ -327,6 +334,17 @@ for value in "$DB_DATABASE" "$DB_USERNAME"; do
     fi
 done
 DB_PASSWORD="$(pick "$MYSQL_ENV" DB_PASSWORD "$(rand_hex 16)" "$ROTATE_DB")"
+# 备份容器只使用最小权限用户（SELECT/SHOW VIEW/TRIGGER/EVENT/LOCK TABLES + 日志表 DELETE）
+DB_BACKUP_USERNAME="$(pick "$MYSQL_ENV" DB_BACKUP_USERNAME backup_reader 0)"
+if ! [[ "$DB_BACKUP_USERNAME" =~ ^[A-Za-z0-9_]+$ ]]; then
+    echo "错误: 备份用户名只能包含字母、数字和下划线: $DB_BACKUP_USERNAME" >&2
+    exit 1
+fi
+if [ "$DB_BACKUP_USERNAME" = "$DB_USERNAME" ]; then
+    echo "错误: DB_BACKUP_USERNAME 不能与应用用户 DB_USERNAME 相同" >&2
+    exit 1
+fi
+DB_BACKUP_PASSWORD="$(pick "$MYSQL_ENV" DB_BACKUP_PASSWORD "$(rand_hex 16)" "$ROTATE_DB")"
 MYSQL_ROOT_PASSWORD="$(pick "$MYSQL_ENV" MYSQL_ROOT_PASSWORD "$(rand_hex 16)" "$ROTATE_DB")"
 REDIS_PASSWORD="$(pick "$REDIS_ENV" REDIS_PASSWORD "$(rand_hex 16)" "$REGENERATE")"
 
@@ -508,6 +526,9 @@ MYSQL_DATABASE=$DB_DATABASE
 DB_DATABASE=$DB_DATABASE
 DB_USERNAME=$DB_USERNAME
 DB_PASSWORD=$DB_PASSWORD
+# init-app-user.sh 用这两个值创建最小权限备份用户
+DB_BACKUP_USERNAME=$DB_BACKUP_USERNAME
+DB_BACKUP_PASSWORD=$DB_BACKUP_PASSWORD
 EOF
 
 cat > "$TMP_DIR/redis.env" <<EOF
@@ -527,9 +548,11 @@ cat > "$TMP_DIR/backup.env" <<EOF
 # Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 #
 # 由 deploy/generate-secrets.sh 生成，切勿提交到版本库。
+# 仅最小权限备份用户，不含 root 凭据。
 # ============================================================
 
-MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
+DB_BACKUP_USERNAME=$DB_BACKUP_USERNAME
+DB_BACKUP_PASSWORD=$DB_BACKUP_PASSWORD
 MYSQL_DATABASE=$DB_DATABASE
 EOF
 
@@ -538,6 +561,8 @@ merge_env "$INIT_ENV" "$TMP_DIR/init.env"
 merge_env "$MYSQL_ENV" "$TMP_DIR/mysql.env"
 merge_env "$REDIS_ENV" "$TMP_DIR/redis.env"
 merge_env "$BACKUP_ENV" "$TMP_DIR/backup.env"
+# 旧版 backup.env 含有 root 密码；merge_env 会保留模板外的自定义键，这里显式移除
+strip_keys "$BACKUP_ENV" MYSQL_ROOT_PASSWORD
 
 # 旧版把所有密钥写在 .env 中；迁移后从主 .env 移除，保留自定义键
 MANAGED_KEYS="$(cat "$TMP_DIR/app.env" "$TMP_DIR/init.env" "$TMP_DIR/mysql.env" \
@@ -582,9 +607,15 @@ echo "  宿主 UID:   $APP_UID:$APP_GID"
 
 if [ "$REGENERATE" = 1 ]; then
     echo
-    echo "以下密钥已轮换，请确认影响："
-    echo "  - JWT / Hashids：所有登录会话失效，旧链接中的 Hashids ID 无法解析"
+    echo "以下应用密钥已轮换，请确认影响："
+    echo "  - JWT：所有登录会话失效"
     echo "  - RSA：已登录客户端需刷新公钥（TLS 证书、字段加密密钥保持不变）"
+    echo "  - Hashids 盐值默认保留；确需轮换请用 --rotate-hashids"
+fi
+
+if [ "$ROTATE_HASHIDS" = 1 ]; then
+    echo
+    echo "Hashids 盐值已轮换：旧链接与已保存的 Hashids ID 将无法解析。"
 fi
 
 if [ "$ROTATE_ENCRYPTABLE" = 1 ]; then
@@ -608,7 +639,11 @@ if [ "$ROTATE_DB" = 1 ]; then
         echo "ALTER USER IF EXISTS 'root'@'%' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD';"
         echo "ALTER USER IF EXISTS 'root'@'localhost' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD';"
         echo "ALTER USER '$DB_USERNAME'@'%' IDENTIFIED BY '$DB_PASSWORD';"
+        echo "ALTER USER IF EXISTS '$DB_BACKUP_USERNAME'@'%' IDENTIFIED BY '$DB_BACKUP_PASSWORD';"
         echo "SQL"
+        echo
+        echo "若备份用户尚不存在，再执行一次 init 脚本创建并授权（幂等）："
+        echo "docker compose exec -T mysql sh /docker-entrypoint-initdb.d/20-app-user.sh"
     else
         echo
         echo "全新部署：MySQL 初始化时会直接使用新的数据库密码，无需手动 ALTER USER。"

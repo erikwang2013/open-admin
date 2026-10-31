@@ -175,13 +175,26 @@ class DocsController
             }
 
             if ($params) {
-                $op['requestBody'] = [
-                    'required' => true,
-                    'content' => ['application/json' => ['schema' => [
-                        'type' => 'object',
-                        'properties' => array_map(fn($v) => ['type' => 'string', 'description' => $v], $params),
-                    ]]],
-                ];
+                if ($m === 'GET' || $m === 'HEAD') {
+                    // GET/HEAD 参数是 query string，不能放进 requestBody
+                    foreach ($params as $name => $desc) {
+                        $op['parameters'][] = [
+                            'name' => $name,
+                            'in' => 'query',
+                            'required' => false,
+                            'schema' => ['type' => 'string'],
+                            'description' => $desc,
+                        ];
+                    }
+                } else {
+                    $op['requestBody'] = [
+                        'required' => true,
+                        'content' => ['application/json' => ['schema' => [
+                            'type' => 'object',
+                            'properties' => array_map(fn($v) => ['type' => 'string', 'description' => $v], $params),
+                        ]]],
+                    ];
+                }
             }
 
             $path[strtolower($m)] = $op;

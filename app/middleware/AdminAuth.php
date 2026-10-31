@@ -43,7 +43,8 @@ class AdminAuth
                 return json(['code' => 401, 'message' => 'Token已失效，请重新登录', 'data' => []])->withStatus(401);
             }
         } catch (\Throwable $e) {
-            // Redis down, skip blacklist check
+            // Redis 故障时无法确认令牌是否已吊销，失败关闭
+            return json(['code' => 503, 'message' => '服务暂时不可用，请稍后再试', 'data' => []])->withStatus(503);
         }
 
         try {

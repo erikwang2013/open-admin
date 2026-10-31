@@ -180,8 +180,19 @@ class UserController extends BaseController
             return $this->fail(trans('messages.user_not_found'), 404);
         }
 
+        $status = (int) $request->input('status', $user->status);
+        if (!in_array($status, [0, 1], true)) {
+            return $this->fail(trans('messages.invalid_status'), 422);
+        }
+        if ($status !== 1 && $id === (int) ($request->adminId ?? 0)) {
+            return $this->fail('不能禁用当前登录账号', 422);
+        }
+        if ($status !== 1 && $this->leavesNoSuperAdmin([$id])) {
+            return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
+        }
+
         $user->real_name = $request->input('real_name', $user->real_name);
-        $user->status = (int) $request->input('status', $user->status);
+        $user->status = $status;
 
         if ($request->input('password') !== null && $request->input('password') !== '') {
             $user->password = password_hash(EncryptionService::decryptTransmission($request->input('password')), PASSWORD_BCRYPT);
@@ -218,9 +229,15 @@ class UserController extends BaseController
         }
 
         $adminId = $request->adminId ?? 0;
+        if ((int) $id === (int) $adminId) {
+            return $this->fail('不能删除当前登录账号', 422);
+        }
         $error = $this->confirmPassword($adminId, $request->input('password', ''), $request);
         if ($error !== null) {
             return $this->fail($error, 422);
+        }
+        if ($this->leavesNoSuperAdmin([$id])) {
+            return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
         }
 
         // 软删除前腾出用户名，释放唯一索引；截断以适配 username varchar(50)
@@ -268,6 +285,13 @@ class UserController extends BaseController
             return $this->fail(trans('messages.invalid_ids') . ': ' . implode(', ', $invalidIds), 422);
         }
 
+        if (in_array((int) $adminId, $decodedIds, true)) {
+            return $this->fail('不能删除当前登录账号', 422);
+        }
+        if ($this->leavesNoSuperAdmin($decodedIds)) {
+            return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
+        }
+
         foreach (AdminUser::whereIn('id', $decodedIds)->get() as $user) {
             $suffix = '#deleted' . $user->id;
             $user->username = mb_substr($user->username, 0, max(0, 50 - mb_strlen($suffix))) . $suffix;
@@ -313,9 +337,37 @@ class UserController extends BaseController
             return $this->fail(trans('messages.invalid_ids') . ': ' . implode(', ', $invalidIds), 422);
         }
 
+        $adminId = (int) ($request->adminId ?? 0);
+        if (in_array($adminId, $decodedIds, true)) {
+            return $this->fail('不能修改当前登录账号的状态', 422);
+        }
+        if ($status === 0 && $this->leavesNoSuperAdmin($decodedIds)) {
+            return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
+        }
+
         AdminUser::whereIn('id', $decodedIds)->update(['status' => $status]);
 
         $message = $status === 1 ? trans('messages.batch_enable_success') : trans('messages.batch_disable_success');
         return $this->success(['count' => count($decodedIds)], $message);
+    }
+
+    /**
+     * 判断本次删除/禁用是否会移除最后一名启用的超级管理员
+     *
+     * @param int[] $ids 将被删除或禁用的用户 ID
+     */
+    private function leavesNoSuperAdmin(array $ids): bool
+    {
+        $isSuperAdmin = static fn ($query) => $query->where('admin_role.slug', 'super_admin');
+        $affected = AdminUser::whereIn('id', $ids)
+            ->where('status', 1)
+            ->whereHas('roles', $isSuperAdmin)
+            ->count();
+        if ($affected === 0) {
+            return false;
+        }
+
+        $remaining = AdminUser::where('status', 1)->whereHas('roles', $isSuperAdmin)->count() - $affected;
+        return $remaining < 1;
     }
 }

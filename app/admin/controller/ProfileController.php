@@ -134,6 +134,10 @@ class ProfileController extends BaseController
                 $key = "{$set}:{$adminId}";
                 foreach (Redis::zrange($key, 0, -1, true) as $member => $exp) {
                     Redis::setex('jwt_blacklist:' . $member, max((int) $exp - time(), 1), '1');
+                    if ($set === 'user_refresh_tokens') {
+                        // 同时清除轮换缓存，防止旧 refresh token 重放换回已吊销的新令牌
+                        Redis::del('refresh_rotation:' . $member);
+                    }
                 }
                 Redis::del($key);
             }
@@ -183,6 +187,32 @@ class ProfileController extends BaseController
                 }
             } catch (\Throwable $e) {
                 // refresh token 无效时忽略
+            }
+
+            // 轮换缓存中的新令牌对一并吊销，防止旧 refresh token 重放换回有效令牌
+            try {
+                $rotationKey = 'refresh_rotation:' . md5($refreshToken);
+                $cached      = Redis::get($rotationKey);
+                if ($cached) {
+                    $pair = json_decode($cached, true);
+                    if (is_array($pair)) {
+                        foreach (['access_token' => false, 'refresh_token' => true] as $field => $allowRefresh) {
+                            if (empty($pair[$field])) {
+                                continue;
+                            }
+                            try {
+                                $pairPayload = $jwt->decode($pair[$field], $allowRefresh);
+                                $pairTtl     = max((int) ($pairPayload['exp'] ?? 0) - time(), 1);
+                            } catch (\Throwable $e) {
+                                $pairTtl = 60; // 无法解析时按最短窗口吊销，避免漏网
+                            }
+                            Redis::setex('jwt_blacklist:' . md5($pair[$field]), $pairTtl, '1');
+                        }
+                    }
+                    Redis::del($rotationKey);
+                }
+            } catch (\Throwable $e) {
+                // Redis 故障时忽略
             }
         }
 

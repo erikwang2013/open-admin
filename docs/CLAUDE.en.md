@@ -18,15 +18,15 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
 | Domain | Feature |
 |----|------|
-| Authentication | Login/Refresh/Logout + click CAPTCHA + account lockout + session limit |
+| Authentication | Login/Refresh/Logout + click CAPTCHA + account lockout + session limit + refresh rotation with 60s grace |
 | Dashboard | Real-time stats/trends/distribution/logs (Redis 5m cache) |
-| Users | CRUD + batch delete/enable-disable + Excel import |
+| Users | CRUD + batch delete/enable-disable + Excel import (5MB/2000-row cap) |
 | Roles & Permissions | CRUD + permission tree + RBAC method.path authorization |
 | System Config | Key-value CRUD |
 | Operation Audit | Log query + automatic detection of 8 platform client sources |
-| Files | Upload + Excel/PDF export (sensitive data masking) |
-| Security | 18-layer defense in depth (XSS/SQL injection/CSRF/rate limiting/CSP...) |
-| Operations | Health check/Prometheus metrics/API docs/security.txt + Docker + CI/CD |
+| Files | Upload + Excel/PDF export (sensitive data masking; HTTP 422 above 5000 rows) |
+| Security | 18-layer defense in depth (XSS/SQL injection/CSRF/rate limiting/CSP..., Redis fail-closed) |
+| Operations | Health check/Prometheus metrics/API docs (incl. /apidoc/)/security.txt + Docker + CI/CD |
 
 ## Project Pet · Xiao An
 
@@ -89,8 +89,8 @@ open-admin/
 │   ├── middleware/             # Middleware (7)
 │   │   ├── Cors.php            # CORS (global)
 │   │   └── (migrated to erikwang2013/security-php package)  # 31 attack detectors
-│   │   ├── RateLimit.php       # Redis rate limiting (global, Lua atomic)
-│   │   ├── AdminAuth.php       # JWT auth + blacklist
+│   │   ├── RateLimit.php       # Redis rate limiting (global, Lua atomic, fail-closed)
+│   │   ├── AdminAuth.php       # JWT auth + blacklist (Redis fail-closed)
 │   │   ├── AdminPermission.php # RBAC permission check (Redis 60s cache)
 │   │   └── OperationLog.php    # Automatic operation logging (incl. client source detection)
 │   ├── model/                  # Data models
@@ -118,7 +118,7 @@ open-admin/
 ├── database/
 │   ├── install.sql             # Full install script (all SQL merged)
 │   └── backup/                 # DB backup scripts
-│       ├── backup.sh           # mysqldump+gzip, 30-day retention
+│       ├── backup.sh           # mysqldump+gzip, 30-day retention (direct host DB access)
 │       └── restore.sh          # Interactive restore
 ├── docs/                       # Documentation
 │   ├── ARCHITECTURE.md         # Mermaid architecture diagrams
@@ -135,6 +135,7 @@ open-admin/
 │       ├── specs/              # Design specs
 │       └── plans/              # Implementation plans
 ├── public/                     # Public entry
+│   ├── apidoc/index.html       # Lightweight API explorer (same-origin /api/docs)
 │   └── img/pet.svg             # Project pet "Xiao An" (SVG, also the site icon)
 ├── site/                       # Responsive static site (Chinese/English, search, install/architecture/changelog)
 ├── deploy/                     # Single-machine production stack (compose + secret generation + Nginx/TLS)
@@ -152,7 +153,7 @@ open-admin/
 ├── docker-compose.yml          # Local quick-start stack (4 services)
 └── .github/
     └── workflows/
-        └── ci.yml              # CI/CD pipeline (PHP syntax + PHPUnit + Flutter analyze)
+        └── ci.yml              # CI/CD pipeline (PHP/Flutter tests + Docker/Compose/Nginx checks)
 ```
 
 ## Middleware Execution Chain
@@ -174,8 +175,11 @@ open-admin/
 - **CSP header**: Content-Security-Policy + X-Permitted-Cross-Domain-Policies injected into all responses
 - **Account lockout**: after 5 consecutive failed logins, the account is locked for 15 minutes
 - **Concurrent session limit**: at most 3 valid tokens per user; the oldest token is blacklisted when exceeded
+- **Refresh rotation**: after a refresh token is exchanged, the old token is blacklisted; replaying the old token within a 60-second grace window returns the same token pair; HarmonyOS issues only one refresh for concurrent 401s
+- **Super admin protection**: cannot delete the current account or change its status; at least one enabled super admin must remain; the `super_admin` role cannot be edited/deleted
+- **Redis fail-closed**: authentication and rate limiting for `/api/` and `/admin/` return 503 when Redis is unavailable (health checks, metrics and other non-API routes pass through)
 - **security.txt**: `/.well-known/security.txt` RFC 9116 endpoint
-- **Nginx security config**: `docs/nginx-security.conf` reverse-proxy hardening reference
+- **Nginx security config**: `docs/nginx-security.conf` reverse-proxy hardening reference; static assets repeat security headers in their own location, and CI validates with `nginx -t`
 
 ## API Versioning Policy
 
@@ -193,6 +197,8 @@ Redis sliding window (Lua atomic), default 60 req/min/IP/route:
 - Login `/api/v1/auth/login`: 10 req/min
 - Response headers: `X-RateLimit-Limit/Remaining/Reset`, plus `Retry-After` when exceeded
 
+> When Redis is unavailable, rate limiting and authentication for `/api/` and `/admin/` fail closed with 503; health checks, metrics and other non-API routes are unaffected.
+>
 > Keys in `RateLimit::$sensitive` must match the **full paths** in `config/route.php` (including the `/api/v{n}` version prefix), otherwise sensitive routes silently fall back to the default 60 req/min.
 
 ## Code Standards
@@ -204,7 +210,7 @@ Redis sliding window (Lua atomic), default 60 req/min/IP/route:
 - **Redis is accessed via the `support\Redis` utility class** (singleton connection pool, automatically reads the `REDIS_HOST/PORT/PASSWORD/DB` environment variables); all keys are automatically prefixed (default `open-admin:`, configurable via the `REDIS_PREFIX` environment variable)
 - **Route permissions**: routes in the `/admin` group require `method.path`-style permissions (e.g. `get.admin/dashboard`); routes needing no permission check are placed outside the group with only the `AdminAuth` middleware
 - **CORS**: when adding request headers, update the `Cors.php` middleware and the `Access-Control-Allow-Headers` fallback in `route.php` accordingly
-- **Super admin protection**: the `update`/`destroy` methods of `RoleController` are forbidden from operating on roles with `slug == 'super_admin'`
+- **Super admin protection**: the `update`/`destroy` methods of `RoleController` are forbidden from operating on roles with `slug == 'super_admin'`; `UserController` forbids deleting the current account or changing its status, and at least one enabled super admin must remain
 - webman converts PHP warnings into exceptions; undefined properties/variables cause 500 errors
 
 ### Database
@@ -225,7 +231,7 @@ Redis sliding window (Lua atomic), default 60 req/min/IP/route:
 
 ### HarmonyOS
 - Uses the `@ohos.net.http` native HTTP client
-- Seamless token refresh: auto-calls `/api/v1/auth/refresh` on 401
+- Seamless token refresh: auto-calls `/api/v1/auth/refresh` on 401; concurrent 401s trigger only one refresh (single-flight)
 - Auto-redirects to the login page when refresh fails
 
 ## Deployment
@@ -253,12 +259,14 @@ docker compose up -d --build
 
 - Per-service env isolation: `deploy/env/{app,init,mysql,redis,backup}.env` (directory `700`, files `600`); the master `deploy/.env` only holds compose interpolation values (domain, ports, `APP_UID`/`APP_GID`). The app container never holds the MySQL root password or the bootstrap admin password. The generator updates known keys in place, appends missing ones and preserves custom entries.
 - `generate-secrets.sh` is idempotent by default and only fills in missing values. It creates `deploy/secrets/rsa_public_key.pem` and the admin password file `deploy/secrets/admin_password.txt`; the RSA private key goes into `RSA_PRIVATE_KEY` in `app.env`.
-- `--regenerate` archives the current `deploy/.env`, `deploy/env/` and `deploy/secrets/` to `deploy/secrets/archive/<timestamp>/`, then rotates application secrets (JWT/HASHIDS/ENCRYPTION/RSA/Redis) by default while preserving `ENCRYPTABLE_KEY`, the existing TLS certificate, `DB_PASSWORD`, `MYSQL_ROOT_PASSWORD` and the admin password, so an existing database keeps working. Use `--rotate-encryptable` to rotate the field-encryption key (the old key is appended to `ENCRYPTION_PREVIOUS_KEYS`, so existing data remains readable; remove the old key only after re-encrypting the data), `--rotate-tls` to rotate TLS, `--rotate-db` for database passwords (the script prints the manual `ALTER USER` commands), and `--reset-admin` to reset the admin password.
+- `--regenerate` archives the current `deploy/.env`, `deploy/env/` and `deploy/secrets/` to `deploy/secrets/archive/<timestamp>/`, then rotates application secrets (JWT/transport encryption/RSA/Redis) by default while preserving the Hashids salt, `ENCRYPTABLE_KEY`, the existing TLS certificate, `DB_PASSWORD`, `MYSQL_ROOT_PASSWORD` and the admin password, so an existing database keeps working. Use `--rotate-encryptable` to rotate the field-encryption key (the old key is appended to `ENCRYPTION_PREVIOUS_KEYS`, so existing data remains readable; remove the old key only after re-encrypting the data), `--rotate-tls` to rotate TLS, `--rotate-db` for database passwords (the script prints the manual `ALTER USER` commands), and `--reset-admin` to reset the admin password; use `--rotate-hashids` if the Hashids salt must be rotated (IDs in old links will stop resolving).
 - Host ownership: `app`/`init` run as `${APP_UID:-1000}:${APP_GID:-1000}`; the script writes `id -u`/`id -g` into the master `.env`, keeping `deploy/data/{runtime,upload}` writable.
 - TLS defaults to a self-signed certificate for `DOMAIN` (`localhost` by default). Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; existing certificates are not overwritten unless `--rotate-tls` is used. HSTS is commented out by default; enable it after a real domain certificate is configured.
 - Ports: Nginx `80/443` (port 80 only keeps `/.well-known/acme-challenge/`, everything else 301 to HTTPS); webman listens on `8791` inside the container only.
 - Logs: Nginx and MySQL write to stdout/stderr and Docker rotates at `10m × 3`; use `docker compose logs -f app`. Host persistent directories: `deploy/data/{mysql,redis,runtime,upload,backups}`.
-- Automatic backup: the `backup` service runs `mysqldump` daily into `deploy/data/backups` with 30-day retention.
+- Resource limits: MySQL 768M, Redis 256M, app 512M, backup/init 256M, Nginx 128M (`deploy.resources.limits` in `deploy/docker-compose.yml`).
+- Automatic backup: the `backup` service runs `mysqldump` daily as the least-privilege `backup_reader` user (read-only on the application database plus `DELETE` on `erik_operation_log`) into `deploy/data/backups`, and archives `deploy/data/upload` as tar; backups are retained for 30 days and operation logs older than 180 days are purged daily.
+- Offsite backup: sync the backup directory with rsync or rclone (examples in `deploy/README.md`).
 - RSA public key: `GET /api/v1/auth/public-key` returns the current public key. Flutter fetches it before login and falls back to the embedded key on failure; after `--regenerate` rotates the keypair, verify the endpoint is reachable and rebuild clients that rely on the embedded fallback.
 
 ### CI/CD
@@ -268,10 +276,13 @@ docker compose up -d --build
 - PHP syntax check (`php -l`)
 - PHPUnit unit tests
 - Flutter static analysis (`flutter analyze`)
+- Docker image build and runtime dependency checks (`php -m` for redis/zip/gd, `gd_info` for FreeType/JPEG)
+- Compose/Nginx config validation: root compose, a temporary `deploy/` compose, and `nginx -t` for both Nginx configs
+- The `release` job depends on `php`, `flutter` and `docker`
 
 ### Database Backup
 
-The production stack's `backup` service writes a daily backup to `deploy/data/backups` (30-day retention).
+The production stack's `backup` service writes daily database and upload backups as the least-privilege user to `deploy/data/backups` (30-day retention) and purges operation logs older than 180 days; see `deploy/README.md` for offsite sync examples.
 `database/backup/backup.sh` — mysqldump + gzip, auto-cleans backups older than 30 days (host with direct database access).
 `database/backup/restore.sh` — interactive restore, lists available backups for selection.
 

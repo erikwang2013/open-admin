@@ -15,14 +15,18 @@ sequenceDiagram
 
     C->>CTL: POST /admin/export/excel
     Note right of C: {table,columns,conditions,title}
-    CTL->>DB: SELECT ... LIMIT 10000
+    CTL->>DB: SELECT ... LIMIT 5001
     DB-->>CTL: Query Results
-    CTL->>CTL: Decrypt Sensitive Fields
-    CTL->>CTL: Mask (maskPhone/maskEmail)
-    CTL->>CTL: PhpSpreadsheet Build
-    Note right of CTL: Blue header with white text<br/>Thin borders on data rows<br/>Frozen first row<br/>Auto filter
-    CTL->>FS: Write runtime/tmp/export_*.xlsx
-    CTL-->>C: File Download
+    alt More than 5000 rows
+        CTL-->>C: HTTP 422
+    else 5000 rows or fewer
+        CTL->>CTL: Decrypt Sensitive Fields
+        CTL->>CTL: Mask (maskPhone/maskEmail)
+        CTL->>CTL: PhpSpreadsheet Build
+        Note right of CTL: Blue header with white text<br/>Thin borders on data rows<br/>Frozen first row<br/>Auto filter
+        CTL->>FS: Write runtime/tmp/export_*.xlsx
+        CTL-->>C: File Download
+    end
 ```
 
 ## PDF Export

@@ -66,7 +66,11 @@ LUA;
         try {
             $result = Redis::eval($lua, [$key, $windowStart, $limit, $now, $now . '.' . mt_rand(), $window + 10], 1);
         } catch (\Throwable $e) {
-            return $handler($request); // Redis down, fail open
+            // API 与管理端限流失效必须失败关闭；健康检查/指标/非 API 路径放行，保证监控可用
+            if (str_starts_with($path, '/api/') || str_starts_with($path, '/admin/')) {
+                return json(['code' => 503, 'message' => '服务暂时不可用，请稍后再试', 'data' => []])->withStatus(503);
+            }
+            return $handler($request);
         }
         $count     = (int) ($result[1] ?? 0);
         $remaining = max($limit - $count, 0);

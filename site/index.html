@@ -167,8 +167,8 @@
         <article class="feature-card span-5 feature-card-tint" data-reveal>
           <p class="card-label">认证</p>
           <h3>登录与令牌</h3>
-          <p>点击验证码、JWT 签发与校验、Token 黑名单，access_token 2 小时，refresh_token 14 天。</p>
-          <p class="feature-foot">连续 5 次失败锁定 15 分钟，同一用户最多 3 个有效 Token。</p>
+          <p>点击验证码、JWT 签发与校验、Token 黑名单，access_token 2 小时，refresh_token 14 天。刷新轮换带 60 秒宽限，HarmonyOS 并发 401 只刷新一次。</p>
+          <p class="feature-foot">连续 5 次失败锁定 15 分钟，同一用户最多 3 个有效 Token；禁止删除当前账号或移除最后一名启用的超级管理员。</p>
         </article>
 
         <article class="feature-card span-3" data-reveal>
@@ -180,13 +180,13 @@
         <article class="feature-card span-4" data-reveal>
           <p class="card-label">用户</p>
           <h3>用户管理</h3>
-          <p>CRUD、批量删除与启禁用、软删除、Excel 导入逐行校验。</p>
+          <p>CRUD、批量删除与启禁用、软删除、Excel 导入（5MB / 2000 行上限，预检后逐行校验）。</p>
         </article>
 
         <article class="feature-card span-4" data-reveal>
           <p class="card-label">权限</p>
           <h3>角色与权限树</h3>
-          <p>RBAC 按 method.path 校验，权限缓存 60 秒，super_admin 受保护。</p>
+          <p>RBAC 按 method.path 校验，权限缓存 60 秒；super_admin 角色不可编辑/删除，且至少保留一名启用的超级管理员。</p>
         </article>
 
         <article class="feature-card span-4" data-reveal>
@@ -205,7 +205,7 @@
         <article class="feature-card span-5" data-reveal>
           <p class="card-label">文件</p>
           <h3>文件与导出</h3>
-          <p>上传校验、Excel 导出、PDF 导出，敏感数据自动脱敏。</p>
+          <p>上传校验、Excel/PDF 导出、敏感数据自动脱敏；导出超过 5000 行返回 422。</p>
         </article>
 
         <article class="feature-card span-7 feature-card-pet" data-reveal>
@@ -227,8 +227,9 @@
             <p>31 种攻击检测器覆盖 XSS、SQL 注入、SSRF、路径遍历与反序列化等场景，命中阈值后升级为 IP 黑名单。</p>
           </div>
           <ul class="platform-list">
-            <li>CSP 与安全响应头注入</li>
+            <li>CSP 与安全响应头注入，Nginx 静态资源单独重复安全头</li>
             <li>默认 60 次/分钟/IP/路由的 Lua 滑动窗口限流</li>
+            <li>Redis 故障时 /api/、/admin/ 的鉴权与限流失败关闭（503）</li>
             <li>security.txt 遵循 RFC 9116</li>
           </ul>
         </article>
@@ -236,7 +237,7 @@
         <article class="platform-card" data-reveal>
           <p class="card-label">运维观测</p>
           <h3>上线后看得见</h3>
-          <p>健康检查、5 项 Prometheus 指标、OpenAPI 文档、单机 Docker Compose（deploy/）与数据库备份脚本。</p>
+          <p>健康检查、5 项 Prometheus 指标、OpenAPI 文档与同源 /apidoc/ 调试页，单机 Docker Compose（deploy/，含容器内存限制）与最小权限数据库/上传备份。CI 构建镜像并校验 PHP 扩展、Compose 与两套 Nginx 配置。</p>
           <a class="text-link" href="https://github.com/erikwang2013/open-admin/blob/main/docs/API.md" target="_blank" rel="noopener">API 文档</a>
         </article>
 
@@ -401,7 +402,9 @@ docker compose up -d --build
 
 # 6 个服务: nginx / app / init / mysql / redis / backup
 # 密钥按服务拆分到 deploy/env/*.env
-# 每日备份 → deploy/data/backups（保留 30 天）
+# --regenerate 保留 Hashids；轮换用 --rotate-hashids
+# 每日备份 DB + upload → deploy/data/backups（保留 30 天，日志 180 天）
+# 异地同步：rsync / rclone（见 deploy/README.md）
 # 宿主机数据与日志 → deploy/data/{mysql,redis,runtime,upload}（runtime 含日志）
 
 # 访问
@@ -429,20 +432,20 @@ docker compose up -d --build
           <p class="card-label">API 认证</p>
           <h3>Bearer Token</h3>
           <pre><code>Authorization: Bearer &lt;token&gt;</code></pre>
-          <p>access_token 有效期 2 小时，refresh_token 14 天。401 时调用刷新接口，不在客户端保存明文密钥。</p>
+          <p>access_token 有效期 2 小时，refresh_token 14 天。401 时调用刷新接口，旧 token 在 60 秒宽限内返回同一对令牌；不在客户端保存明文密钥。</p>
         </article>
 
         <article class="usage-card" data-reveal>
           <p class="card-label">统一响应</p>
           <h3>code 为 0 即成功</h3>
           <pre><code>{ "code": 0, "message": "success", "data": {} }</code></pre>
-          <p>错误码覆盖 400、401、403、404、422、429 与 500。ID 出入参使用 Hashids，不暴露数据库主键。</p>
+          <p>错误码覆盖 400、401、403、404、422、429、500 与 503。ID 出入参使用 Hashids，不暴露数据库主键。</p>
         </article>
 
         <article class="usage-card" data-reveal>
           <p class="card-label">限流</p>
           <h3>先看响应头</h3>
-          <p>默认 60 次/分钟/IP/路由，登录接口 10 次/分钟。响应携带 X-RateLimit-Limit、Remaining、Reset，超限时读取 Retry-After。</p>
+          <p>默认 60 次/分钟/IP/路由，登录接口 10 次/分钟。响应携带 X-RateLimit-Limit、Remaining、Reset，超限时读取 Retry-After；Redis 不可用时 /api/、/admin/ 返回 503。</p>
         </article>
       </div>
 
@@ -459,6 +462,7 @@ docker compose up -d --build
             <tr><td><code>GET</code></td><td><code>/health</code></td><td>健康检查</td></tr>
             <tr><td><code>GET</code></td><td><code>/metrics</code></td><td>Prometheus 指标</td></tr>
             <tr><td><code>GET</code></td><td><code>/api/docs</code></td><td>OpenAPI 交互文档</td></tr>
+            <tr><td><code>GET</code></td><td><code>/apidoc/</code></td><td>轻量 API 调试页（同源 /api/docs）</td></tr>
           </tbody>
         </table>
       </div>
@@ -491,6 +495,10 @@ docker compose up -d --build
       </div>
 
       <ol class="timeline">
+        <li data-reveal>
+          <div class="timeline-meta"><span class="version-tag">v2.1.9</span><time datetime="2026-11-01">2026-11-01</time></div>
+          <div class="timeline-body"><h3>安全加固与交付校验</h3><p>自删除与最后一名超级管理员保护；Redis 故障时 /api/、/admin/ 鉴权与限流失败关闭（503）；refresh token 轮换增加 60 秒宽限，HarmonyOS 并发 401 单飞刷新；备份改为最小权限 backup_reader，新增上传目录 tar、异地同步与 180 天操作日志清理；导入预检 2000 行上限，导出超过 5000 行返回 422；新增 --rotate-hashids、容器内存限制、Nginx 静态资源安全头、轻量 /apidoc/ 调试页与 CI Docker/Compose/Nginx 校验。</p></div>
+        </li>
         <li data-reveal>
           <div class="timeline-meta"><span class="version-tag">v2.1.8</span><time datetime="2026-11-01">2026-11-01</time></div>
           <div class="timeline-body"><h3>JWT 变量统一与文档收尾</h3><p>JWT 签名密钥统一使用 JWT_SECRET_KEY，移除未使用的 JWT_SECRET 别名；同步更新中英文文档、架构/生命周期图与站点内容。</p></div>

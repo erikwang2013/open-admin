@@ -36,7 +36,7 @@
   <text class="fName" x="98" y="150">认证</text>
   <text class="fWhere" x="98" y="167">app/api/v1/controller</text>
   <line x1="50" y1="184" x2="290" y2="184" stroke="#EEF2F7"/>
-  <text class="fItem" x="50" y="205">· 登录 / 注册 / 刷新 / 登出</text>
+  <text class="fItem" x="50" y="205">· 登录 / 刷新 / 登出</text>
   <text class="fItem" x="50" y="224">· 点击验证码（poster-php）</text>
   <text class="fItem" x="50" y="243">· 账号锁定 5 次 × 15 分钟</text>
   <text class="fItem" x="50" y="262">· 并发会话上限 3，超出踢最旧</text>
@@ -68,7 +68,7 @@
   <text class="fItem" x="650" y="205">· CRUD + 批量删除 / 启禁用</text>
   <text class="fItem" x="650" y="224">· Excel 导入逐行校验 + 错误报告</text>
   <text class="fItem" x="650" y="243">· 软删除 + 敏感操作二次确认</text>
-  <text class="fItem" x="650" y="262">· 密码 Argon2 哈希存储</text>
+  <text class="fItem" x="650" y="262">· 密码 bcrypt 哈希存储</text>
 
   <!-- 角色权限 -->
   <rect class="card" x="930" y="112" width="280" height="152" rx="14"/>

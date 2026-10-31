@@ -142,17 +142,20 @@ All responses (including normal ones) carry the following headers:
 
 ### Degradation Strategy
 
-When Redis is unhealthy (connection timeout, unavailable, etc.), the system **fails open**:
+When Redis is unhealthy (connection timeout, unavailable, etc.), `/api/` and `/admin/` requests **fail closed** with HTTP 503, while non-API paths such as `/health` and `/metrics` still pass through so monitoring and probes keep working:
 
 ```php
 try {
     $result = Redis::eval($lua, ...);
 } catch (\Throwable $e) {
-    return $handler($request); // Redis down, 放行所有请求
+    if (str_starts_with($path, '/api/') || str_starts_with($path, '/admin/')) {
+        return json(['code' => 503, 'message' => '服务暂时不可用，请稍后再试', 'data' => []])->withStatus(503);
+    }
+    return $handler($request); // 非 API 路径放行，保证监控可用
 }
 ```
 
-Better to temporarily lose rate-limit protection than to block legitimate business requests.
+When rate limiting or authentication fails, availability is traded for safety: API requests are refused while Redis is down, preventing bypass of rate limits and the token blacklist.
 
 ### 5.4 Account Lockout Mechanism
 
@@ -209,7 +212,9 @@ Implemented by the AdminAuth middleware, mounted on route groups that require au
 3. JWT decode → failure (expired/signature mismatch) → 401 `Token已过期或无效`
 4. Success → inject `$request->adminId` and `$request->adminUsername`
 
-**Blacklist mechanism**: on logout, `md5(token)` is written to Redis with the TTL set to the JWT's remaining validity. When Redis fails, blacklist checks are skipped (fail-open); a logged-out token may remain usable briefly, but the JWT's short validity (2h) acts as a fallback safeguard.
+**Blacklist mechanism**: on logout, `md5(token)` is written to Redis with the TTL set to the JWT's remaining validity. When Redis fails, `AdminAuth` cannot read the blacklist and returns 503 (fail closed) instead of allowing tokens that may have been logged out.
+
+**Refresh token rotation**: every successful `/api/v1/auth/refresh` issues a new access/refresh pair and immediately blacklists the old refresh_token. To tolerate concurrent requests and client retries, the server caches the new pair for 60 seconds under the md5 of the old token (`refresh_rotation:{md5}`): resubmitting the same old token within the grace period returns the same pair instead of rotating again, and after 60 seconds it is rejected as blacklisted. A password change bumps the password-change watermark and clears the rotation cache; logout blacklists the cached tokens and deletes the cache key. Clients should refresh serially; the HarmonyOS client uses single-flight refresh for concurrent 401s so all requests share one result.
 
 ### 6.2 Concurrent Session Limit
 
@@ -273,6 +278,8 @@ For example:
 5. No match → 403 `{"code": 403, "message": "无权限访问"}`
 
 **Password re-confirmation**: BaseController provides `confirmPassword()`. Sensitive operations (deleting users, data export, etc.) additionally require the current password at the controller layer, preventing unauthorized actions after session hijacking.
+
+**Super-admin protection**: delete, batch delete and batch disable reject the currently logged-in account (422) and count enabled users with `slug = super_admin` before writing; if the operation would leave zero, the request returns 422 `系统必须保留至少一名启用的超级管理员`. The built-in `super_admin` role itself cannot be edited or deleted (403). The check is check-then-write; the extreme case of concurrent deletion of multiple super admins needs database row locks, and the residual race window is listed in 12.2.
 
 ---
 
@@ -376,6 +383,8 @@ Key rotation: the `ENCRYPTION_PREVIOUS_KEYS` environment variable supports a com
 - Email: `a***@example.com`
 - ID card: fully masked as `********`
 
+**Import/export resource limits**: a single Excel export is capped at 5,000 rows (the query uses `LIMIT 5001` as a probe; over the cap returns HTTP 422), limiting memory use and the data-exfiltration surface of bulk exports. User imports are limited to 5MB and 2,000 rows; before loading the workbook the server reads worksheet metadata and rejects any sheet over 2,001 rows with a 422, then validates the row count again after loading.
+
 ---
 
 ## 9. Key Management
@@ -397,7 +406,7 @@ All keys are injected via `.env` environment variables; config files read them w
 - `.env.example` is a public template and contains no real keys
 - All default keys **must** be replaced with random strings in production
 - The single-machine production stack uses `deploy/generate-secrets.sh` to create `deploy/env/{app,init,mysql,redis,backup}.env` (directory `700`, files `600`), `deploy/.env` and `deploy/secrets/`; `deploy/.env`, `deploy/env/` and `deploy/secrets/` are all in `.gitignore`. Environment variables are isolated per service, so the app container never holds the MySQL root password or the bootstrap admin password
-- `--regenerate` archives the old `.env`, `env/` and `secrets/` to `deploy/secrets/archive/<timestamp>/`, then rotates application secrets (JWT/HASHIDS/ENCRYPTION/RSA/Redis) by default, preserving `ENCRYPTABLE_KEY`, the existing TLS certificate, `DB_PASSWORD`, `MYSQL_ROOT_PASSWORD` and the admin password so an existing database keeps working. Use `--rotate-encryptable` to rotate the field-encryption key (the old key is appended to `ENCRYPTION_PREVIOUS_KEYS`, so existing data remains readable; remove the old key only after re-encrypting the data), `--rotate-tls` to rotate TLS, `--rotate-db` for database password rotation, and `--reset-admin` to reset the admin password
+- `--regenerate` archives the old `.env`, `env/` and `secrets/` to `deploy/secrets/archive/<timestamp>/`, then rotates application secrets (JWT/ENCRYPTION/RSA/Redis) by default, preserving `HASHIDS_SALT`, `ENCRYPTABLE_KEY`, the existing TLS certificate, `DB_PASSWORD`, `MYSQL_ROOT_PASSWORD` and the admin password so an existing database keeps working. Rotate the Hashids salt explicitly with `--rotate-hashids` (IDs in old links stop resolving); use `--rotate-encryptable` to rotate the field-encryption key (the old key is appended to `ENCRYPTION_PREVIOUS_KEYS`, so existing data remains readable; remove the old key only after re-encrypting the data), `--rotate-tls` to rotate TLS, `--rotate-db` for database password rotation, and `--reset-admin` to reset the admin password
 - The RSA public key is exposed via `GET /api/v1/auth/public-key` (public key only, safe to expose). After rotation, verify the endpoint is reachable and rebuild old clients that rely on the embedded fallback key
 
 ### Key Storage Isolation
@@ -408,6 +417,10 @@ All keys are injected via `.env` environment variables; config files read them w
 | Storage encryption | `config/encryptable.php` → `key` | `ENCRYPTABLE_KEY` |
 | ID obfuscation | `config/hashids.php` → `connections.main.salt` | `HASHIDS_SALT` |
 | JWT signing | `config/plugin/erikwang2013/jwt/jwt` | `JWT_SECRET_KEY` |
+
+### Backup and Log Retention
+
+The production `backup` service uses a dedicated least-privilege MySQL user, `backup_reader` (`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` plus `DELETE` on `erik_operation_log`), and never holds the root password. It runs `mysqldump --single-transaction --no-tablespaces` daily and archives `deploy/data/upload` as `upload_<timestamp>.tar.gz`; both are kept for 30 days. It also deletes operation logs older than 180 days daily (at most 10,000 rows per run, failures never block backups). Backups live on the same host/disk as the database, so they must be copied offsite with `rsync` or `rclone` to avoid losing data and backups together in a single-machine failure.
 
 ---
 
@@ -458,13 +471,14 @@ The project provides `docs/nginx-security.conf` as a security hardening referenc
 | `limit_req_zone` | Request rate limiting at the Nginx layer |
 | `limit_conn_zone` | Concurrent connection limit |
 | `add_header` security headers | Appends security headers such as X-XSS-Protection at the Nginx layer |
+| Static asset headers | Repeats `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` and `Cache-Control` inside the assets locations (an `add_header` in a location replaces inherited headers) |
 | `if ($request_method)` | Rejects non-standard HTTP methods at the Nginx layer |
 | SSL/TLS configuration | Modern TLS 1.2/1.3 configuration, weak cipher suites disabled |
 | Hiding backend headers | `proxy_hide_header` removes sensitive headers such as the webman version |
 
 **Usage**: merge the config from `docs/nginx-security.conf` into your Nginx server block, adjusting for your actual domain and certificate paths.
 
-The single-machine production stack uses `deploy/nginx/default.conf`: port 80 redirects everything except `/.well-known/acme-challenge/` to HTTPS, and the certificate is read from `deploy/secrets/tls/fullchain.pem` and `privkey.pem`. Replace those two files with real-domain certificates; existing certificates are not overwritten unless `--rotate-tls` is used. `Strict-Transport-Security` (HSTS) is commented out by default: with a self-signed certificate or an unconfirmed domain it would pin browsers to the wrong host, so enable it after a real-domain certificate is configured. Nginx/MySQL logs go to stdout/stderr and are rotated by Docker at `10m × 3`, so no unbounded host log files are created.
+The single-machine production stack uses `deploy/nginx/default.conf`: port 80 redirects everything except `/.well-known/acme-challenge/` to HTTPS, and the certificate is read from `deploy/secrets/tls/fullchain.pem` and `privkey.pem`. Replace those two files with real-domain certificates; existing certificates are not overwritten unless `--rotate-tls` is used. `Strict-Transport-Security` (HSTS) is commented out by default: with a self-signed certificate or an unconfirmed domain it would pin browsers to the wrong host, so enable it after a real-domain certificate is configured. Nginx/MySQL logs go to stdout/stderr and are rotated by Docker at `10m × 3`, so no unbounded host log files are created. Both configs are validated with `nginx -t` in CI.
 
 ---
 
@@ -494,7 +508,9 @@ The single-machine production stack uses `deploy/nginx/default.conf`: port 80 re
 | Limitation | Impact | Mitigation |
 |------|---------|---------|
 | CSRF protection works only for browsers | Non-browser clients (curl, Postman, mobile apps) can skip Origin/Referer checks | Non-browser clients are naturally immune to CSRF; rely on JWT authentication instead of cookies |
-| Rate limiting and blacklist degrade to fail-open when Redis is unavailable | Attackers can bypass rate limiting and high-frequency blocking | Monitor Redis availability with alerts; IP blacklist supports file/redis/cache backends for degradation |
+| `/api/` and `/admin/` fail closed (503) when Redis is unavailable | The admin UI and API are unavailable while Redis is down | Non-API paths such as `/health` and `/metrics` pass through; monitor and alert on Redis and restore it quickly |
+| 60-second refresh token grace period | An old refresh_token replayed within 60 seconds of rotation returns the cached new pair | The old token is blacklisted and the cache lives only 60 seconds; clients refresh serially and HarmonyOS uses single-flight |
+| Last-super-admin check has no row lock | Two concurrent deletes/disables of the last two super admins may both pass the check | Re-check immediately before writing; strict serialization needs a transaction with `SELECT ... FOR UPDATE` |
 | No standalone WAF engine | Regex-based detection, not a dedicated WAF rule engine | Recommended: Nginx ModSecurity or Cloudflare WAF in front in production |
 | Stateless JWT cannot be actively invalidated | Tokens cannot be revoked server-side before expiry (except via blacklist) | Blacklist + short 2h TTL narrows the risk window |
 | No special rate limit for admin endpoints | Admin endpoints share the 60/min default limit with normal endpoints | Admin operation frequency is naturally low; no distinction needed for now |

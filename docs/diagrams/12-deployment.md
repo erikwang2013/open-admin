@@ -12,7 +12,7 @@ flowchart TB
         wm["webman app :8791<br/>容器内网"]
         mysql[("MySQL 8.0<br/>deploy/data/mysql")]
         redis[("Redis 7 · AOF<br/>deploy/data/redis")]
-        backup["backup（每日）<br/>mysqldump · gzip<br/>保留 30 天"]
+        backup["backup（每日）<br/>mysqldump + upload tar<br/>保留 30 天 · 日志 180 天"]
     end
 
     subgraph persist["宿主机持久化"]

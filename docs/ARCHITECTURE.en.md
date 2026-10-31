@@ -265,6 +265,8 @@ sequenceDiagram
     SV-->>CL: 200 { dashboard data }
 ```
 
+Refresh tokens: every successful `POST /api/v1/auth/refresh` rotates the access/refresh pair; the old refresh_token is blacklisted immediately and the new pair is cached for 60 seconds under `refresh_rotation:<md5(old token)>`, so resubmitting the same old token within the grace period returns the same pair. A password change clears the rotation cache and logout blacklists the cached tokens; the HarmonyOS client uses single-flight refresh for concurrent 401s.
+
 ---
 
 ## 5. RBAC Permission Model
@@ -515,8 +517,9 @@ sequenceDiagram
 
     Note over C,FS: === Excel Export ===
     C->>CTL: POST /admin/export/excel<br/>{ table, columns, conditions }
-    CTL->>DB: SELECT ... LIMIT 10000
+    CTL->>DB: SELECT ... LIMIT 5001
     DB-->>CTL: Data
+    CTL->>CTL: Over 5,000 rows → HTTP 422
     CTL->>CTL: Decrypt sensitive fields
     CTL->>CTL: Masking (maskPhone/maskEmail)
     CTL->>CTL: PhpSpreadsheet build<br/>Blue header with white text<br/>Thin borders on data rows<br/>Frozen first row<br/>Auto-filter
@@ -530,6 +533,8 @@ sequenceDiagram
     CTL->>FS: Write runtime/tmp/export_*.pdf
     CTL-->>C: File download
 ```
+
+For user import, `ImportController` reads worksheet metadata (`listWorksheetInfo`) before `IOFactory::load()` and rejects any workbook with a sheet over 2,001 rows with HTTP 422; after loading it re-checks with `getHighestDataRow()`. Files are limited to 5MB and 2,000 data rows.
 
 ---
 
@@ -629,6 +634,8 @@ flowchart TB
     style L7 fill:#FF4D4F,color:#fff
 ```
 
+Additional notes: when Redis fails, `AdminAuth` blacklist checks and `RateLimit` return 503 (fail closed) for `/api/` and `/admin/`, while non-API paths such as `/health` and `/metrics` pass through; delete/disable operations cannot remove the last enabled super administrator, and the built-in `super_admin` role cannot be edited or deleted.
+
 ---
 
 ## 13. Deployment Topology
@@ -645,7 +652,7 @@ flowchart TB
         INIT["init (one-shot)<br/>schema + admin user<br/>then exits"]
         MYSQL["MySQL 8.0<br/>deploy/data/mysql"]
         REDIS["Redis 7 · AOF<br/>deploy/data/redis"]
-        BACKUP["backup (daily)<br/>mysqldump · 30-day retention"]
+        BACKUP["backup (daily)<br/>mysqldump + upload tar<br/>30-day retention · 180-day logs"]
     end
 
     subgraph "Host persistence"
@@ -676,7 +683,7 @@ flowchart TB
     style DATA fill:#F6F8FC,color:#1677FF
 ```
 
-> Environment variables are isolated per service in `deploy/env/{app,init,mysql,redis,backup}.env` (`600`, directory `700`); the master `deploy/.env` only holds compose interpolation values. The app and init containers run as the host `APP_UID`/`APP_GID`. Nginx/MySQL logs go to stdout/stderr and are rotated by Docker at `10m × 3`; HSTS is off by default and should be enabled after a real domain certificate is configured.
+> Environment variables are isolated per service in `deploy/env/{app,init,mysql,redis,backup}.env` (`600`, directory `700`); the master `deploy/.env` only holds compose interpolation values. The app and init containers run as the host `APP_UID`/`APP_GID`. `backup` uses the least-privilege `backup_reader` user to back up the database and uploads and to delete operation logs older than 180 days; every service has a memory limit (app 512M, init 256M, mysql 768M, redis 256M, nginx 128M, backup 256M). Nginx/MySQL logs go to stdout/stderr and are rotated by Docker at `10m × 3`; HSTS is off by default and should be enabled after a real domain certificate is configured.
 
 ---
 

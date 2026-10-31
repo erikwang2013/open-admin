@@ -46,10 +46,20 @@ class ImportController extends BaseController
         }
 
         $tmpPath = $file->getRealPath();
-        $spreadsheet = IOFactory::load($tmpPath);
+
+        $reader = IOFactory::createReaderForFile($tmpPath);
+        $reader->setReadDataOnly(true);
+
+        // 加载前先读工作表元数据拒绝超大表，避免整本工作簿进内存
+        $sheetRows = array_column($reader->listWorksheetInfo($tmpPath), 'totalRows');
+        if ($sheetRows && max($sheetRows) > 2001) {
+            return $this->fail('数据行数不能超过 2000 行（不含表头）', 422);
+        }
+
+        $spreadsheet = $reader->load($tmpPath);
         $sheet       = $spreadsheet->getActiveSheet();
 
-        // 先按数据边界拒绝超大表，避免 toArray() 展开占用大量内存
+        // 再加一道实际数据边界校验，防止元数据与实际行数不一致
         if ($sheet->getHighestDataRow() > 2001) {
             return $this->fail('数据行数不能超过 2000 行（不含表头）', 422);
         }

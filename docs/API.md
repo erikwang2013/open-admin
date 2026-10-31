@@ -13,7 +13,7 @@
 > **端点总览**: 认证(4) | 仪表盘(1) | 用户(7) | 角色(4) | 权限(4) | 配置(4) | 日志(1) | 个人中心(3) | 导入导出(3) | 上传(1) | 运维(4: health/metrics/docs/security.txt) | 共 36 端点
 - **认证**: `Authorization: Bearer <token>`（JWT）
 - **响应格式**: `{ "code": 0, "message": "success", "data": {...} }`
-- **文档端点**: `GET /api/docs` 返回 OpenAPI 3.0 JSON 规范
+- **文档端点**: `GET /api/docs` 返回 OpenAPI 3.0 JSON 规范；`/apidoc/` 提供轻量同源调试界面（单个 HTML，无外部资源）
 
 ### 请求要求
 
@@ -39,6 +39,7 @@
 | 422 | 参数验证失败 | 必填字段缺失、格式不符、业务校验不通过 |
 | 429 | 请求过于频繁 | RateLimit 触发 / 账号锁定（连续5次登录失败锁定15分钟） |
 | 500 | 服务器内部错误 | |
+| 503 | 服务暂时不可用 | Redis 不可用导致 `/api/`、`/admin/` 鉴权或限流失败关闭 |
 
 ## 3. 公开端点
 
@@ -79,6 +80,8 @@ GET /api/docs
 - **认证**: 无需
 - **限流**: 全局默认 (60次/分钟)
 - **响应**: OpenAPI 3.0.3 JSON 规范，包含所有端点定义、参数和 Schema
+
+浏览器打开 `/apidoc/` 可直接调试本文档中的接口：页面从同源 `GET /api/docs` 读取规范，支持填写 Bearer Token、路径/查询参数与 JSON 请求体，并在页面内展示状态码与响应。该界面为单个静态 HTML，不依赖外部 CDN 或构建步骤。
 
 ### 3.3 生成验证码
 
@@ -369,6 +372,8 @@ POST /api/v1/auth/refresh
 ```
 
 刷新成功会同时返回新的 access_token 和 refresh_token，旧令牌自动失效。刷新时会更新用户最后登录时间和 IP。
+
+为容忍并发请求与客户端重试，旧 refresh_token 轮换后有 60 秒宽限期：服务端以旧令牌的 md5 为键缓存新令牌对 60 秒，宽限期内再次提交同一旧令牌会原样返回缓存的新令牌对，不会重复轮换；超过宽限期后旧令牌按黑名单处理并返回 401。客户端应串行刷新；HarmonyOS 客户端对并发 401 采用单飞（single-flight）刷新，多个请求共享同一次刷新结果。
 
 **可能的错误**:
 - 422: 缺少刷新令牌
@@ -729,6 +734,8 @@ DELETE /admin/user/{id}
 - 404: 用户不存在
 - 422: 敏感操作需要输入密码确认（password 为空）
 - 422: 密码验证失败（密码不匹配）
+- 422: 不能删除当前登录账号
+- 422: 系统必须保留至少一名启用的超级管理员
 
 ### 5.6 批量删除用户
 
@@ -769,6 +776,8 @@ POST /admin/user/batch/destroy
 - 422: 请选择要删除的用户（ids 为空）
 - 422: 无效的 ID（hashid 解码失败）
 - 422: 密码验证失败
+- 422: 不能删除当前登录账号（ids 包含当前用户）
+- 422: 系统必须保留至少一名启用的超级管理员
 
 ### 5.7 批量启用/禁用用户
 
@@ -807,6 +816,8 @@ message 根据 status 值动态变化为 `"批量启用成功"` 或 `"批量禁�
 **可能的错误**:
 - 422: 请选择用户（ids 为空）
 - 422: 状态值无效（status 不是 0 或 1）
+- 422: 不能修改当前登录账号的状态
+- 422: 系统必须保留至少一名启用的超级管理员（禁用最后一名启用的超级管理员时）
 
 ## 6. 角色管理
 
@@ -940,6 +951,8 @@ PUT /admin/role/{id}
 }
 ```
 
+内置 `super_admin` 角色禁止更新，返回 403（`超级管理员不可编辑`）。
+
 ### 6.4 删除角色
 
 ```
@@ -965,7 +978,7 @@ DELETE /admin/role/{id}
 }
 ```
 
-删除时自动解除角色与所有权限、用户的关联关系，然后物理删除角色记录。
+删除时自动解除角色与所有权限、用户的关联关系，然后物理删除角色记录。内置 `super_admin` 角色禁止删除，返回 403（`超级管理员不可删除`）。
 
 ## 7. 权限管理
 
@@ -1427,7 +1440,7 @@ POST /admin/profile/logout
 }
 ```
 
-登出逻辑：解码 JWT 获取剩余有效期 (exp - now)，将该 token 的 md5 哈希写入 Redis 黑名单 `jwt_blacklist:{md5}`，TTL = 剩余有效期。黑名单中的 token 在 `AdminAuth` 中间件中被拦截，返回 401。
+登出逻辑：解码 JWT 获取剩余有效期 (exp - now)，将该 token 的 md5 哈希写入 Redis 黑名单 `jwt_blacklist:{md5}`，TTL = 剩余有效期。若请求携带的 refresh_token 存在轮换缓存，同时拉黑缓存中的 access_token 与 refresh_token 并删除缓存键。黑名单中的 token 在 `AdminAuth` 中间件中被拦截，返回 401；Redis 读取失败时返回 503（失败关闭）。
 
 无 token 时返回 401。token 已过期/无效时（解码抛出异常）仍视为登出成功。
 
@@ -1470,7 +1483,10 @@ POST /admin/export/excel
 | `admin_role` | id, name, slug, description, status, created_at |
 | `system_config` | id, group, key, value, type, description, created_at |
 
-敏感字段 `phone`、`email`、`id_card` 在导出时自动脱敏处理。数据上限 10000 行。Excel 首行冻结、自动筛选。
+敏感字段 `phone`、`email`、`id_card` 在导出时自动脱敏处理。单次最多导出 5000 行（查询 `LIMIT 5001` 探测），超过时返回 HTTP 422。Excel 首行冻结、自动筛选。
+
+**可能的错误**:
+- 422: 导出数据超过 5000 行，请缩小筛选范围（HTTP 状态码同为 422）
 
 ### 11.2 导出 PDF
 
@@ -1532,7 +1548,7 @@ POST /admin/import/users
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| file | file | 是 | `.xlsx` 或 `.xls` 格式 |
+| file | file | 是 | `.xlsx` 或 `.xls` 格式，最大 5MB |
 
 **Excel 列要求**:
 
@@ -1545,7 +1561,12 @@ POST /admin/import/users
 | email | 否 | 邮箱 |
 | status | 否 | 状态，默认 1 |
 
-第 1 行为列标题（大小写不敏感），第 2 行起为数据。
+第 1 行为列标题（大小写不敏感），第 2 行起为数据。单个文件不超过 5MB，数据行（不含表头）最多 2000 行。服务端在加载工作簿前先读取工作表元数据，任一工作表超过 2001 行立即返回 422，避免整本工作簿进入内存；加载后仍保留行数上限作为二次防御。
+
+**可能的错误**:
+- 422: 仅支持 .xlsx 或 .xls 文件
+- 422: 文件大小不能超过 5MB
+- 422: 数据行数不能超过 2000 行（不含表头）
 
 **响应示例**:
 ```json
@@ -1625,7 +1646,9 @@ POST /admin/upload
 - 默认全局限制: 60 次/分钟 / IP+路径
 - 登录端点 `/api/v1/auth/login`: 10 次/分钟
 - 使用 Redis 原子化滑动窗口算法（Lua ZSET），避免 TOCTOU 竞态
-- Redis 不可用时 fail open（放行），不阻塞请求
+- Redis 不可用时失败关闭：`/api/`、`/admin/` 请求返回 503（JSON `code: 503`）；`/health`、`/metrics` 等非 API 路径放行，保证监控与探针可用。`AdminAuth` 读取黑名单失败时同样返回 503
+
+Nginx 静态资源（`/assets/`、`/open-admin/assets/` 等）在 location 级重复注入 `X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy` 与 `Cache-Control`：location 内的 `add_header` 会覆盖继承值，因此必须逐条重复。
 
 ## 14. 认证流程
 
@@ -1672,7 +1695,7 @@ POST /admin/upload
     ↓
    AdminAuth 中间件:
    a. 提取 Bearer token
-   b. 检查黑名单 (Redis jwt_blacklist:{md5}) → 401
+   b. 检查黑名单 (Redis jwt_blacklist:{md5}) → 401；Redis 读取失败 → 503（失败关闭）
    c. 解码 JWT，校验过期 → 401
    d. 设置 $request->adminId = sub 字段
     ↓
@@ -1689,7 +1712,11 @@ POST /admin/upload
    客户端请求 POST /api/v1/auth/refresh
    请求体: { refresh_token: "..." }
     ↓
-   服务端解码 refresh_token → 签发新 access + refresh
+   服务端: 校验令牌类型、用户状态与密码变更水位 → 轮换令牌
+   - 新令牌对写入 refresh_rotation:{md5(旧 refresh_token)}，TTL 60 秒
+   - 旧 refresh_token 立即加入黑名单（TTL ≥ 60 秒）
+   - 60 秒内重试同一旧令牌 → 返回缓存的同一对新令牌（幂等宽限）
+   - HarmonyOS 客户端：并发 401 单飞刷新，多个请求等待同一次结果
     ↓
    客户端更新本地令牌
 
@@ -1700,7 +1727,8 @@ POST /admin/upload
    服务端:
    a. 解码 JWT 获取剩余 TTL
    b. 写入 Redis 黑名单: jwt_blacklist:{md5(token)} = 1, TTL = 剩余有效期
-   c. 返回成功
+   c. 若存在对应 refresh_token 的轮换缓存，同时拉黑缓存中的令牌并删除该键
+   d. 返回成功
 ```
 
 ### JWT 结构
@@ -1718,6 +1746,7 @@ POST /admin/upload
 - 敏感操作（删除用户、角色、权限、配置）需要当前登录用户密码二次确认
 - 并发会话限制：同一用户最多 3 个有效 Token，第 4 个设备登录时最旧 Token 被强制加入黑名单
 - 账号锁定：连续 5 次登录失败触发 15 分钟账号锁定，锁定期间返回 429
+- 超级管理员保护：不能删除当前登录账号或修改其状态；删除/禁用操作不能移除最后一名启用的超级管理员；内置 `super_admin` 角色禁止编辑/删除
 
 ### 中间件架构
 
@@ -1774,7 +1803,7 @@ docker compose up -d
 
 ### 生产部署（单机 6 个服务）
 
-生产编排位于 `deploy/`，单机运行 `nginx`、`app`、`init`（一次性初始化）、`mysql`、`redis`、`backup`（每日自动备份），不依赖全文检索引擎。PHP 通过 `Dockerfile` 构建（基于 `php:8.3-cli-alpine`，启用 OPcache 并安装 zip/redis 扩展）；webman 仅在容器内网监听 8791，由 Nginx 对外暴露 80/443。
+生产编排位于 `deploy/`，单机运行 `nginx`、`app`、`init`（一次性初始化）、`mysql`、`redis`、`backup`（每日自动备份），不依赖全文检索引擎。PHP 通过 `Dockerfile` 构建（基于 `php:8.3-cli-alpine`，启用 OPcache，安装 redis/zip/gd 扩展，GD 启用 FreeType 与 JPEG）；webman 仅在容器内网监听 8791，由 Nginx 对外暴露 80/443。
 
 ```bash
 cd deploy
@@ -1783,10 +1812,11 @@ docker compose up -d --build
 ```
 
 - 环境变量按服务隔离：`deploy/env/{app,init,mysql,redis,backup}.env`（目录 `700`、文件 `600`）；master `deploy/.env` 仅保存域名、端口与 `APP_UID`/`APP_GID` 等 compose 插值。应用容器不持有 MySQL root 密码和初始化管理员密码；`app`/`init` 以该 UID/GID 运行，保证 `deploy/data/{runtime,upload}` 可写。
-- `generate-secrets.sh` 生成 RSA 密钥、自签名 TLS 证书与管理员密码 `deploy/secrets/admin_password.txt`，RSA 私钥写入 `app.env`；默认幂等，`--regenerate` 先归档旧 `.env`、`env/` 与 `secrets/` 到 `deploy/secrets/archive/<时间戳>/`，默认只轮换应用密钥并保留 `ENCRYPTABLE_KEY`、现有 TLS 证书、数据库/管理员密码；字段加密密钥、TLS、数据库密码、管理员密码分别用 `--rotate-encryptable`（旧密钥自动加入 `ENCRYPTION_PREVIOUS_KEYS`，旧数据仍可读取；完成数据重加密后再移除旧密钥）、`--rotate-tls`、`--rotate-db`、`--reset-admin` 显式轮换。
+- `generate-secrets.sh` 生成 RSA 密钥、自签名 TLS 证书与管理员密码 `deploy/secrets/admin_password.txt`，RSA 私钥写入 `app.env`；默认幂等，`--regenerate` 先归档旧 `.env`、`env/` 与 `secrets/` 到 `deploy/secrets/archive/<时间戳>/`，默认只轮换应用密钥并保留 `ENCRYPTABLE_KEY`、Hashids 盐值、现有 TLS 证书、数据库/管理员密码；Hashids 用 `--rotate-hashids` 显式轮换（旧链接中的 ID 将失效），字段加密密钥、TLS、数据库密码、管理员密码分别用 `--rotate-encryptable`（旧密钥自动加入 `ENCRYPTION_PREVIOUS_KEYS`，旧数据仍可读取；完成数据重加密后再移除旧密钥）、`--rotate-tls`、`--rotate-db`、`--reset-admin` 显式轮换。
 - 真实域名证书替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`；80 端口仅保留 ACME 校验路径，其余 301 到 HTTPS；HSTS 默认关闭，配置真实证书后再启用。
 - 日志：Nginx/MySQL 写 stdout/stderr，Docker 按 `10m × 3` 轮转；持久化目录：`deploy/data/{mysql,redis,runtime,upload,backups}`。
-- `backup` 服务每天 `mysqldump` 到 `deploy/data/backups`，保留 30 天。
+- 资源上限：`deploy/docker-compose.yml` 为每个服务设置 `deploy.resources.limits.memory`（app 512M、init 256M、mysql 768M、redis 256M、nginx 128M、backup 256M），可按宿主机容量调整。
+- `backup` 服务使用最小权限用户 `backup_reader`（`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` + `erik_operation_log` 的 `DELETE`）每日 `mysqldump --single-transaction --no-tablespaces` 到 `deploy/data/backups`，同时把 `deploy/data/upload` 打包为 `upload_<时间>.tar.gz`；两类备份保留 30 天，并每日清理 180 天前的操作日志（每轮最多 10000 行）。备份与 MySQL 位于同一主机/磁盘，需用 `rsync` 或 `rclone` 复制到异地（见 `deploy/README.md`）。
 
 ### CI/CD
 
@@ -1794,10 +1824,11 @@ docker compose up -d --build
 - `php -l` 语法检查
 - PHPUnit 单元测试
 - `flutter analyze` 静态分析
+- Docker 镜像构建 + PHP 扩展检查（redis/zip/gd、GD FreeType/JPEG）+ 根目录与 `deploy/` Compose 配置校验 + 两份 Nginx 配置的 `nginx -t`
 
 ### 数据库备份
 
-生产编排的 `backup` 服务每日自动备份到 `deploy/data/backups`（保留 30 天）。`database/backup/` 目录的脚本适用于宿主机直连数据库的场景：
+生产编排的 `backup` 服务每日自动备份数据库与上传文件到 `deploy/data/backups`（保留 30 天），并清理 180 天前的操作日志；异地副本需自行用 `rsync`/`rclone` 同步。`database/backup/` 目录的脚本适用于宿主机直连数据库的场景：
 - `backup.sh` — mysqldump + gzip 压缩备份，自动清理 30 天前的旧备份文件
 - `restore.sh` — 交互式恢复，列出现有备份供用户选择
 

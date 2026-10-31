@@ -162,8 +162,8 @@
         <article class="feature-card span-5 feature-card-tint" data-reveal>
           <p class="card-label">Auth</p>
           <h3>Sign-in &amp; tokens</h3>
-          <p>Click captcha, JWT issue and verify, token blacklist. access_token lasts 2 hours; refresh_token lasts 14 days.</p>
-          <p class="feature-foot">Lockout after 5 failures for 15 minutes; at most 3 active tokens per user.</p>
+          <p>Click captcha, JWT issue and verify, token blacklist. access_token lasts 2 hours; refresh_token lasts 14 days. Refresh rotation has a 60-second grace window; HarmonyOS refreshes concurrent 401s only once.</p>
+          <p class="feature-foot">Lockout after 5 failures for 15 minutes; at most 3 active tokens per user; deleting the current account or removing the last enabled super admin is blocked.</p>
         </article>
 
         <article class="feature-card span-3" data-reveal>
@@ -175,13 +175,13 @@
         <article class="feature-card span-4" data-reveal>
           <p class="card-label">Users</p>
           <h3>User management</h3>
-          <p>CRUD, batch delete and status changes, soft delete, row-by-row Excel import.</p>
+          <p>CRUD, batch delete and status changes, soft delete, Excel import (5MB / 2000-row cap, pre-checked then validated row by row).</p>
         </article>
 
         <article class="feature-card span-4" data-reveal>
           <p class="card-label">Permissions</p>
           <h3>Roles &amp; permission tree</h3>
-          <p>RBAC checks method.path, permissions cache for 60 seconds, super_admin is protected.</p>
+          <p>RBAC checks method.path, permissions cache for 60 seconds; the super_admin role cannot be edited/deleted, and at least one enabled super admin must remain.</p>
         </article>
 
         <article class="feature-card span-4" data-reveal>
@@ -200,7 +200,7 @@
         <article class="feature-card span-5" data-reveal>
           <p class="card-label">Files</p>
           <h3>Files &amp; export</h3>
-          <p>Upload checks, Excel and PDF exports, automatic masking of sensitive data.</p>
+          <p>Upload checks, Excel/PDF exports, automatic masking of sensitive data; exports above 5000 rows return 422.</p>
         </article>
 
         <article class="feature-card span-7 feature-card-pet" data-reveal>
@@ -222,8 +222,9 @@
             <p>31 detectors cover XSS, SQL injection, SSRF, path traversal and deserialization; thresholds escalate to IP blacklists.</p>
           </div>
           <ul class="platform-list">
-            <li>CSP and security headers</li>
+            <li>CSP and security headers; static assets repeat them in their own Nginx location</li>
             <li>Rate limit 60/min/IP/route via Redis Lua sliding window</li>
+            <li>Redis outages fail closed with 503 for /api/ and /admin/ auth and rate limiting</li>
             <li>security.txt follows RFC 9116</li>
           </ul>
         </article>
@@ -231,7 +232,7 @@
         <article class="platform-card" data-reveal>
           <p class="card-label">Observability</p>
           <h3>See it after deploy</h3>
-          <p>Health checks, 5 Prometheus gauges, OpenAPI docs, a single-machine Docker Compose stack (deploy/) and database backups.</p>
+          <p>Health checks, 5 Prometheus gauges, OpenAPI docs plus the same-origin /apidoc/ explorer, a single-machine Docker Compose stack (deploy/) with container memory limits, and least-privilege database/upload backups. CI builds the image and validates PHP extensions, Compose and both Nginx configs.</p>
           <a class="text-link" href="https://github.com/erikwang2013/open-admin/blob/main/docs/API.md" target="_blank" rel="noopener">API docs</a>
         </article>
 
@@ -396,7 +397,9 @@ docker compose up -d --build
 
 # 6 services: nginx / app / init / mysql / redis / backup
 # Secrets split per service into deploy/env/*.env
-# Daily backups → deploy/data/backups (30-day retention)
+# --regenerate keeps Hashids; use --rotate-hashids to rotate
+# Daily DB + upload backups → deploy/data/backups (30-day retention, 180-day logs)
+# Offsite sync: rsync / rclone (see deploy/README.md)
 # Host data and logs → deploy/data/{mysql,redis,runtime,upload} (runtime holds logs)
 
 # Access
@@ -424,20 +427,20 @@ docker compose up -d --build
           <p class="card-label">API auth</p>
           <h3>Bearer Token</h3>
           <pre><code>Authorization: Bearer &lt;token&gt;</code></pre>
-          <p>access_token lasts 2 hours; refresh_token lasts 14 days. On 401, call refresh; never store plaintext secrets in clients.</p>
+          <p>access_token lasts 2 hours; refresh_token lasts 14 days. On 401, call refresh; an old token replayed within the 60-second grace window returns the same pair. Never store plaintext secrets in clients.</p>
         </article>
 
         <article class="usage-card" data-reveal>
           <p class="card-label">Unified response</p>
           <h3>code 0 means success</h3>
           <pre><code>{ "code": 0, "message": "success", "data": {} }</code></pre>
-          <p>Errors cover 400, 401, 403, 404, 422, 429 and 500. IDs use Hashids; database keys stay hidden.</p>
+          <p>Errors cover 400, 401, 403, 404, 422, 429, 500 and 503. IDs use Hashids; database keys stay hidden.</p>
         </article>
 
         <article class="usage-card" data-reveal>
           <p class="card-label">Rate limit</p>
           <h3>Read the headers</h3>
-          <p>Default 60/min/IP/route; login 10/min. Responses include X-RateLimit-Limit, Remaining and Reset; read Retry-After when limited.</p>
+          <p>Default 60/min/IP/route; login 10/min. Responses include X-RateLimit-Limit, Remaining and Reset; read Retry-After when limited. Redis outages return 503 for /api/ and /admin/.</p>
         </article>
       </div>
 
@@ -454,6 +457,7 @@ docker compose up -d --build
             <tr><td><code>GET</code></td><td><code>/health</code></td><td>Health check</td></tr>
             <tr><td><code>GET</code></td><td><code>/metrics</code></td><td>Prometheus metrics</td></tr>
             <tr><td><code>GET</code></td><td><code>/api/docs</code></td><td>OpenAPI interactive docs</td></tr>
+            <tr><td><code>GET</code></td><td><code>/apidoc/</code></td><td>Lightweight API explorer (same-origin /api/docs)</td></tr>
           </tbody>
         </table>
       </div>
@@ -486,6 +490,10 @@ docker compose up -d --build
       </div>
 
       <ol class="timeline">
+        <li data-reveal>
+          <div class="timeline-meta"><span class="version-tag">v2.1.9</span><time datetime="2026-11-01">2026-11-01</time></div>
+          <div class="timeline-body"><h3>Security hardening and delivery checks</h3><p>Self-deletion and last-super-admin protection; Redis outages now fail closed with 503 for /api/ and /admin/ auth and rate limiting; refresh-token rotation gained a 60-second grace window and HarmonyOS single-flight refresh; backups use the least-privilege backup_reader user with upload tar archives, offsite sync and 180-day operation-log retention; imports pre-check the 2000-row cap and exports above 5000 rows return 422; added --rotate-hashids, container memory limits, Nginx static-asset security headers, a lightweight /apidoc/ explorer and CI Docker/Compose/Nginx validation.</p></div>
+        </li>
         <li data-reveal>
           <div class="timeline-meta"><span class="version-tag">v2.1.8</span><time datetime="2026-11-01">2026-11-01</time></div>
           <div class="timeline-body"><h3>JWT variable cleanup and docs polish</h3><p>Standardized the JWT signing key on JWT_SECRET_KEY and removed the unused JWT_SECRET alias; refreshed the Chinese/English docs, architecture/lifecycle diagrams and site content.</p></div>

@@ -69,18 +69,18 @@ SVG / PNG）**不是开源资产**，版权归作者所有。未经书面许可�
 
 | 业务域 | 功能 | 说明 |
 |--------|------|------|
-| 🔐 认证 | 登录/刷新令牌/登出 | 点击验证码 + JWT + 黑名单 |
+| 🔐 认证 | 登录/刷新令牌/登出 | 点击验证码 + JWT + 黑名单；刷新轮换 60 秒宽限 + HarmonyOS 单飞 |
 | | 账号锁定 | 5 次失败锁定 15 分钟 |
 | | 并发会话限制 | 同一用户最多 3 个有效 Token |
 | 📊 仪表盘 | 实时统计/趋势图/分布图/最近操作 | Redis 缓存 5 分钟 |
-| 👥 用户管理 | CRUD + 批量删除/启禁用 | 软删除 + 密码二次确认 |
-| | Excel 批量导入 | 逐行校验 + 错误报告 |
-| 🔒 角色权限 | 角色 CRUD + 权限树 | RBAC method.path 粒度鉴权 |
+| 👥 用户管理 | CRUD + 批量删除/启禁用 | 软删除 + 密码二次确认；不能删除自己或最后一名启用的超管 |
+| | Excel 批量导入 | 逐行校验 + 错误报告；5MB / 2000 行上限 |
+| 🔒 角色权限 | 角色 CRUD + 权限树 | RBAC method.path 粒度鉴权；内置 `super_admin` 禁改删 |
 | ⚙ 系统配置 | 键值对 CRUD | 分组管理 |
 | 📋 操作审计 | 日志查询 + 来源端检测 | 8 平台自动识别 |
-| 📁 文件管理 | 上传/Excel 导出/PDF 导出 | 敏感数据自动脱敏 |
-| 🛡 安全防护 | 18 层纵深防御 | XSS/SQL注入/路径遍历/命令注入/CSRF/限流/CSP... |
-| 🏥 运维 | 健康检查/metrics/API 文档/security.txt | Prometheus + OpenAPI 3.0 + erikwang2013/apidoc-php 交互文档 |
+| 📁 文件管理 | 上传/Excel 导出/PDF 导出 | 敏感数据自动脱敏；导出超过 5000 行返回 422 |
+| 🛡 安全防护 | 18 层纵深防御 | XSS/SQL注入/路径遍历/命令注入/CSRF/限流/CSP；Redis 故障时 API/管理端 503 失败关闭 |
+| 🏥 运维 | 健康检查/metrics/API 文档/security.txt | Prometheus + OpenAPI 3.0 + 轻量 `/apidoc/` 调试页 + Docker CI |
 | 🌐 国际化 | 中英文切换 | Accept-Language 头 / ?lang= 参数 |
 
 ## 技术栈
@@ -297,7 +297,7 @@ docker compose up -d
 # http://localhost/api/v1/...  (API)
 ```
 
-- `Dockerfile`: PHP 8.3（Alpine）+ OPcache + zip/redis 扩展 + Composer
+- `Dockerfile`: PHP 8.3（Alpine）+ OPcache + redis/zip/gd 扩展（GD 含 FreeType/JPEG）+ Composer
 - `docker-compose.yml`: 4 个服务编排；app 仅在容器内网监听 8791，对外由 Nginx 暴露 80
 - `.env.docker`: Docker 环境专用环境变量
 
@@ -328,9 +328,10 @@ docker compose up -d
 完整的 API 参考（统一响应格式、错误码、全部端点详情、认证流程、限流策略、中间件链路）见 **[docs/API.md](docs/API.md)**，要点如下：
 
 - **统一响应格式**: `{ "code": 0, "message": "success", "data": {...} }`，`code=0` 表示成功
-- **错误码**: `400` 参数错误 / `401` 未登录 / `403` 无权限 / `404` 不存在 / `422` 验证失败 / `429` 限流 / `500` 服务器错误
+- **错误码**: `400` 参数错误 / `401` 未登录 / `403` 无权限 / `404` 不存在 / `422` 验证失败 / `429` 限流 / `500` 服务器错误 / `503` Redis 故障导致鉴权或限流失败关闭
 - **API 版本**: 版本号体现在 URL 前缀中（如 `/api/v1/...`），不使用请求头
-- **认证**: `Authorization: Bearer {token}`；access_token 有效期 2 小时，refresh_token 14 天
+- **认证**: `Authorization: Bearer {token}`；access_token 有效期 2 小时，refresh_token 14 天；刷新令牌轮换后保留 60 秒宽限
+- **在线调试**: `/apidoc/` 提供单文件同源调试界面，直接从 `GET /api/docs` 读取 OpenAPI 规范
 - **ID 处理**: 请求/响应中的 ID 为 hashids 加密字符串，不暴露真实数据库 ID
 
 ## 前端说明
@@ -384,7 +385,7 @@ docker compose up -d
 | `init` | 一次性初始化：建表、创建管理员，完成后退出 |
 | `mysql` | MySQL 8.0，数据持久化到宿主机目录；错误/慢日志写 stderr |
 | `redis` | Redis 7，AOF 持久化到宿主机目录 |
-| `backup` | 每日 `mysqldump` 到 `deploy/data/backups`，保留 30 天 |
+| `backup` | 最小权限用户每日备份数据库 + 上传文件到 `deploy/data/backups`，保留 30 天；清理 180 天前操作日志 |
 
 ```bash
 cd deploy
@@ -394,14 +395,15 @@ docker compose up -d --build
 
 - **环境变量按服务隔离**：`deploy/env/{app,init,mysql,redis,backup}.env`（目录 `700`、文件 `600`）；master `deploy/.env` 仅保存 compose 插值所需的域名、端口与 `APP_UID`/`APP_GID`。应用容器拿不到 MySQL root 密码和初始化管理员密码。生成脚本会原位更新已知键并追加缺失键，保留自定义项。
 - `generate-secrets.sh` 默认幂等，只补齐缺失值；同时生成 `deploy/secrets/rsa_public_key.pem`、管理员密码 `deploy/secrets/admin_password.txt`，RSA 私钥写入 `app.env` 的 `RSA_PRIVATE_KEY`。
-- `--regenerate` 先归档旧的 `deploy/.env`、`deploy/env/` 与 `deploy/secrets/` 到 `deploy/secrets/archive/<时间戳>/`，默认只轮换 JWT/HASHIDS/ENCRYPTION/RSA/Redis 等应用密钥，并保留 `ENCRYPTABLE_KEY`、现有 TLS 证书（真实域名证书不会被覆盖）、`DB_PASSWORD`、`MYSQL_ROOT_PASSWORD` 与管理员密码，不会破坏已有数据库。需要轮换字段加密密钥用 `--rotate-encryptable`（旧密钥自动加入 `ENCRYPTION_PREVIOUS_KEYS`，旧数据仍可读取；完成数据重加密后再移除旧密钥），轮换 TLS 用 `--rotate-tls`，轮换数据库密码用 `--rotate-db`（脚本会打印需手动执行的 `ALTER USER` 命令），重置管理员密码用 `--reset-admin`。
+- `--regenerate` 先归档旧的 `deploy/.env`、`deploy/env/` 与 `deploy/secrets/` 到 `deploy/secrets/archive/<时间戳>/`，默认只轮换 JWT/ENCRYPTION/RSA/Redis 等应用密钥，并保留 `HASHIDS_SALT`、`ENCRYPTABLE_KEY`、现有 TLS 证书（真实域名证书不会被覆盖）、`DB_PASSWORD`、`MYSQL_ROOT_PASSWORD` 与管理员密码，不会破坏已有数据库。轮换 Hashids 用 `--rotate-hashids`（旧链接中的 ID 将失效）；轮换字段加密密钥用 `--rotate-encryptable`（旧密钥自动加入 `ENCRYPTION_PREVIOUS_KEYS`，旧数据仍可读取；完成数据重加密后再移除旧密钥），轮换 TLS 用 `--rotate-tls`，轮换数据库密码用 `--rotate-db`（脚本会打印需手动执行的 `ALTER USER` 命令），重置管理员密码用 `--reset-admin`。
 - **宿主机属主**：`app`/`init` 以 `${APP_UID:-1000}:${APP_GID:-1000}` 运行，脚本用 `id -u`/`id -g` 写入 master `.env`，保证 `deploy/data/{runtime,upload}` 对宿主机用户可写。
 - **日志**：Nginx 与 MySQL 写 stdout/stderr，由 Docker 按 `10m × 3` 轮转，用 `docker compose logs -f app` 查看；宿主机持久化目录为 `deploy/data/{mysql,redis,runtime,upload,backups}`。
+- **资源上限**：compose 为各服务设置内存上限（app 512M、init 256M、mysql 768M、redis 256M、nginx 128M、backup 256M）。
 - TLS：默认按 `DOMAIN`（默认 `localhost`）生成自签名证书；真实域名证书直接替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`，脚本不会覆盖已有证书（`--rotate-tls` 除外）。80 端口仅放行 `/.well-known/acme-challenge/`，其余 301 到 HTTPS；HSTS 默认关闭，配置真实域名证书后再启用。
-- 自动备份：`backup` 服务每天执行一次 `mysqldump`，写入 `deploy/data/backups` 并保留 30 天。
+- 自动备份：`backup` 使用最小权限用户 `backup_reader` 每天执行 `mysqldump --single-transaction --no-tablespaces`，并把 `deploy/data/upload` 打包为 tar.gz，写入 `deploy/data/backups` 并保留 30 天；同时清理 180 天前的操作日志（每轮最多 10000 行）。备份与 MySQL 同机同盘，需用 `rsync`/`rclone` 复制到异地。
 - RSA 公钥：`GET /api/v1/auth/public-key` 返回当前公钥，Flutter 登录前动态获取、失败时回退内置公钥；`--regenerate` 换钥后需确认该端点可达，依赖内置回退的旧客户端需重新构建。
 
-PHP 镜像通过 `Dockerfile` 构建，基础镜像 `php:8.3-cli-alpine`，启用 OPcache 并安装 zip/redis 扩展。
+PHP 镜像通过 `Dockerfile` 构建，基础镜像 `php:8.3-cli-alpine`，启用 OPcache 并安装 redis/zip/gd 扩展（GD 含 FreeType/JPEG）。
 
 ### CI/CD
 
@@ -410,10 +412,11 @@ GitHub Actions 持续集成流水线：`.github/workflows/ci.yml`
 - PHP 语法检查 (`php -l`)
 - PHPUnit 单元测试
 - Flutter 静态分析 (`flutter analyze`)
+- Docker 镜像构建 + PHP 扩展检查（redis/zip/gd、GD FreeType/JPEG）+ 根目录与 `deploy/` Compose 配置校验 + 两份 Nginx 配置 `nginx -t`
 
 ### 数据库备份
 
-生产编排的 `backup` 服务每日自动备份到 `deploy/data/backups`（保留 30 天）；下面两个脚本适用于宿主机直连数据库的场景。
+生产编排的 `backup` 服务每日自动备份数据库与上传文件到 `deploy/data/backups`（保留 30 天），并清理 180 天前的操作日志；异地副本需用 `rsync`/`rclone` 同步。下面两个脚本适用于宿主机直连数据库的场景。
 
 `database/backup/` 目录：
 
@@ -422,7 +425,7 @@ GitHub Actions 持续集成流水线：`.github/workflows/ci.yml`
 
 ### Nginx 安全配置
 
-生产部署请参考 `docs/nginx-security.conf` 配置反向代理安全加固。
+生产部署请参考 `docs/nginx-security.conf` 配置反向代理安全加固。静态资源 location 会重复注入 `X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy` 与 `Cache-Control`（location 级 `add_header` 会覆盖继承值）；该配置与 `deploy/nginx/default.conf` 均在 CI 中执行 `nginx -t`。
 
 ## 开源不易，欢迎支持
 

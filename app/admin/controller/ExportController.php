@@ -57,7 +57,7 @@ class ExportController extends BaseController
         // 查询数据（多取 1 行用于判断是否超限）
         $data = $this->fetchExportData($table, $columns, $conditions);
         if (count($data) > 5000) {
-            return $this->fail('导出数据超过 5000 行，请缩小筛选范围', 422);
+            return $this->fail('导出数据超过 5000 行，请缩小筛选范围', 422)->withStatus(422);
         }
         $sensitiveFields = $this->getSensitiveFields($table);
 

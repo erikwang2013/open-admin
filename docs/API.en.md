@@ -15,7 +15,7 @@ open-admin is built on webman v2 and provides a RESTful JSON API. All admin endp
 > **Endpoint overview**: Auth (4) | Dashboard (1) | Users (7) | Roles (4) | Permissions (4) | Config (4) | Logs (1) | Profile (3) | Import/Export (3) | Upload (1) | Ops (4: health/metrics/docs/security.txt) | 36 endpoints in total
 - **Authentication**: `Authorization: Bearer <token>` (JWT)
 - **Response format**: `{ "code": 0, "message": "success", "data": {...} }`
-- **Docs endpoint**: `GET /api/docs` returns the OpenAPI 3.0 JSON specification
+- **Docs endpoint**: `GET /api/docs` returns the OpenAPI 3.0 JSON specification; `/apidoc/` provides a lightweight same-origin debug UI (a single HTML file with no external assets)
 
 ### Request Requirements
 
@@ -41,6 +41,7 @@ open-admin is built on webman v2 and provides a RESTful JSON API. All admin endp
 | 422 | Validation failed | Required fields missing, invalid format, business validation failed |
 | 429 | Too many requests | RateLimit triggered / account locked (5 failed logins lock for 15 min) |
 | 500 | Internal server error | |
+| 503 | Service unavailable | Redis unavailable, so auth/rate limiting for `/api/` and `/admin/` fails closed |
 
 ## 3. Public Endpoints
 
@@ -80,6 +81,8 @@ GET /api/docs
 - **Authentication**: none
 - **Rate limit**: global default (60/min)
 - **Response**: OpenAPI 3.0.3 JSON specification with all endpoint definitions, parameters, and schemas
+
+Open `/apidoc/` in a browser to call the documented endpoints directly: the page loads the same-origin `GET /api/docs` spec and supports a Bearer token, path/query parameters and a JSON request body, showing the status code and response. It is a single static HTML file with no external CDN or build step.
 
 ### 3.3 Generate Captcha
 
@@ -370,6 +373,8 @@ POST /api/v1/auth/refresh
 ```
 
 A successful refresh returns new access_token and refresh_token, and the old tokens automatically become invalid. The refresh also updates the user's last login time and IP.
+
+To tolerate concurrent requests and client retries, a rotated refresh_token keeps a 60-second grace period: the server caches the new token pair for 60 seconds under the md5 of the old token, and resubmitting the same old token within that window returns the cached pair unchanged instead of rotating again. After the grace period the old token is treated as blacklisted and returns 401. Clients should refresh serially; the HarmonyOS client uses single-flight refresh for concurrent 401s so all requests share one refresh result.
 
 **Possible errors**:
 - 422: Refresh token missing
@@ -730,6 +735,8 @@ Soft deletion is performed (Eloquent SoftDeletes): rows are marked with deleted_
 - 404: User does not exist
 - 422: Sensitive operations require password confirmation (password empty)
 - 422: Password verification failed (password mismatch)
+- 422: Cannot delete the currently logged-in account
+- 422: At least one enabled super administrator must remain
 
 ### 5.6 Batch Delete Users
 
@@ -770,6 +777,8 @@ Soft deletion is performed; `data.count` is the number of users actually deleted
 - 422: Select users to delete (ids empty)
 - 422: Invalid ID (hashid decode failed)
 - 422: Password verification failed
+- 422: Cannot delete the currently logged-in account (ids include the current user)
+- 422: At least one enabled super administrator must remain
 
 ### 5.7 Batch Enable/Disable Users
 
@@ -808,6 +817,8 @@ message dynamically changes based on status to `"批量启用成功"` (batch ena
 **Possible errors**:
 - 422: Select users (ids empty)
 - 422: Invalid status value (status is not 0 or 1)
+- 422: Cannot change the status of the currently logged-in account
+- 422: At least one enabled super administrator must remain (when disabling the last enabled super administrator)
 
 ## 6. Role Management
 
@@ -941,6 +952,8 @@ PUT /admin/role/{id}
 }
 ```
 
+The built-in `super_admin` role cannot be updated; the request returns 403 (`超级管理员不可编辑`).
+
 ### 6.4 Delete Role
 
 ```
@@ -966,7 +979,7 @@ DELETE /admin/role/{id}
 }
 ```
 
-Deletion automatically detaches the role from all its permissions and users, then physically deletes the role record.
+Deletion automatically detaches the role from all its permissions and users, then physically deletes the role record. The built-in `super_admin` role cannot be deleted; the request returns 403 (`超级管理员不可删除`).
 
 ## 7. Permission Management
 
@@ -1428,7 +1441,7 @@ POST /admin/profile/logout
 }
 ```
 
-Logout logic: decode the JWT to get the remaining validity (exp - now), write the token's md5 hash to the Redis blacklist `jwt_blacklist:{md5}` with TTL = remaining validity. Blacklisted tokens are blocked in the `AdminAuth` middleware with a 401 response.
+Logout logic: decode the JWT to get the remaining validity (exp - now), write the token's md5 hash to the Redis blacklist `jwt_blacklist:{md5}` with TTL = remaining validity. If the supplied refresh_token has a rotation cache entry, the cached access_token and refresh_token are blacklisted too and the cache key is removed. Blacklisted tokens are blocked in the `AdminAuth` middleware with a 401 response; if Redis cannot be read, the request returns 503 (fail closed).
 
 Returns 401 when no token is provided. An expired/invalid token (decode throws an exception) is still treated as a successful logout.
 
@@ -1471,7 +1484,10 @@ POST /admin/export/excel
 | `admin_role` | id, name, slug, description, status, created_at |
 | `system_config` | id, group, key, value, type, description, created_at |
 
-Sensitive fields `phone`, `email`, and `id_card` are automatically masked on export. Data is capped at 10,000 rows. The first Excel row is frozen and auto-filter is enabled.
+Sensitive fields `phone`, `email`, and `id_card` are automatically masked on export. A single export is capped at 5,000 rows (the query uses `LIMIT 5001` as a probe); exceeding the cap returns HTTP 422. The first Excel row is frozen and auto-filter is enabled.
+
+**Possible errors**:
+- 422: Export exceeds 5,000 rows; narrow the filter (the HTTP status is also 422)
 
 ### 11.2 Export PDF
 
@@ -1533,7 +1549,7 @@ POST /admin/import/users
 
 | Field | Type | Required | Description |
 |------|------|------|------|
-| file | file | Yes | `.xlsx` or `.xls` format |
+| file | file | Yes | `.xlsx` or `.xls` format, max 5MB |
 
 **Excel column requirements**:
 
@@ -1546,7 +1562,12 @@ POST /admin/import/users
 | email | No | Email |
 | status | No | Status, default 1 |
 
-Row 1 contains column headers (case-insensitive); data starts at row 2.
+Row 1 contains column headers (case-insensitive); data starts at row 2. Files are limited to 5MB and 2,000 data rows (excluding the header). Before loading the workbook the server reads worksheet metadata and rejects any workbook with a sheet over 2,001 rows with a 422, keeping the whole workbook out of memory; the row limit is checked again after loading as a second defense.
+
+**Possible errors**:
+- 422: Only .xlsx or .xls files are supported
+- 422: File size must not exceed 5MB
+- 422: Data rows must not exceed 2,000 (excluding the header)
 
 **Example response**:
 ```json
@@ -1626,7 +1647,9 @@ Rate limit details:
 - Default global limit: 60/min per IP + path
 - Login endpoint `/api/v1/auth/login`: 10/min
 - Uses the Redis atomic sliding window algorithm (Lua ZSET) to avoid TOCTOU races
-- Fails open when Redis is unavailable (requests pass), never blocking traffic
+- Fails closed when Redis is unavailable: `/api/` and `/admin/` requests return 503 (JSON `code: 503`), while non-API paths such as `/health` and `/metrics` pass through so monitoring and probes keep working. `AdminAuth` also returns 503 when the blacklist read fails
+
+Nginx static assets (`/assets/`, `/open-admin/assets/`, etc.) repeat `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` and `Cache-Control` at location level: an `add_header` inside a location replaces inherited headers, so each one must be repeated.
 
 ## 14. Authentication Flow
 
@@ -1673,7 +1696,7 @@ The complete authentication sequence:
     ↓
    AdminAuth middleware:
    a. Extracts the Bearer token
-   b. Checks the blacklist (Redis jwt_blacklist:{md5}) → 401
+   b. Checks the blacklist (Redis jwt_blacklist:{md5}) → 401; Redis read failure → 503 (fail closed)
    c. Decodes the JWT, validates expiry → 401
    d. Sets $request->adminId = sub field
     ↓
@@ -1690,7 +1713,11 @@ The complete authentication sequence:
    Client requests POST /api/v1/auth/refresh
    Request body: { refresh_token: "..." }
     ↓
-   Server decodes refresh_token → issues new access + refresh
+   Server: validates token type, user status and password-change watermark → rotates tokens
+   - Writes the new pair to refresh_rotation:{md5(old refresh_token)} with a 60-second TTL
+   - Blacklists the old refresh_token immediately (TTL ≥ 60 seconds)
+   - Retrying the same old token within 60 seconds → returns the cached pair unchanged (idempotent grace)
+   - HarmonyOS client: single-flight refresh for concurrent 401s; all requests await the same result
     ↓
    Client updates local tokens
 
@@ -1701,7 +1728,8 @@ The complete authentication sequence:
    Server:
    a. Decodes the JWT to get the remaining TTL
    b. Writes to the Redis blacklist: jwt_blacklist:{md5(token)} = 1, TTL = remaining validity
-   c. Returns success
+   c. If a rotation cache exists for the supplied refresh_token, blacklists its cached tokens and deletes the key
+   d. Returns success
 ```
 
 ### JWT Structure
@@ -1719,6 +1747,7 @@ The complete authentication sequence:
 - Sensitive operations (deleting users, roles, permissions, configs) require password confirmation from the currently logged-in user
 - Concurrent session limit: at most 3 valid tokens per user; when a 4th device logs in, the oldest token is forcibly blacklisted
 - Account lockout: 5 consecutive login failures trigger a 15-minute lock; 429 is returned while locked
+- Super-admin protection: you cannot delete or change the status of the currently logged-in account; delete/disable operations cannot remove the last enabled super administrator; the built-in `super_admin` role cannot be edited or deleted
 
 ### Middleware Architecture
 
@@ -1775,7 +1804,7 @@ docker compose up -d
 
 ### Production (single machine, 6 services)
 
-The production stack lives in `deploy/` and runs `nginx`, `app`, `init` (one-shot bootstrap), `mysql`, `redis` and `backup` (daily automatic backups) on one machine. No full-text search cluster is used. PHP is built via `Dockerfile` (based on `php:8.3-cli-alpine` with OPcache enabled); webman listens on 8791 inside the container network only, and Nginx exposes 80/443.
+The production stack lives in `deploy/` and runs `nginx`, `app`, `init` (one-shot bootstrap), `mysql`, `redis` and `backup` (daily automatic backups) on one machine. No full-text search cluster is used. PHP is built via `Dockerfile` (based on `php:8.3-cli-alpine` with OPcache and the redis/zip/gd extensions; GD has FreeType and JPEG enabled); webman listens on 8791 inside the container network only, and Nginx exposes 80/443.
 
 ```bash
 cd deploy
@@ -1784,10 +1813,11 @@ docker compose up -d --build
 ```
 
 - Per-service env isolation: `deploy/env/{app,init,mysql,redis,backup}.env` (directory `700`, files `600`); the master `deploy/.env` only holds compose interpolation values such as domain, ports and `APP_UID`/`APP_GID`. The app container never holds the MySQL root password or the bootstrap admin password; `app`/`init` run as that UID/GID so `deploy/data/{runtime,upload}` stays writable.
-- `generate-secrets.sh` creates the RSA keypair, a self-signed TLS certificate and the admin password file `deploy/secrets/admin_password.txt`; the RSA private key goes into `app.env`. It is idempotent by default; `--regenerate` archives the old `.env`, `env/` and `secrets/` to `deploy/secrets/archive/<timestamp>/` and rotates application secrets only, preserving `ENCRYPTABLE_KEY`, the existing TLS certificate, database and admin passwords. Rotate the field-encryption key, TLS, database passwords and admin password explicitly with `--rotate-encryptable` (the old key is appended to `ENCRYPTION_PREVIOUS_KEYS`, so existing data remains readable; remove the old key only after re-encrypting the data), `--rotate-tls`, `--rotate-db` and `--reset-admin`.
+- `generate-secrets.sh` creates the RSA keypair, a self-signed TLS certificate and the admin password file `deploy/secrets/admin_password.txt`; the RSA private key goes into `app.env`. It is idempotent by default; `--regenerate` archives the old `.env`, `env/` and `secrets/` to `deploy/secrets/archive/<timestamp>/` and rotates application secrets only, preserving `ENCRYPTABLE_KEY`, the Hashids salt, the existing TLS certificate, database and admin passwords. Rotate the Hashids salt explicitly with `--rotate-hashids` (IDs in old links stop resolving); rotate the field-encryption key, TLS, database passwords and admin password explicitly with `--rotate-encryptable` (the old key is appended to `ENCRYPTION_PREVIOUS_KEYS`, so existing data remains readable; remove the old key only after re-encrypting the data), `--rotate-tls`, `--rotate-db` and `--reset-admin`.
 - Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; port 80 only serves the ACME challenge path and redirects everything else to HTTPS; HSTS is commented out by default and should be enabled after a real certificate is configured.
 - Logs: Nginx/MySQL write to stdout/stderr and Docker rotates at `10m × 3`; persistent directories: `deploy/data/{mysql,redis,runtime,upload,backups}`.
-- The `backup` service runs `mysqldump` daily into `deploy/data/backups` with 30-day retention.
+- Resource limits: `deploy/docker-compose.yml` sets `deploy.resources.limits.memory` per service (app 512M, init 256M, mysql 768M, redis 256M, nginx 128M, backup 256M); adjust for the host capacity.
+- The `backup` service uses the least-privilege `backup_reader` user (`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` plus `DELETE` on `erik_operation_log`) to run `mysqldump --single-transaction --no-tablespaces` daily into `deploy/data/backups`, and archives `deploy/data/upload` as `upload_<timestamp>.tar.gz`; both are kept for 30 days, and operation logs older than 180 days are deleted daily (at most 10,000 rows per run). Backups live on the same host/disk as MySQL; copy them offsite with `rsync` or `rclone` (see `deploy/README.md`).
 
 ### CI/CD
 
@@ -1795,10 +1825,11 @@ docker compose up -d --build
 - `php -l` syntax check
 - PHPUnit unit tests
 - `flutter analyze` static analysis
+- Docker image build + PHP extension checks (redis/zip/gd, GD FreeType/JPEG) + root and `deploy/` Compose config validation + `nginx -t` for both Nginx configs
 
 ### Database Backup
 
-The production stack's `backup` service writes a daily backup to `deploy/data/backups` (30-day retention). The scripts in `database/backup/` are for a host with direct database access:
+The production stack's `backup` service writes daily database and upload backups to `deploy/data/backups` (30-day retention) and deletes operation logs older than 180 days; sync offsite copies with `rsync`/`rclone` yourself. The scripts in `database/backup/` are for a host with direct database access:
 - `backup.sh` — mysqldump + gzip compressed backup, auto-clears backups older than 30 days
 - `restore.sh` — interactive restore, lists existing backups for selection
 

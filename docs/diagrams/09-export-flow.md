@@ -11,14 +11,18 @@ sequenceDiagram
 
     C->>CTL: POST /admin/export/excel
     Note right of C: {table,columns,conditions,title}
-    CTL->>DB: SELECT ... LIMIT 10000
+    CTL->>DB: SELECT ... LIMIT 5001
     DB-->>CTL: 查询结果
-    CTL->>CTL: 解密敏感字段
-    CTL->>CTL: 脱敏(maskPhone/maskEmail)
-    CTL->>CTL: PhpSpreadsheet构建
-    Note right of CTL: 表头蓝底白字<br/>数据行细边框<br/>冻结首行<br/>自动筛选
-    CTL->>FS: 写入runtime/tmp/export_*.xlsx
-    CTL-->>C: 文件下载
+    alt 行数 > 5000
+        CTL-->>C: HTTP 422
+    else 行数 ≤ 5000
+        CTL->>CTL: 解密敏感字段
+        CTL->>CTL: 脱敏(maskPhone/maskEmail)
+        CTL->>CTL: PhpSpreadsheet构建
+        Note right of CTL: 表头蓝底白字<br/>数据行细边框<br/>冻结首行<br/>自动筛选
+        CTL->>FS: 写入runtime/tmp/export_*.xlsx
+        CTL-->>C: 文件下载
+    end
 ```
 
 ## PDF 导出

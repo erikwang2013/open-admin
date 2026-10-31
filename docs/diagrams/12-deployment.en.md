@@ -16,7 +16,7 @@ flowchart TB
         wm["webman app :8791<br/>container network"]
         mysql[("MySQL 8.0<br/>deploy/data/mysql")]
         redis[("Redis 7 · AOF<br/>deploy/data/redis")]
-        backup["backup (daily)<br/>mysqldump · gzip<br/>30-day retention"]
+        backup["backup (daily)<br/>mysqldump + upload tar<br/>30-day retention · logs 180 days"]
     end
 
     subgraph persist["Host persistence"]

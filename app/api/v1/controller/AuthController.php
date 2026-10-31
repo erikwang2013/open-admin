@@ -169,15 +169,6 @@ class AuthController
                 return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
             }
 
-            // 已登出的 refresh token 不可再使用
-            try {
-                if (Redis::get('jwt_blacklist:' . md5($refreshToken))) {
-                    return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
-                }
-            } catch (Throwable) {
-                // Redis 故障时跳过黑名单检查
-            }
-
             $userId = (int) ($payload['sub'] ?? 0);
             $user   = AdminUser::find($userId);
             if (!$user || $user->status === 0) {
@@ -194,6 +185,38 @@ class AuthController
                 // Redis 故障时 fail-open
             }
 
+            // 轮换重放宽限：60 秒内同一旧 refresh token 的重试/并发刷新返回同一对新令牌，
+            // 必须放在黑名单拒绝之前，否则旧令牌轮换后立即重试会被判为已登出
+            $rotationKey = 'refresh_rotation:' . md5($refreshToken);
+            try {
+                $cachedPair = Redis::get($rotationKey);
+                if ($cachedPair) {
+                    $pair = json_decode($cachedPair, true);
+                    if (is_array($pair) && !empty($pair['access_token']) && !empty($pair['refresh_token'])) {
+                        return json([
+                            'code'    => 0,
+                            'message' => 'success',
+                            'data'    => $pair + ['user' => [
+                                'id'        => Container::get('hashids')->encode($user->id),
+                                'username'  => $user->username,
+                                'real_name' => $user->real_name,
+                            ]],
+                        ]);
+                    }
+                }
+            } catch (Throwable) {
+                // Redis 故障时退回正常轮换流程（下方黑名单检查同样 fail-open）
+            }
+
+            // 已登出的 refresh token 不可再使用
+            try {
+                if (Redis::get('jwt_blacklist:' . md5($refreshToken))) {
+                    return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
+                }
+            } catch (Throwable) {
+                // Redis 故障时跳过黑名单检查
+            }
+
             // 刷新时更新最后登录时间和IP
             $user->last_login_at = date('Y-m-d H:i:s');
             $user->last_login_ip = $request->getRealIp();
@@ -207,6 +230,26 @@ class AuthController
             // 并发会话限制
             $this->trackSession($userId, $token, $tokenExpire);
             $this->trackRefreshToken($userId, $newRefresh, $refreshExpire);
+
+            // 先写轮换缓存，保证并发重试命中宽限；再吊销旧 refresh token
+            try {
+                Redis::setex($rotationKey, 60, json_encode([
+                    'access_token'  => $token,
+                    'refresh_token' => $newRefresh,
+                    'expires_in'    => $tokenExpire,
+                ]));
+            } catch (Throwable) {
+                // Redis 故障不影响本次刷新
+            }
+            try {
+                Redis::setex(
+                    'jwt_blacklist:' . md5($refreshToken),
+                    max((int) ($payload['exp'] ?? 0) - time(), 60),
+                    '1'
+                );
+            } catch (Throwable) {
+                // Redis 故障不影响本次刷新
+            }
 
             return json([
                 'code'    => 0,

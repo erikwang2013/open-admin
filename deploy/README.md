@@ -42,9 +42,9 @@ docker compose down
 | `deploy/.env` | 域名、端口、宿主机 UID/GID（仅 compose 插值） | compose | 600 |
 | `deploy/env/app.env` | `APP_*`、`JWT_*`、`HASHIDS_*`、`SNOWFLAKE_*`、`ENCRYPTION_*`（含 RSA 私钥）、`ENCRYPTABLE_*`、`DB_*`（仅应用用户）、`REDIS_*`、`POSTER_*` | app | 600 |
 | `deploy/env/init.env` | `DB_*`（仅应用用户）、`ADMIN_USERNAME`、`ADMIN_PASSWORD`、`SNOWFLAKE_*` | init | 600 |
-| `deploy/env/mysql.env` | `MYSQL_ROOT_PASSWORD`、`MYSQL_DATABASE`、`DB_*` | mysql | 600 |
+| `deploy/env/mysql.env` | `MYSQL_ROOT_PASSWORD`、`MYSQL_DATABASE`、`DB_*`、`DB_BACKUP_USERNAME`、`DB_BACKUP_PASSWORD` | mysql | 600 |
 | `deploy/env/redis.env` | `REDIS_PASSWORD` | redis | 600 |
-| `deploy/env/backup.env` | `MYSQL_ROOT_PASSWORD`、`MYSQL_DATABASE` | backup | 600 |
+| `deploy/env/backup.env` | `DB_BACKUP_USERNAME`、`DB_BACKUP_PASSWORD`、`MYSQL_DATABASE`（不含 root 凭据） | backup | 600 |
 
 `deploy/env/` 目录权限为 700。脚本默认幂等，只补齐缺失项；**自定义键会被保留**，
 已有键原地更新，不会整文件覆盖。
@@ -68,7 +68,7 @@ docker compose down
 | `deploy/data/redis` | Redis AOF 持久化 | 700 |
 | `deploy/data/runtime` | webman 运行时、日志、`install.lock` | 700 |
 | `deploy/data/upload` | 后台上传文件 | 700 |
-| `deploy/data/backups` | 自动备份输出目录（`backup_*.sql.gz`，保留 30 天） | 700 |
+| `deploy/data/backups` | 自动备份输出目录（`backup_*.sql.gz`、`upload_*.tar.gz`，保留 30 天） | 700 |
 
 > 容器首次启动后会把 `data/mysql`、`data/redis` 的所有者改为容器内用户
 > （MySQL/Redis 镜像的标准行为），宿主机普通用户随后无法直接读取这些目录，属正常现象。
@@ -127,15 +127,15 @@ docker compose down
 docker compose up -d --build
 ```
 
-`--regenerate` 轮换应用密钥（JWT、Hashids、传输层加密 `ENCRYPTION_KEY`、RSA、Redis 密码），
-但 **保留** `DB_PASSWORD`、`MYSQL_ROOT_PASSWORD`、`ADMIN_PASSWORD`、
+`--regenerate` 轮换应用密钥（JWT、传输层加密 `ENCRYPTION_KEY`、RSA、Redis 密码），
+但 **保留** Hashids 盐值、`DB_PASSWORD`、`MYSQL_ROOT_PASSWORD`、`ADMIN_PASSWORD`、
 `secrets/admin_password.txt`、数据库字段加密密钥 `ENCRYPTABLE_KEY` / `ENCRYPTION_PREVIOUS_KEYS`
-以及现有 TLS 证书，因此已有数据库、加密字段和真实证书都不受影响。
+以及现有 TLS 证书，因此已有数据库、加密字段、对外 ID 和真实证书都不受影响。
 
 影响范围：
 
 - JWT 轮换：所有已登录会话失效；
-- Hashids 轮换：旧链接中的 ID 无法解析；
+- Hashids 盐值默认保留，旧链接中的 ID 仍可解析；确需轮换请用 `--rotate-hashids`（见下文）；
 - RSA 轮换：登录页会自动重新获取公钥；仍依赖内置回退公钥的旧客户端需重新构建；
 - `ENCRYPTABLE_KEY` 默认不轮换；确需轮换请用 `--rotate-encryptable`（见下文）；
 - TLS 证书默认不轮换；确需重签自签证书请用 `--rotate-tls`（见下文）。
@@ -144,13 +144,22 @@ docker compose up -d --build
 `deploy/secrets/archive/<时间戳>/`，归档成功后才写新值。归档目录包含旧 RSA 私钥、
 旧数据库密码与旧证书，请按密钥材料妥善保管。
 
+### 轮换 Hashids 盐值（--rotate-hashids）
+
+```bash
+./generate-secrets.sh --rotate-hashids   # 可与其他参数组合
+```
+
+生成新的 `HASHIDS_SALT` / `HASHIDS_ALT_SALT`。轮换后旧链接、收藏夹以及外部系统中已保存的
+Hashids ID 将无法解析（数据库主键不变）。只有确认没有依赖旧 ID 的链接/集成后才应执行。
+
 ### 轮换数据库密码（--rotate-db）
 
 ```bash
 ./generate-secrets.sh --rotate-db    # 可与其他参数组合
 ```
 
-生成新的 `MYSQL_ROOT_PASSWORD` / `DB_PASSWORD` 并写入 `deploy/env/mysql.env` 等文件。
+生成新的 `MYSQL_ROOT_PASSWORD` / `DB_PASSWORD` / `DB_BACKUP_PASSWORD` 并写入 `deploy/env/mysql.env` 等文件。
 已存在的 MySQL 数据目录不会自动改密码，脚本会打印需要手动执行的 `ALTER USER` 命令
 （旧 root 密码见归档中的 `env/mysql.env`）。全新部署无需手动执行。
 
@@ -199,23 +208,81 @@ docker compose up -d --build
 
 - 服务端未配置 `RSA_PRIVATE_KEY` 时该接口返回 `code: 404`，客户端回退到内置公钥。
 
+## 资源限制
+
+compose 为每个服务设置了 `deploy.resources.limits.memory`，超过上限的容器会被 OOM 杀掉：
+
+| 服务 | 内存上限 | 说明 |
+|------|----------|------|
+| `app` | 512M | PHP/webman 进程 |
+| `init` | 256M | 一次性初始化 |
+| `mysql` | 768M | `innodb-buffer-pool-size=256M` |
+| `redis` | 256M | `maxmemory 256mb`（另需少量进程开销） |
+| `nginx` | 128M | 反向代理与静态文件 |
+| `backup` | 256M | `mysqldump`、`gzip` 与 `tar` |
+
+数值按单机小规模部署估算，会随用户量、导入导出和上传文件大小变化。若容器出现 OOM
+（`docker inspect <容器> --format '{{.State.OOMKilled}}'` 为 `true`），调高对应服务的
+`memory` 后执行 `docker compose up -d` 生效。MySQL 与 Redis 的上限需同时高于各自的
+`innodb-buffer-pool-size` / `maxmemory` 配置加进程开销。
+
 ## 备份与恢复
 
-`backup` 服务在 MySQL 健康后立即执行一次备份，之后每 24 小时执行一次：
-`mysqldump --single-transaction --routines --triggers` → gzip → `deploy/data/backups/`，
-并自动删除 30 天前的 `backup_*.sql.gz`。容器以 `APP_UID:APP_GID` 运行，备份文件归宿主用户所有，
-无需 root 才能读取。容器日志同样按 `10m × 3` 轮转。
+`backup` 服务在 MySQL 健康后立即执行一次，之后每 24 小时执行一次：
+
+- 数据库：`mysqldump --single-transaction --no-tablespaces --default-character-set=utf8mb4`
+  → gzip → `deploy/data/backups/backup_<时间戳>.sql.gz`；
+- 上传文件：`deploy/data/upload` 以只读方式挂载，打包为 `upload_<时间戳>.tar.gz`；
+- 两类备份均保留 30 天，容器启动时清理异常退出遗留的临时文件；
+- 每轮用备份用户执行一次
+  `DELETE FROM erik_operation_log WHERE created_at < DATE_SUB(NOW(), INTERVAL 180 DAY) LIMIT 10000`，
+  每天最多清理 1 万行；清理失败只记录日志，不影响备份。
+
+备份使用专用的最小权限 MySQL 用户（默认 `backup_reader`）：应用库的
+`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES`，外加 `erik_operation_log` 表的 `DELETE`。
+`backup.env` 不再保存 root 密码，root 凭据只在 `mysql.env`（仅 mysql 容器可见）中。
+备份容器以 `APP_UID:APP_GID` 运行，备份文件归宿主用户所有，无需 root 读取；容器日志按
+`10m × 3` 轮转。
+
+> **升级已有部署**：`docker-entrypoint-initdb.d` 只在 MySQL 数据目录为空时执行。已有部署升级后
+> 需手动补建备份用户（脚本幂等）：
+>
+> ```bash
+> cd deploy
+> ./generate-secrets.sh        # 生成 DB_BACKUP_* 并从 backup.env 移除旧 root 密码
+> docker compose up -d         # 用新的 env 重建容器
+> docker compose exec -T mysql sh /docker-entrypoint-initdb.d/20-app-user.sh
+> docker compose restart backup   # 补建用户后立即做一次备份，而不是等 24 小时
+> ```
+>
+> 之后若用 `--rotate-db` 轮换数据库密码，按脚本输出同时更新备份用户的 `ALTER USER`。
+
+### 异地备份
+
+`deploy/data/backups` 与数据库位于**同一台机器、同一块磁盘**，主机或磁盘故障时备份会一起丢失。
+请把备份定期复制到异地，例如宿主机 cron：
+
+```bash
+# rsync 到另一台主机（建议使用 SSH 密钥）
+rsync -a --delete deploy/data/backups/ backup@backup.example.com:/srv/open-admin/backups/
+
+# 或使用 rclone 同步到 S3 兼容对象存储
+rclone sync deploy/data/backups/ remote:open-admin-backups/
+```
+
+远端同样要保留 30 天以上的历史（对象存储版本控制或远端轮转），否则误删或勒索软件会同时
+影响近端与远端备份。
 
 手动备份：
 
 ```bash
 cd deploy
 docker compose exec -T mysql sh -c \
-  'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump -uroot --single-transaction --routines --triggers --default-character-set=utf8mb4 "$MYSQL_DATABASE"' \
+  'MYSQL_PWD="$DB_BACKUP_PASSWORD" mysqldump -u"$DB_BACKUP_USERNAME" --single-transaction --no-tablespaces --default-character-set=utf8mb4 "$MYSQL_DATABASE"' \
   | gzip > "data/backups/backup_$(date +%Y%m%d_%H%M%S).sql.gz"
 ```
 
-恢复：
+恢复（需要写权限，使用 root）：
 
 ```bash
 gunzip -c deploy/data/backups/backup_YYYYMMDD_HHMMSS.sql.gz \

@@ -263,6 +263,8 @@ sequenceDiagram
     SV-->>CL: 200 { dashboard data }
 ```
 
+刷新令牌：`POST /api/v1/auth/refresh` 每次成功刷新都轮换 access/refresh 令牌；旧 refresh_token 立即加入黑名单，同时以 `refresh_rotation:<md5(旧令牌)>` 缓存新令牌对 60 秒，宽限期内再次提交同一旧令牌返回同一对令牌。密码修改会清除轮换缓存，登出会拉黑缓存中的令牌；HarmonyOS 客户端对并发 401 使用单飞刷新。
+
 ---
 
 ## 5. RBAC 权限模型
@@ -513,8 +515,9 @@ sequenceDiagram
 
     Note over C,FS: === Excel 导出 ===
     C->>CTL: POST /admin/export/excel<br/>{ table, columns, conditions }
-    CTL->>DB: SELECT ... LIMIT 10000
+    CTL->>DB: SELECT ... LIMIT 5001
     DB-->>CTL: 数据
+    CTL->>CTL: 超过 5000 行 → 返回 HTTP 422
     CTL->>CTL: 解密敏感字段
     CTL->>CTL: 脱敏处理 (maskPhone/maskEmail)
     CTL->>CTL: PhpSpreadsheet 构建<br/>表头蓝底白字<br/>数据行细边框<br/>冻结首行<br/>自动筛选
@@ -528,6 +531,8 @@ sequenceDiagram
     CTL->>FS: 写入 runtime/tmp/export_*.pdf
     CTL-->>C: 文件下载
 ```
+
+导入用户时，`ImportController` 在 `IOFactory::load()` 之前先读取工作表元数据（`listWorksheetInfo`），任一工作表超过 2001 行立即返回 HTTP 422；加载后再用 `getHighestDataRow()` 复核，文件上限 5MB、数据行上限 2000 行。
 
 ---
 
@@ -627,6 +632,8 @@ flowchart TB
     style L7 fill:#FF4D4F,color:#fff
 ```
 
+补充：`AdminAuth` 黑名单与 `RateLimit` 在 Redis 故障时对 `/api/`、`/admin/` 返回 503（失败关闭），`/health`、`/metrics` 等非 API 路径放行；删除/禁用操作不能移除最后一名启用的超级管理员，内置 `super_admin` 角色禁止编辑/删除。
+
 ---
 
 ## 13. 部署拓扑
@@ -643,7 +650,7 @@ flowchart TB
         INIT["init（一次性）<br/>建表 + 创建管理员<br/>完成后退出"]
         MYSQL["MySQL 8.0<br/>deploy/data/mysql"]
         REDIS["Redis 7 · AOF<br/>deploy/data/redis"]
-        BACKUP["backup（每日）<br/>mysqldump · 保留 30 天"]
+        BACKUP["backup（每日）<br/>mysqldump + upload tar<br/>保留 30 天 · 日志 180 天"]
     end
 
     subgraph "宿主机持久化"
@@ -674,7 +681,7 @@ flowchart TB
     style DATA fill:#F6F8FC,color:#1677FF
 ```
 
-> 环境变量按服务隔离在 `deploy/env/{app,init,mysql,redis,backup}.env`（`600`，目录 `700`），master `deploy/.env` 只保存 compose 插值；应用与 init 以宿主机 `APP_UID`/`APP_GID` 运行。Nginx/MySQL 日志写 stdout/stderr，由 Docker 按 `10m × 3` 轮转；HSTS 默认关闭，配置真实域名证书后再启用。
+> 环境变量按服务隔离在 `deploy/env/{app,init,mysql,redis,backup}.env`（`600`，目录 `700`），master `deploy/.env` 只保存 compose 插值；应用与 init 以宿主机 `APP_UID`/`APP_GID` 运行。`backup` 使用最小权限用户 `backup_reader`，备份数据库、上传文件并清理 180 天前的操作日志；各服务设置内存上限（app 512M、init 256M、mysql 768M、redis 256M、nginx 128M、backup 256M）。Nginx/MySQL 日志写 stdout/stderr，由 Docker 按 `10m × 3` 轮转；HSTS 默认关闭，配置真实域名证书后再启用。
 
 ---
 

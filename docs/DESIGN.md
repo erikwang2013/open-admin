@@ -195,6 +195,7 @@ erik_system_config (系统配置) — 独立表
 上传:     /admin/upload
 批量:     /admin/user/batch/{destroy|status}
 文档:     /api/docs     (OpenAPI 3.0)
+调试页:   /apidoc/      (单文件同源调试界面，读取 /api/docs)
 健康:     /health
 ```
 
@@ -230,7 +231,7 @@ curl http://localhost:8791/api/v2/auth/login
 | 默认 | 60 次/分钟/IP/路由 |
 | POST /api/v1/auth/login | 10 次/分钟 |
 
-超限返回 429，响应头包含 X-RateLimit-Limit / Remaining / Reset / Retry-After。
+超限返回 429，响应头包含 X-RateLimit-Limit / Remaining / Reset / Retry-After。Redis 故障时 `/api/`、`/admin/` 返回 503（失败关闭），`/health`、`/metrics` 等非 API 路径放行以保证监控可用。
 
 ### 4.4 统一响应
 
@@ -249,8 +250,9 @@ curl http://localhost:8791/api/v2/auth/login
 | 401 | 未认证 | Token 缺失/过期/无效 |
 | 403 | 无权限 | 用户角色不包含所需权限 |
 | 404 | 不存在 | 资源未找到 |
-| 422 | 验证失败 | 表单参数不符合规则 / 密码确认失败 |
+| 422 | 验证失败 | 表单参数不符合规则 / 密码确认失败 / 导出超过 5000 行 |
 | 500 | 服务端错误 | 未预期异常 |
+| 503 | 服务不可用 | Redis 故障导致 `/api/`、`/admin/` 鉴权或限流失败关闭 |
 
 ### 4.5 认证流程（含点击验证码）
 
@@ -277,6 +279,8 @@ curl http://localhost:8791/api/v2/auth/login
   │◄── 200 {dashboard data}           │
 ```
 
+刷新：`POST /api/v1/auth/refresh` 轮换令牌对，旧 refresh_token 立即拉黑，并以 `refresh_rotation:<md5>` 缓存新令牌对 60 秒；宽限期内重复提交旧令牌返回同一对令牌。密码修改清除轮换缓存，登出拉黑缓存令牌；HarmonyOS 客户端并发 401 单飞刷新。
+
 ### 4.6 权限模型 (RBAC)
 
 ```
@@ -291,6 +295,8 @@ curl http://localhost:8791/api/v2/auth/login
   例: get.admin/user  post.admin/user  delete.admin/user
   超级管理员标识: * (跳过所有权限检查)
 ```
+
+超级管理员保护：不能删除当前登录账号或修改其状态；删除/禁用后必须至少保留一名启用的超管（否则 422）；内置 `super_admin` 角色禁止编辑/删除（403）。
 
 ### 4.7 敏感操作二次确认
 
@@ -357,7 +363,10 @@ curl http://localhost:8791/api/v2/auth/login
 | 人机验证 | 点击验证码（Click Captcha），登录强制校验 |
 | 账号锁定 | 连续 5 次登录失败锁定账号 15 分钟，锁定期间返回 429 |
 | 会话限制 | 同一用户最多 3 个并发 Token，超出时最旧 Token 自动黑名单 |
-| 限流 | RateLimit 中间件，Redis 滑动窗口，Lua 原子化 |
+| 限流 | RateLimit 中间件，Redis 滑动窗口，Lua 原子化；Redis 故障时 `/api/`、`/admin/` 失败关闭（503） |
+| 鉴权降级 | AdminAuth 黑名单读取失败返回 503，不放行可能已登出的 Token |
+| 超管保护 | 不能操作当前账号；删除/禁用保留至少一名启用的超级管理员；内置超管角色禁改删 |
+| 导入导出 | 导入 5MB / 2000 行（加载前拒绝超大工作表）；导出 5000 行，超出 HTTP 422 |
 | CSP | Content-Security-Policy 头限制资源来源，防 XSS 与数据注入 |
 | 操作确认 | 删除等敏感操作需输入当前用户密码二次确认 |
 | 传输 | HTTPS + JWT Bearer Token |
@@ -395,11 +404,14 @@ ENCRYPTABLE_KEY     → DB 存储加密密钥，与传输密钥独立
 
 ```
 请求: POST /admin/export/excel { table, columns, conditions, title }
-  → fetchExportData() 查询数据 (limit 10000)
+  → fetchExportData() 查询数据 (LIMIT 5001 探测)
+  → 超过 5000 行 → HTTP 422（不生成文件）
   → 脱敏敏感字段
   → PhpSpreadsheet 构建（蓝底白字表头 + 冻结首行 + 自动筛选）
   → 写入 runtime/tmp/ → download 响应
 ```
+
+导入：`POST /admin/import/users` 限制 5MB；`ImportController` 在 `IOFactory::load()` 前用 `createReaderForFile` + `setReadDataOnly(true)` + `listWorksheetInfo()` 检查所有工作表，任一工作表超过 2001 行立即返回 422；加载后再用 `getHighestDataRow()` 复核，数据行最多 2000 行。
 
 ### 7.2 PDF 导出
 
@@ -416,7 +428,7 @@ ENCRYPTABLE_KEY     → DB 存储加密密钥，与传输密钥独立
 
 ```
 Nginx (:80/:443，TLS 终止 + 静态官网) → app (webman :8791) → MySQL + Redis
-init（一次性）：建表 + 创建管理员；backup（每日）：mysqldump 到 deploy/data/backups
+init（一次性）：建表 + 创建管理员；backup（每日）：mysqldump + upload tar 到 deploy/data/backups，清理 180 天前操作日志
 数据持久化到 deploy/data/，日志写 stdout/stderr 由 Docker 轮转
 ```
 
@@ -427,11 +439,11 @@ init（一次性）：建表 + 创建管理员；backup（每日）：mysqldump 
 | 服务 | 镜像/构建 | 说明 |
 |------|----------|------|
 | `nginx` | nginx:alpine | 80/443，TLS、静态官网、反向代理 + Gzip；日志写 stdout/stderr |
-| `app` | 本地 `Dockerfile` 构建 | 8791（仅容器内网），PHP 8.3 + OPcache + webman，以宿主机 UID/GID 运行 |
+| `app` | 本地 `Dockerfile` 构建 | 8791（仅容器内网），PHP 8.3 + OPcache + redis/zip/gd（FreeType/JPEG）+ webman，以宿主机 UID/GID 运行 |
 | `init` | 同 app 镜像 | 一次性建表 + 创建管理员，完成后退出 |
 | `mysql` | mysql:8.0 | 主数据库，数据持久化到宿主机；错误/慢日志写 stderr |
 | `redis` | redis:7-alpine | 缓存 / 限流 / 验证码，AOF 持久化 |
-| `backup` | mysql:8.0 | 每日 `mysqldump` 到 `deploy/data/backups`，保留 30 天 |
+| `backup` | mysql:8.0 | 最小权限用户每日 `mysqldump` + 上传文件 tar 到 `deploy/data/backups`，保留 30 天；清理 180 天前操作日志 |
 
 首次部署：
 
@@ -442,10 +454,13 @@ docker compose up -d --build
 ```
 
 - 环境变量按服务隔离：`deploy/env/{app,init,mysql,redis,backup}.env`（目录 `700`、文件 `600`）；master `deploy/.env` 只保存域名、端口与 `APP_UID`/`APP_GID`。应用容器不持有 MySQL root 密码与初始化管理员密码。
-- 密钥由 `generate-secrets.sh` 自动生成；默认幂等，`--regenerate` 先归档旧 `.env`、`env/` 与 `secrets/` 到 `deploy/secrets/archive/<时间戳>/`，默认只轮换 JWT/HASHIDS/ENCRYPTION/RSA/Redis 等应用密钥，保留 `ENCRYPTABLE_KEY`、现有 TLS 证书、数据库与管理员密码；字段加密密钥、TLS、数据库密码、管理员密码分别用 `--rotate-encryptable`、`--rotate-tls`、`--rotate-db`、`--reset-admin` 显式轮换。
+- 密钥由 `generate-secrets.sh` 自动生成；默认幂等，`--regenerate` 先归档旧 `.env`、`env/` 与 `secrets/` 到 `deploy/secrets/archive/<时间戳>/`，默认只轮换 JWT/ENCRYPTION/RSA/Redis 等应用密钥，保留 `HASHIDS_SALT`、`ENCRYPTABLE_KEY`、现有 TLS 证书、数据库与管理员密码；Hashids 用 `--rotate-hashids` 显式轮换（旧链接 ID 失效），字段加密密钥、TLS、数据库密码、管理员密码分别用 `--rotate-encryptable`、`--rotate-tls`、`--rotate-db`、`--reset-admin` 显式轮换。
 - `app`/`init` 以 `${APP_UID:-1000}:${APP_GID:-1000}` 运行，脚本用 `id -u`/`id -g` 写入 master `.env`，保证 `deploy/data/{runtime,upload}` 可写。
 - 真实域名证书替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`；管理员密码见 `deploy/secrets/admin_password.txt`；HSTS 默认关闭，配置真实证书后再启用。
 - 持久化目录：`deploy/data/{mysql,redis,runtime,upload,backups}`；日志由 Docker 按 `10m × 3` 轮转。
+- 各服务设置内存上限：app 512M、init 256M、mysql 768M、redis 256M、nginx 128M、backup 256M。
+- Nginx 在静态资源 location 内重复注入 `X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy` 与 `Cache-Control`；`deploy/nginx/default.conf` 与 `docs/nginx-security.conf` 均由 CI 执行 `nginx -t`。
+- `backup` 使用最小权限用户 `backup_reader`（数据表 `SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` + `erik_operation_log` 的 `DELETE`），备份与 MySQL 同机同盘，需用 `rsync`/`rclone` 复制到异地。
 
 项目根目录的 `docker-compose.yml` 仅保留 4 个服务（nginx/app/mysql/redis）的本地快速开始编排；其 `.env.docker` 默认值为公开且故意无效的占位值，使用前先替换，禁止公网暴露，生产请使用 `deploy/`。
 
@@ -455,10 +470,11 @@ GitHub Actions 持续集成定义在 `.github/workflows/ci.yml`：
 - PHP 语法检查 (`php -l`)
 - PHPUnit 单元测试
 - Flutter 静态分析 (`flutter analyze`)
+- Docker 镜像构建 + PHP 扩展检查（redis/zip/gd、GD FreeType/JPEG）+ 根目录与 `deploy/` Compose 配置校验 + 两份 Nginx 配置 `nginx -t`（release 依赖 php/flutter/docker 三个 job）
 
 ### 8.4 数据库备份
 
-生产编排的 `backup` 服务每日自动备份到 `deploy/data/backups`（保留 30 天）。
+生产编排的 `backup` 服务每日自动备份数据库与上传文件到 `deploy/data/backups`（保留 30 天），并清理 180 天前的操作日志；异地副本需用 `rsync`/`rclone` 同步。
 `database/backup/backup.sh` — mysqldump + gzip 备份，自动清理 30 天前旧备份（宿主机直连数据库）。
 `database/backup/restore.sh` — 交互式选择并恢复备份。
 

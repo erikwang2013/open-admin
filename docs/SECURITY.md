@@ -140,17 +140,20 @@ Lua 脚本在 Redis 服务端单线程执行，**天然原子化**，消除 TOCT
 
 ### 降级策略
 
-Redis 异常（连接超时、不可用等）时 **fail-open**：
+Redis 异常（连接超时、不可用等）时，`/api/` 与 `/admin/` 请求 **fail-closed**，返回 HTTP 503；`/health`、`/metrics` 等非 API 路径仍放行，保证监控与探针可用：
 
 ```php
 try {
     $result = Redis::eval($lua, ...);
 } catch (\Throwable $e) {
-    return $handler($request); // Redis down, 放行所有请求
+    if (str_starts_with($path, '/api/') || str_starts_with($path, '/admin/')) {
+        return json(['code' => 503, 'message' => '服务暂时不可用，请稍后再试', 'data' => []])->withStatus(503);
+    }
+    return $handler($request); // 非 API 路径放行，保证监控可用
 }
 ```
 
-宁可短时间丧失限流保护，也不阻断正常业务请求。
+限流与鉴权失败时以可用性换安全：Redis 故障期间拒绝 API 请求，避免绕过限流与 Token 黑名单。
 
 ### 5.4 账号锁定机制
 
@@ -207,7 +210,9 @@ AdminAuth 中间件实现，挂载在需要认证的路由组上。
 3. JWT decode → 失败（过期/签名不匹配） → 401 `Token已过期或无效`
 4. 成功 → 注入 `$request->adminId` 和 `$request->adminUsername`
 
-**黑名单机制**：用户登出时，将 `md5(token)` 写入 Redis，TTL 设为 JWT 剩余有效期。Redis 故障时黑名单检查被跳过（fail-open），此时已登出的 Token 仍可短期使用，但 JWT 本身的短期有效期（2h）作为兜底保护。
+**黑名单机制**：用户登出时，将 `md5(token)` 写入 Redis，TTL 设为 JWT 剩余有效期。Redis 故障时黑名单读取失败，`AdminAuth` 返回 503（fail-closed），不会放行可能已登出的 Token。
+
+**刷新令牌轮换**：`/api/v1/auth/refresh` 每次成功刷新都会签发新的 access/refresh 令牌对，旧 refresh_token 立即加入黑名单。为容忍并发请求与客户端重试，服务端以旧令牌的 md5 为键缓存新令牌对 60 秒（`refresh_rotation:{md5}`）：宽限期内再次提交同一旧令牌返回同一对新令牌，不会重复轮换；超过 60 秒后按黑名单拒绝。密码修改会写入密码变更水位并清除轮换缓存，登出会拉黑缓存中的令牌并删除缓存键。客户端应串行刷新；HarmonyOS 客户端对并发 401 使用单飞（single-flight）刷新，多个请求共享同一次刷新结果。
 
 ### 6.2 并发会话限制
 
@@ -271,6 +276,8 @@ API 权限标识格式：`{method}.{path}`
 5. 匹配失败 → 403 `{"code": 403, "message": "无权限访问"}`
 
 **二次确认**：BaseController 提供 `confirmPassword()` 方法，敏感操作（删除用户、数据导出等）在 Controller 层额外要求输入当前密码，防止会话劫持后被未授权操作。
+
+**超级管理员保护**：删除/批量删除/批量禁用会拒绝当前登录账号（422），并在写入前统计启用状态、`slug = super_admin` 的用户数，若操作后剩余为 0 则返回 422 `系统必须保留至少一名启用的超级管理员`。内置 `super_admin` 角色本身禁止编辑/删除（403）。该检查为“检查后写入”，并发删除多名的极端场景需数据库行锁；当前实现按业务规则在写入前复核，残留并发窗口见 12.2。
 
 ---
 
@@ -374,6 +381,8 @@ OperationLog 中间件对 POST / PUT / DELETE 请求自动记录操作日志。G
 - 邮箱：`a***@example.com`
 - 身份证：完全遮盖为 `********`
 
+**导入导出资源上限**：Excel 导出单次最多 5000 行（查询 `LIMIT 5001` 探测，超出返回 HTTP 422），避免大批量导出占用内存并扩大数据外泄面；用户导入限制 5MB、2000 行，服务端在加载工作簿前读取工作表元数据，任一工作表超过 2001 行立即返回 422，加载后再次校验行数。
+
 ---
 
 ## 9. 密钥管理
@@ -395,7 +404,7 @@ OperationLog 中间件对 POST / PUT / DELETE 请求自动记录操作日志。G
 - `.env.example` 是公开模板文件，不包含真实密钥
 - 生产环境**必须**更换所有默认密钥为随机字符串
 - 单机生产部署使用 `deploy/generate-secrets.sh` 生成 `deploy/env/{app,init,mysql,redis,backup}.env`（目录 `700`、文件 `600`）、`deploy/.env` 与 `deploy/secrets/`；`deploy/.env`、`deploy/env/`、`deploy/secrets/` 均已加入 `.gitignore`。环境变量按服务隔离，应用容器不持有 MySQL root 密码与初始化管理员密码
-- `--regenerate` 先把旧 `.env`、`env/` 与 `secrets/` 归档到 `deploy/secrets/archive/<时间戳>/`，默认只轮换 JWT/HASHIDS/ENCRYPTION/RSA/Redis 等应用密钥，保留 `ENCRYPTABLE_KEY`、现有 TLS 证书、`DB_PASSWORD`、`MYSQL_ROOT_PASSWORD` 与管理员密码，避免破坏已有数据库。需要轮换字段加密密钥用 `--rotate-encryptable`（旧密钥自动加入 `ENCRYPTION_PREVIOUS_KEYS`，旧数据仍可读取；完成数据重加密后再移除旧密钥），轮换 TLS 用 `--rotate-tls`，轮换数据库密码用 `--rotate-db`，重置管理员密码用 `--reset-admin`
+- `--regenerate` 先把旧 `.env`、`env/` 与 `secrets/` 归档到 `deploy/secrets/archive/<时间戳>/`，默认只轮换 JWT/ENCRYPTION/RSA/Redis 等应用密钥，保留 `HASHIDS_SALT`、`ENCRYPTABLE_KEY`、现有 TLS 证书、`DB_PASSWORD`、`MYSQL_ROOT_PASSWORD` 与管理员密码，避免破坏已有数据库。需要轮换 Hashids 用 `--rotate-hashids`（旧链接中的 ID 将失效），轮换字段加密密钥用 `--rotate-encryptable`（旧密钥自动加入 `ENCRYPTION_PREVIOUS_KEYS`，旧数据仍可读取；完成数据重加密后再移除旧密钥），轮换 TLS 用 `--rotate-tls`，轮换数据库密码用 `--rotate-db`，重置管理员密码用 `--reset-admin`
 - RSA 公钥通过 `GET /api/v1/auth/public-key` 公开（仅公钥，可安全暴露）；换钥后确认该端点可达，依赖内置回退公钥的旧客户端需重新构建
 
 ### 密钥存储隔离
@@ -406,6 +415,10 @@ OperationLog 中间件对 POST / PUT / DELETE 请求自动记录操作日志。G
 | 存储加密 | `config/encryptable.php` → `key` | `ENCRYPTABLE_KEY` |
 | ID 混淆 | `config/hashids.php` → `connections.main.salt` | `HASHIDS_SALT` |
 | JWT 签名 | `config/plugin/erikwang2013/jwt/jwt` | `JWT_SECRET_KEY` |
+
+### 备份与日志保留
+
+生产 `backup` 服务使用独立的最小权限 MySQL 用户 `backup_reader`（`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES`，外加 `erik_operation_log` 的 `DELETE`），不持有 root 密码。每日用 `mysqldump --single-transaction --no-tablespaces` 备份数据库，并把 `deploy/data/upload` 打包为 `upload_<时间>.tar.gz`，两类备份保留 30 天；同时每日清理 180 天前的操作日志（每轮最多 10000 行，失败不影响备份）。备份与数据库位于同一主机/磁盘，必须用 `rsync` 或 `rclone` 复制到异地，避免单机故障同时丢失数据与备份。
 
 ---
 
@@ -456,13 +469,14 @@ Policy: https://erik.xyz/security-policy
 | `limit_req_zone` | Nginx 层面的请求频率限制 |
 | `limit_conn_zone` | 并发连接数限制 |
 | `add_header` 安全头 | 在 Nginx 层面追加 X-XSS-Protection 等安全头 |
+| 静态资源安全头 | 在 assets location 内重复 `X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy` 与 `Cache-Control`（location 级 `add_header` 会覆盖继承值） |
 | `if ($request_method)` | Nginx 层面拒绝非标准 HTTP 方法 |
 | SSL/TLS 配置 | 现代 TLS 1.2/1.3 配置，禁用弱加密套件 |
 | 隐藏后端头 | `proxy_hide_header` 移除 webman 版本等敏感头 |
 
 **使用方式**：将 `docs/nginx-security.conf` 中的配置合并到您的 Nginx server 块中，根据实际域名和证书路径调整。
 
-单机生产编排使用 `deploy/nginx/default.conf`：80 端口除 `/.well-known/acme-challenge/` 外全部 301 到 HTTPS；证书读取 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`。真实域名证书直接替换这两个文件，脚本默认不会覆盖已有证书（`--rotate-tls` 除外）。`Strict-Transport-Security`（HSTS）默认注释关闭：自签证书或尚未确认的域名下开启会把浏览器锁在错误域名上，配置真实域名证书后再启用。Nginx/MySQL 日志写 stdout/stderr，由 Docker 按 `10m × 3` 轮转，不生成无上限的宿主机日志文件。
+单机生产编排使用 `deploy/nginx/default.conf`：80 端口除 `/.well-known/acme-challenge/` 外全部 301 到 HTTPS；证书读取 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`。真实域名证书直接替换这两个文件，脚本默认不会覆盖已有证书（`--rotate-tls` 除外）。`Strict-Transport-Security`（HSTS）默认注释关闭：自签证书或尚未确认的域名下开启会把浏览器锁在错误域名上，配置真实域名证书后再启用。Nginx/MySQL 日志写 stdout/stderr，由 Docker 按 `10m × 3` 轮转，不生成无上限的宿主机日志文件。两份配置均在 CI 中用 `nginx -t` 校验。
 
 ---
 
@@ -492,7 +506,9 @@ Policy: https://erik.xyz/security-policy
 | 局限 | 影响范围 | 缓解措施 |
 |------|---------|---------|
 | CSRF 保护仅对浏览器有效 | 非浏览器客户端（curl, Postman, 移动 App）可跳过 Origin/Referer 检查 | 非浏览器客户端天然不受 CSRF 攻击；依赖 JWT 认证替代 Cookie |
-| Redis 不可用时限流和黑名单降级为 fail-open | 攻击者可绕过限流和高频拦截 | 监控 Redis 可用性告警；IP 黑名单支持 file/redis/cache 三后端可降级 |
+| Redis 不可用时 `/api/`、`/admin/` 失败关闭（503） | Redis 故障期间管理端与 API 不可用 | `/health`、`/metrics` 等非 API 路径放行；监控 Redis 并告警，尽快恢复 |
+| 刷新令牌 60 秒宽限期 | 旧 refresh_token 在轮换后 60 秒内重放可拿到缓存的新令牌对 | 旧令牌已拉黑且缓存仅 60 秒；客户端串行刷新，HarmonyOS 单飞 |
+| 最后一名超级管理员检查未加行锁 | 两个并发删除/禁用最后两名超管时可能都通过检查 | 写入前复核；极端并发需改事务 + `SELECT ... FOR UPDATE` |
 | 无独立 WAF 引擎 | 基于正则匹配的检测，非专用 WAF 规则引擎 | 生产环境建议前置 Nginx ModSecurity 或 Cloudflare WAF |
 | JWT 无状态无法主动失效 | Token 未过期前无法从服务端主动吊销（除黑名单外） | 黑名单 + 短期 2h TTL 降低风险窗口 |
 | 管理员端点无特殊限流 | 管理员接口与普通接口共用 60/min 默认限制 | 管理员操作频率天然低，暂无需区分 |

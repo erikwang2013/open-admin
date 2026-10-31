@@ -45,9 +45,9 @@ or the initial admin password:
 | `deploy/.env` | domain, ports, host UID/GID (compose interpolation only) | compose | 600 |
 | `deploy/env/app.env` | `APP_*`, `JWT_*`, `HASHIDS_*`, `SNOWFLAKE_*`, `ENCRYPTION_*` (incl. RSA private key), `ENCRYPTABLE_*`, `DB_*` (app user only), `REDIS_*`, `POSTER_*` | app | 600 |
 | `deploy/env/init.env` | `DB_*` (app user only), `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `SNOWFLAKE_*` | init | 600 |
-| `deploy/env/mysql.env` | `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE`, `DB_*` | mysql | 600 |
+| `deploy/env/mysql.env` | `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE`, `DB_*`, `DB_BACKUP_USERNAME`, `DB_BACKUP_PASSWORD` | mysql | 600 |
 | `deploy/env/redis.env` | `REDIS_PASSWORD` | redis | 600 |
-| `deploy/env/backup.env` | `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE` | backup | 600 |
+| `deploy/env/backup.env` | `DB_BACKUP_USERNAME`, `DB_BACKUP_PASSWORD`, `MYSQL_DATABASE` (no root credentials) | backup | 600 |
 
 The `deploy/env/` directory is mode 700. The script is idempotent and only fills in missing
 values; **custom keys are preserved**, known keys are updated in place, and the file is never
@@ -73,7 +73,7 @@ rewritten from a fixed list.
 | `deploy/data/redis` | Redis AOF persistence | 700 |
 | `deploy/data/runtime` | webman runtime, logs, `install.lock` | 700 |
 | `deploy/data/upload` | Admin uploads | 700 |
-| `deploy/data/backups` | Automatic backups (`backup_*.sql.gz`, kept 30 days) | 700 |
+| `deploy/data/backups` | Automatic backups (`backup_*.sql.gz`, `upload_*.tar.gz`, kept 30 days) | 700 |
 
 > On first start the containers chown `data/mysql` and `data/redis` to their internal users
 > (standard MySQL/Redis image behaviour). Your host user may no longer read those directories
@@ -137,16 +137,17 @@ docker compose down
 docker compose up -d --build
 ```
 
-`--regenerate` rotates application secrets (JWT, Hashids, transport `ENCRYPTION_KEY`, RSA, Redis
-password) but **preserves** `DB_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `ADMIN_PASSWORD`,
+`--regenerate` rotates application secrets (JWT, transport `ENCRYPTION_KEY`, RSA, Redis password)
+but **preserves** the Hashids salts, `DB_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `ADMIN_PASSWORD`,
 `secrets/admin_password.txt`, the field-encryption key `ENCRYPTABLE_KEY` /
 `ENCRYPTION_PREVIOUS_KEYS` and the existing TLS certificates, so an existing database, encrypted
-fields and real certificates are unaffected.
+fields, public IDs and real certificates are unaffected.
 
 Impact:
 
 - JWT rotation: all logged-in sessions are invalidated;
-- Hashids rotation: IDs in old links no longer resolve;
+- the Hashids salts are preserved by default, so IDs in old links still resolve; use
+  `--rotate-hashids` only when you really need to rotate them (see below);
 - RSA rotation: the login page re-fetches the public key; older clients that rely on the embedded
   fallback key must be rebuilt;
 - `ENCRYPTABLE_KEY` is not rotated by default; use `--rotate-encryptable` if you really need to
@@ -159,16 +160,26 @@ directory to `deploy/secrets/archive/<timestamp>/`, and only writes new values a
 succeeds. The archive contains the old RSA private key, old database passwords and old
 certificate — treat it as key material.
 
+### Rotating the Hashids salts (--rotate-hashids)
+
+```bash
+./generate-secrets.sh --rotate-hashids   # can be combined with other flags
+```
+
+Generates new `HASHIDS_SALT` / `HASHIDS_ALT_SALT`. Old links, bookmarks and Hashids IDs stored in
+external systems no longer resolve afterwards (database primary keys are unchanged). Only run this
+when no integration depends on the old IDs.
+
 ### Rotating database passwords (--rotate-db)
 
 ```bash
 ./generate-secrets.sh --rotate-db    # can be combined with other flags
 ```
 
-Generates new `MYSQL_ROOT_PASSWORD` / `DB_PASSWORD` and writes them to `deploy/env/mysql.env`
-and the other env files. An existing MySQL data directory does not change its account passwords
-automatically, so the script prints the `ALTER USER` commands to run manually (the old root
-password is in the archived `env/mysql.env`). A fresh deployment needs no manual step.
+Generates new `MYSQL_ROOT_PASSWORD` / `DB_PASSWORD` / `DB_BACKUP_PASSWORD` and writes them to
+`deploy/env/mysql.env` and the other env files. An existing MySQL data directory does not change
+its account passwords automatically, so the script prints the `ALTER USER` commands to run manually
+(the old root password is in the archived `env/mysql.env`). A fresh deployment needs no manual step.
 
 ### Resetting the admin password (--reset-admin)
 
@@ -220,23 +231,87 @@ password, the login page calls `GET /api/v1/auth/public-key` to fetch the server
 - When the server has no `RSA_PRIVATE_KEY`, the endpoint returns `code: 404` and the client falls back
   to the embedded public key.
 
+## Resource limits
+
+Compose sets `deploy.resources.limits.memory` for every service; a container exceeding its limit is
+OOM-killed:
+
+| Service | Memory limit | Notes |
+|---------|--------------|-------|
+| `app` | 512M | PHP/webman processes |
+| `init` | 256M | one-shot initialization |
+| `mysql` | 768M | `innodb-buffer-pool-size=256M` |
+| `redis` | 256M | `maxmemory 256mb` (plus process overhead) |
+| `nginx` | 128M | reverse proxy and static files |
+| `backup` | 256M | `mysqldump`, `gzip` and `tar` |
+
+The values assume a small single-machine deployment and vary with user count, imports/exports and
+upload sizes. If a container is OOM-killed (`docker inspect <container> --format
+'{{.State.OOMKilled}}'` reports `true`), raise that service's `memory` and run
+`docker compose up -d`. For MySQL and Redis the limit must stay above their
+`innodb-buffer-pool-size` / `maxmemory` settings plus process overhead.
+
 ## Backup and restore
 
-The `backup` service takes one dump as soon as MySQL is healthy and then every 24 hours:
-`mysqldump --single-transaction --routines --triggers` → gzip → `deploy/data/backups/`. It deletes
-`backup_*.sql.gz` older than 30 days. It runs as `APP_UID:APP_GID`, so backup files belong to the
-host user and need no root to read. Its container logs rotate at `10m × 3` too.
+The `backup` service takes one backup as soon as MySQL is healthy and then every 24 hours:
+
+- database: `mysqldump --single-transaction --no-tablespaces --default-character-set=utf8mb4`
+  → gzip → `deploy/data/backups/backup_<timestamp>.sql.gz`;
+- uploads: `deploy/data/upload` is mounted read-only and archived as
+  `upload_<timestamp>.tar.gz`;
+- both kinds are kept for 30 days, and stale temporary files are removed when the container starts;
+- each daily loop runs
+  `DELETE FROM erik_operation_log WHERE created_at < DATE_SUB(NOW(), INTERVAL 180 DAY) LIMIT 10000`
+  as the backup user, deleting at most 10,000 rows per day; failures are logged and never block the
+  backup.
+
+Backups use a dedicated least-privilege MySQL user (default `backup_reader`): `SELECT, SHOW VIEW,
+TRIGGER, EVENT, LOCK TABLES` on the app database plus `DELETE` on `erik_operation_log` only.
+`backup.env` no longer contains the root password; root credentials live only in `mysql.env`
+(visible to the mysql container). The backup container runs as `APP_UID:APP_GID`, so files belong
+to the host user and need no root to read; its logs rotate at `10m × 3`.
+
+> **Upgrading an existing deployment**: `docker-entrypoint-initdb.d` only runs when the MySQL data
+> directory is empty. Create the backup user manually after upgrading (the script is idempotent):
+>
+> ```bash
+> cd deploy
+> ./generate-secrets.sh        # generates DB_BACKUP_* and removes the old root password from backup.env
+> docker compose up -d         # recreate containers with the new env files
+> docker compose exec -T mysql sh /docker-entrypoint-initdb.d/20-app-user.sh
+> docker compose restart backup   # take a backup now instead of waiting 24 hours
+> ```
+>
+> If you later rotate database passwords with `--rotate-db`, run the printed `ALTER USER` for the
+> backup user as well.
+
+### Offsite copies
+
+`deploy/data/backups` sits on the **same machine and the same disk** as the database, so a host or
+disk failure loses the backups together with the data. Copy them offsite on a schedule, e.g. from
+host cron:
+
+```bash
+# rsync to another host (prefer SSH keys)
+rsync -a --delete deploy/data/backups/ backup@backup.example.com:/srv/open-admin/backups/
+
+# or rclone to an S3-compatible bucket
+rclone sync deploy/data/backups/ remote:open-admin-backups/
+```
+
+Keep more than 30 days of history at the destination too (object-storage versioning or remote
+rotation); otherwise accidental deletion or ransomware hits both copies.
 
 Manual backup:
 
 ```bash
 cd deploy
 docker compose exec -T mysql sh -c \
-  'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump -uroot --single-transaction --routines --triggers --default-character-set=utf8mb4 "$MYSQL_DATABASE"' \
+  'MYSQL_PWD="$DB_BACKUP_PASSWORD" mysqldump -u"$DB_BACKUP_USERNAME" --single-transaction --no-tablespaces --default-character-set=utf8mb4 "$MYSQL_DATABASE"' \
   | gzip > "data/backups/backup_$(date +%Y%m%d_%H%M%S).sql.gz"
 ```
 
-Restore:
+Restore (needs write privileges, so it uses root):
 
 ```bash
 gunzip -c deploy/data/backups/backup_YYYYMMDD_HHMMSS.sql.gz \
