@@ -41,9 +41,19 @@ class ImportController extends BaseController
             return $this->fail('仅支持 .xlsx 或 .xls 文件', 422);
         }
 
+        if ($file->getSize() > 5 * 1024 * 1024) {
+            return $this->fail('文件大小不能超过 5MB', 422);
+        }
+
         $tmpPath = $file->getRealPath();
         $spreadsheet = IOFactory::load($tmpPath);
         $sheet       = $spreadsheet->getActiveSheet();
+
+        // 先按数据边界拒绝超大表，避免 toArray() 展开占用大量内存
+        if ($sheet->getHighestDataRow() > 2001) {
+            return $this->fail('数据行数不能超过 2000 行（不含表头）', 422);
+        }
+
         $rows        = $sheet->toArray();
 
         if (count($rows) < 2) {

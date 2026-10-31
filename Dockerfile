@@ -7,23 +7,32 @@ FROM php:8.3-cli-alpine
 
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 
-# 镜像加速 + 基础依赖
+# 镜像加速 + 运行时依赖（curl/unzip 保留，其余为扩展运行库）
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories \
     && apk update --no-cache \
     && apk add --no-cache \
+        libpng \
+        libjpeg-turbo \
+        freetype \
+        oniguruma \
+        libxml2 \
+        libzip \
+        curl \
+        unzip
+
+# PHP 扩展 + 原生 Redis（support\Redis 硬依赖）全部编译完成后，
+# 一次性删除 dev 头文件与 $PHPIZE_DEPS 虚拟包，镜像只保留运行库
+RUN apk add --no-cache --virtual .build-deps \
+        $PHPIZE_DEPS \
         libpng-dev \
         libjpeg-turbo-dev \
         freetype-dev \
         oniguruma-dev \
         libxml2-dev \
         libzip-dev \
-        curl \
-        git \
-        unzip \
-    && docker-php-source extract
-
-# PHP 扩展（zip 供 PhpSpreadsheet 使用）
-RUN docker-php-ext-install -j$(nproc) \
+    && docker-php-source extract \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) \
         pdo pdo_mysql \
         pcntl \
         mbstring \
@@ -32,14 +41,11 @@ RUN docker-php-ext-install -j$(nproc) \
         dom \
         xmlwriter \
         zip \
-    && docker-php-ext-enable opcache pcntl
-
-# 原生 Redis 扩展（support\Redis 硬依赖），编译后清理构建依赖
-RUN apk add --no-cache --virtual .pecl-deps $PHPIZE_DEPS \
     && pecl install redis \
-    && docker-php-ext-enable redis \
-    && apk del .pecl-deps \
-    && rm -rf /tmp/pear
+    && docker-php-ext-enable opcache pcntl redis \
+    && docker-php-source delete \
+    && apk del .build-deps \
+    && rm -rf /tmp/pear /var/cache/apk/* /tmp/*
 
 # OPcache 生产配置
 RUN echo "opcache.enable=1" >> "$PHP_INI_DIR/php.ini" \
@@ -49,9 +55,6 @@ RUN echo "opcache.enable=1" >> "$PHP_INI_DIR/php.ini" \
 
 # Composer
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
-
-RUN docker-php-source delete \
-    && rm -rf /var/cache/apk/* /tmp/*
 
 RUN mkdir -p /app
 WORKDIR /app

@@ -416,34 +416,38 @@ ENCRYPTABLE_KEY     → DB 存储加密密钥，与传输密钥独立
 
 ```
 Nginx (:80/:443，TLS 终止 + 静态官网) → app (webman :8791) → MySQL + Redis
-init（一次性）：建表 + 创建管理员；数据/日志绑定 deploy/data/
+init（一次性）：建表 + 创建管理员；backup（每日）：mysqldump 到 deploy/data/backups
+数据持久化到 deploy/data/，日志写 stdout/stderr 由 Docker 轮转
 ```
 
 ### 8.2 Docker Compose（单机生产部署）
 
-生产编排位于 `deploy/`，单机运行 5 个服务，不依赖全文检索引擎：
+生产编排位于 `deploy/`，单机运行 6 个服务，不依赖全文检索引擎：
 
 | 服务 | 镜像/构建 | 说明 |
 |------|----------|------|
-| `nginx` | nginx:alpine | 80/443，TLS、静态官网、反向代理 + Gzip |
-| `app` | 本地 `Dockerfile` 构建 | 8791（仅容器内网），PHP 8.3 + OPcache + webman |
+| `nginx` | nginx:alpine | 80/443，TLS、静态官网、反向代理 + Gzip；日志写 stdout/stderr |
+| `app` | 本地 `Dockerfile` 构建 | 8791（仅容器内网），PHP 8.3 + OPcache + webman，以宿主机 UID/GID 运行 |
 | `init` | 同 app 镜像 | 一次性建表 + 创建管理员，完成后退出 |
-| `mysql` | mysql:8.0 | 主数据库，数据与日志绑定宿主机目录 |
+| `mysql` | mysql:8.0 | 主数据库，数据持久化到宿主机；错误/慢日志写 stderr |
 | `redis` | redis:7-alpine | 缓存 / 限流 / 验证码，AOF 持久化 |
+| `backup` | mysql:8.0 | 每日 `mysqldump` 到 `deploy/data/backups`，保留 30 天 |
 
 首次部署：
 
 ```bash
 cd deploy
-./generate-secrets.sh          # 生成 .env、密钥、自签名证书与管理员密码
+./generate-secrets.sh          # 生成 master .env、各服务 env、密钥、自签名证书与管理员密码
 docker compose up -d --build
 ```
 
-- 密钥由 `generate-secrets.sh` 自动生成并写入 `deploy/.env`；默认幂等，`--regenerate` 先归档旧 `.env` 与 `secrets/` 到 `deploy/secrets/archive/<时间戳>/` 再重建。
-- 真实域名证书替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`；管理员密码见 `deploy/secrets/admin_password.txt`。
-- 持久化目录：`deploy/data/{mysql,mysql-logs,redis,runtime,upload,nginx/logs,backups}`。
+- 环境变量按服务隔离：`deploy/env/{app,init,mysql,redis,backup}.env`（目录 `700`、文件 `600`）；master `deploy/.env` 只保存域名、端口与 `APP_UID`/`APP_GID`。应用容器不持有 MySQL root 密码与初始化管理员密码。
+- 密钥由 `generate-secrets.sh` 自动生成；默认幂等，`--regenerate` 先归档旧 `.env`、`env/` 与 `secrets/` 到 `deploy/secrets/archive/<时间戳>/`，默认只轮换 JWT/HASHIDS/ENCRYPTION/RSA/Redis 等应用密钥，保留 `ENCRYPTABLE_KEY`、现有 TLS 证书、数据库与管理员密码；字段加密密钥、TLS、数据库密码、管理员密码分别用 `--rotate-encryptable`、`--rotate-tls`、`--rotate-db`、`--reset-admin` 显式轮换。
+- `app`/`init` 以 `${APP_UID:-1000}:${APP_GID:-1000}` 运行，脚本用 `id -u`/`id -g` 写入 master `.env`，保证 `deploy/data/{runtime,upload}` 可写。
+- 真实域名证书替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`；管理员密码见 `deploy/secrets/admin_password.txt`；HSTS 默认关闭，配置真实证书后再启用。
+- 持久化目录：`deploy/data/{mysql,redis,runtime,upload,backups}`；日志由 Docker 按 `10m × 3` 轮转。
 
-项目根目录的 `docker-compose.yml` 仅保留 4 个服务（nginx/app/mysql/redis）的本地快速开始编排；生产请使用 `deploy/`。
+项目根目录的 `docker-compose.yml` 仅保留 4 个服务（nginx/app/mysql/redis）的本地快速开始编排；其 `.env.docker` 默认值为公开且故意无效的占位值，使用前先替换，禁止公网暴露，生产请使用 `deploy/`。
 
 ### 8.3 CI/CD
 
@@ -454,7 +458,8 @@ GitHub Actions 持续集成定义在 `.github/workflows/ci.yml`：
 
 ### 8.4 数据库备份
 
-`database/backup/backup.sh` — mysqldump + gzip 备份，自动清理 30 天前旧备份。
+生产编排的 `backup` 服务每日自动备份到 `deploy/data/backups`（保留 30 天）。
+`database/backup/backup.sh` — mysqldump + gzip 备份，自动清理 30 天前旧备份（宿主机直连数据库）。
 `database/backup/restore.sh` — 交互式选择并恢复备份。
 
 ### 8.5 监控

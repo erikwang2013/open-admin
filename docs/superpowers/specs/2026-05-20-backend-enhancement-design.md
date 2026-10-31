@@ -1,5 +1,7 @@
 # 子项目 A：后端增强 — 设计规范
 
+> **历史文档（2026-05-20）**：Elasticsearch 全文检索已从项目移除（下文相关设计仅作历史记录），当前架构仅使用 MySQL + Redis；示例端口已统一为 8791。
+
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
 ## 范围
@@ -211,7 +213,6 @@ Redis::setex("jwt_blacklist:" . md5($token), max($ttl, 0), '1');
     "php": "8.3.0",
     "database": "ok",
     "redis": "ok",
-    "elasticsearch": "ok",
     "timestamp": 1747737600
   }
 }

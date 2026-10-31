@@ -95,6 +95,9 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
+      - name: Test
+        run: flutter test
+
   # ============================================================
   # Release — 推送到 main 后自动打 tag + 创建 Release
   # 版本号基于最新 tag 的 patch 位增量（v2.1.0 → v2.1.1）

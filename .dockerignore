@@ -1,5 +1,6 @@
 # 构建上下文排除项：避免宿主机产物/密钥进入镜像
 .git
+.claude
 .env
 .env.docker
 vendor
@@ -8,12 +9,17 @@ apps/flutter
 apps/harmonyos
 docs
 site
+tests
+deploy
+.github
 database/backup
 .superpowers
 node_modules
 *.log
-# 单机生产部署产物（init-admin.php 由 compose 只读挂载，不进入镜像）
-deploy/data
-deploy/secrets
-deploy/.env
-deploy/init-admin.php
+.phpunit.result.cache
+README.md
+CLAUDE.md
+# 运行时产物与 API 文档 UI 由宿主机挂载，不进入镜像
+public/upload
+public/web
+public/apidoc

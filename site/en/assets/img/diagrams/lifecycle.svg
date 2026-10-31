@@ -44,7 +44,7 @@
   <text class="sTitle" x="222" y="166">Install</text>
   <text class="sWhere" x="352" y="166">InstallController · public</text>
   <text class="sItem" x="222" y="188">1. Database connection → 2. Admin account → 3. Tables + permissions, then write .env</text>
-  <text class="sItem" x="222" y="205">Creates runtime/install.lock; delete it to reinstall</text>
+  <text class="sItem" x="222" y="205">Creates runtime/install.lock; reinstall needs an empty/restored admin-free DB</text>
 
   <path d="M 150 195 L 150 245" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
 

@@ -275,7 +275,7 @@ POST /api/v1/auth/login
   3. 明文回退 → 直接使用原始输入
 ```
 
-公钥通过 `GET /api/v1/auth/public-key` 在登录前动态获取，Flutter 客户端同时保留内置公钥作为请求失败时的回退。私钥仅存储在 `.env` 的 `RSA_PRIVATE_KEY` 中，不可泄露。
+公钥通过 `GET /api/v1/auth/public-key` 在登录前动态获取，Flutter 客户端同时保留内置公钥作为请求失败时的回退。私钥仅存储在环境变量 `RSA_PRIVATE_KEY` 中（直连部署为 `.env`，`deploy/` 为 `env/app.env`），不可泄露。
 
 > AES 对称加密为旧版兼容方案，待所有客户端迁移至 RSA 后将移除。
 
@@ -1770,9 +1770,11 @@ docker compose up -d
 # 安装向导: http://localhost/install（数据库主机填 mysql）
 ```
 
-### 生产部署（单机 5 个服务）
+> **仅限本地试跑**：`.env.docker` 的默认密码/密钥是公开且故意无效的占位值，使用前先替换，禁止直接暴露公网；生产使用 `deploy/`。
 
-生产编排位于 `deploy/`，单机运行 `nginx`、`app`、`init`（一次性初始化）、`mysql`、`redis`，不依赖全文检索引擎。PHP 通过 `Dockerfile` 构建（基于 `php:8.3-cli-alpine`，启用 OPcache 并安装 zip/redis 扩展）；webman 仅在容器内网监听 8791，由 Nginx 对外暴露 80/443。
+### 生产部署（单机 6 个服务）
+
+生产编排位于 `deploy/`，单机运行 `nginx`、`app`、`init`（一次性初始化）、`mysql`、`redis`、`backup`（每日自动备份），不依赖全文检索引擎。PHP 通过 `Dockerfile` 构建（基于 `php:8.3-cli-alpine`，启用 OPcache 并安装 zip/redis 扩展）；webman 仅在容器内网监听 8791，由 Nginx 对外暴露 80/443。
 
 ```bash
 cd deploy
@@ -1780,9 +1782,11 @@ cd deploy
 docker compose up -d --build
 ```
 
-- `generate-secrets.sh` 生成 `deploy/.env`、RSA 密钥、自签名 TLS 证书与管理员密码 `deploy/secrets/admin_password.txt`；默认幂等，`--regenerate` 先把旧 `.env` 与 `secrets/` 归档到 `deploy/secrets/archive/<时间戳>/`。
-- 真实域名证书替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`；80 端口仅保留 ACME 校验路径，其余 301 到 HTTPS。
-- 持久化目录：`deploy/data/{mysql,mysql-logs,redis,runtime,upload,nginx/logs,backups}`；Docker 日志按 `10m × 3` 轮转。
+- 环境变量按服务隔离：`deploy/env/{app,init,mysql,redis,backup}.env`（目录 `700`、文件 `600`）；master `deploy/.env` 仅保存域名、端口与 `APP_UID`/`APP_GID` 等 compose 插值。应用容器不持有 MySQL root 密码和初始化管理员密码；`app`/`init` 以该 UID/GID 运行，保证 `deploy/data/{runtime,upload}` 可写。
+- `generate-secrets.sh` 生成 RSA 密钥、自签名 TLS 证书与管理员密码 `deploy/secrets/admin_password.txt`，RSA 私钥写入 `app.env`；默认幂等，`--regenerate` 先归档旧 `.env`、`env/` 与 `secrets/` 到 `deploy/secrets/archive/<时间戳>/`，默认只轮换应用密钥并保留 `ENCRYPTABLE_KEY`、现有 TLS 证书、数据库/管理员密码；字段加密密钥、TLS、数据库密码、管理员密码分别用 `--rotate-encryptable`（旧密钥自动加入 `ENCRYPTION_PREVIOUS_KEYS`，旧数据仍可读取；完成数据重加密后再移除旧密钥）、`--rotate-tls`、`--rotate-db`、`--reset-admin` 显式轮换。
+- 真实域名证书替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`；80 端口仅保留 ACME 校验路径，其余 301 到 HTTPS；HSTS 默认关闭，配置真实证书后再启用。
+- 日志：Nginx/MySQL 写 stdout/stderr，Docker 按 `10m × 3` 轮转；持久化目录：`deploy/data/{mysql,redis,runtime,upload,backups}`。
+- `backup` 服务每天 `mysqldump` 到 `deploy/data/backups`，保留 30 天。
 
 ### CI/CD
 
@@ -1793,7 +1797,7 @@ docker compose up -d --build
 
 ### 数据库备份
 
-`database/backup/` 目录提供备份与恢复脚本：
+生产编排的 `backup` 服务每日自动备份到 `deploy/data/backups`（保留 30 天）。`database/backup/` 目录的脚本适用于宿主机直连数据库的场景：
 - `backup.sh` — mysqldump + gzip 压缩备份，自动清理 30 天前的旧备份文件
 - `restore.sh` — 交互式恢复，列出现有备份供用户选择
 

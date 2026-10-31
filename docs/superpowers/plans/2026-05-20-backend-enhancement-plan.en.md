@@ -4,6 +4,8 @@
 
 # Backend Enhancement — Implementation Plan
 
+> **Historical document (2026-05-20)**: Elasticsearch full-text search has been removed from the project (the related steps below are kept for history only); the stack now uses MySQL + Redis only. Example ports are now 8791.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement 13 backend enhancements: 3 new middleware (CORS, RateLimit, OperationLog), 6 new controllers, 2 model changes, and route + middleware configuration.
@@ -343,7 +345,6 @@ class HealthController
                 'php'           => PHP_VERSION,
                 'database'      => $this->checkDb(),
                 'redis'         => $this->checkRedis(),
-                'elasticsearch' => $this->checkES(),
                 'timestamp'     => time(),
             ],
         ]);
@@ -369,18 +370,6 @@ class HealthController
         }
     }
 
-    private function checkES(): string
-    {
-        try {
-            $hosts = config('plugin.erikwang2013.webman-scout.scout.hosts', ['http://localhost:9200']);
-            $client = new \GuzzleHttp\Client(['timeout' => 2]);
-            $resp = $client->get(rtrim($hosts[0], '/') . '/_cluster/health');
-            $body = json_decode((string) $resp->getBody(), true);
-            return $body['status'] ?? 'unknown';
-        } catch (Throwable $e) {
-            return $e->getMessage();
-        }
-    }
 }
 ```
 
@@ -1213,13 +1202,13 @@ sleep 2
 php start.php status
 
 # 3. Health check
-curl http://localhost:8787/health
+curl http://localhost:8791/health
 
 # 4. Captcha + login
-curl -X POST http://localhost:8787/api/captcha/generate -H "API-Version: v1"
+curl -X POST http://localhost:8791/api/captcha/generate -H "API-Version: v1"
 
 # 5. CORS preflight
-curl -X OPTIONS http://localhost:8787/api/auth/login -H "Origin: http://example.com" -I
+curl -X OPTIONS http://localhost:8791/api/auth/login -H "Origin: http://example.com" -I
 
 # 6. Stop the service
 php start.php stop

@@ -396,7 +396,8 @@ All keys are injected via `.env` environment variables; config files read them w
 - `.env` is in `.gitignore`; committing it to the repository is strictly forbidden
 - `.env.example` is a public template and contains no real keys
 - All default keys **must** be replaced with random strings in production
-- The single-machine production stack uses `deploy/generate-secrets.sh` to create `deploy/.env` and `deploy/secrets/` (`600/700` permissions). It is idempotent by default; `--regenerate` first archives the old secrets to `deploy/secrets/archive/<timestamp>/` and then rotates them all
+- The single-machine production stack uses `deploy/generate-secrets.sh` to create `deploy/env/{app,init,mysql,redis,backup}.env` (directory `700`, files `600`), `deploy/.env` and `deploy/secrets/`; `deploy/.env`, `deploy/env/` and `deploy/secrets/` are all in `.gitignore`. Environment variables are isolated per service, so the app container never holds the MySQL root password or the bootstrap admin password
+- `--regenerate` archives the old `.env`, `env/` and `secrets/` to `deploy/secrets/archive/<timestamp>/`, then rotates application secrets (JWT/HASHIDS/ENCRYPTION/RSA/Redis) by default, preserving `ENCRYPTABLE_KEY`, the existing TLS certificate, `DB_PASSWORD`, `MYSQL_ROOT_PASSWORD` and the admin password so an existing database keeps working. Use `--rotate-encryptable` to rotate the field-encryption key (the old key is appended to `ENCRYPTION_PREVIOUS_KEYS`, so existing data remains readable; remove the old key only after re-encrypting the data), `--rotate-tls` to rotate TLS, `--rotate-db` for database password rotation, and `--reset-admin` to reset the admin password
 - The RSA public key is exposed via `GET /api/v1/auth/public-key` (public key only, safe to expose). After rotation, verify the endpoint is reachable and rebuild old clients that rely on the embedded fallback key
 
 ### Key Storage Isolation
@@ -463,7 +464,7 @@ The project provides `docs/nginx-security.conf` as a security hardening referenc
 
 **Usage**: merge the config from `docs/nginx-security.conf` into your Nginx server block, adjusting for your actual domain and certificate paths.
 
-The single-machine production stack uses `deploy/nginx/default.conf`: port 80 redirects everything except `/.well-known/acme-challenge/` to HTTPS, and the certificate is read from `deploy/secrets/tls/fullchain.pem` and `privkey.pem`. Replace those two files with real-domain certificates; existing certificates are never overwritten.
+The single-machine production stack uses `deploy/nginx/default.conf`: port 80 redirects everything except `/.well-known/acme-challenge/` to HTTPS, and the certificate is read from `deploy/secrets/tls/fullchain.pem` and `privkey.pem`. Replace those two files with real-domain certificates; existing certificates are not overwritten unless `--rotate-tls` is used. `Strict-Transport-Security` (HSTS) is commented out by default: with a self-signed certificate or an unconfirmed domain it would pin browsers to the wrong host, so enable it after a real-domain certificate is configured. Nginx/MySQL logs go to stdout/stderr and are rotated by Docker at `10m × 3`, so no unbounded host log files are created.
 
 ---
 

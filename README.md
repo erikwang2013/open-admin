@@ -228,7 +228,7 @@ cp .env.example .env
 
 | 环境变量 | 说明 | 默认值 |
 |---------|------|--------|
-| `JWT_SECRET` | JWT 签名密钥 | `open-admin-jwt-secret-change-in-production` |
+| `JWT_SECRET_KEY` | JWT 签名密钥（`config/jwt.php` 实际读取；`JWT_SECRET` 为旧别名，建议保持同值） | `open-admin-jwt-secret-change-in-production` |
 | `HASHIDS_SALT` | Hashids 盐值 | `open-admin-hashids-salt-2026` |
 | `ENCRYPTION_KEY` | API 加密密钥 | 32 字节默认值 |
 | `SNOWFLAKE_DATACENTER_ID` | 数据中心 ID (0-31) | `1` |
@@ -255,7 +255,7 @@ php start.php start
 
 点击「开始安装」后自动完成建表、播种权限数据、创建管理员账号，并写入 `.env` 数据库配置。
 
-> 安装完成后生成 `runtime/install.lock` 锁定文件。需重新安装时删除此文件即可。
+> 安装完成后生成 `runtime/install.lock` 锁定文件。仅删除该文件**不足以**重装：安装程序发现数据库中已有管理员时会拒绝再次初始化。重新安装需要先清空或恢复为不含管理员的数据库（全新库），再删除 `runtime/install.lock`。
 
 ### 4. 登录
 
@@ -276,6 +276,8 @@ flutter run -d chrome    # Web 端（PC 管理后台风格）
 使用 DevEco Studio 打开 `apps/harmonyos/` 目录，连接真机或模拟器运行。
 
 ### 6. Docker Compose 快速开始（本地/单机试跑）
+
+> **⚠ 仅限本地试跑**：`.env.docker` 中的数据库密码、JWT/加密密钥均为公开且故意无效的占位值，**禁止直接暴露到公网**。首次启动前请先替换为有效值；生产环境请使用 `deploy/`（按服务隔离环境变量并自动生成随机密钥）。
 
 项目根目录的 `docker-compose.yml` 提供 4 个服务的快速开始编排：Nginx、PHP (webman app)、MySQL、Redis。
 
@@ -299,7 +301,7 @@ docker compose up -d
 - `docker-compose.yml`: 4 个服务编排；app 仅在容器内网监听 8791，对外由 Nginx 暴露 80
 - `.env.docker`: Docker 环境专用环境变量
 
-> 生产环境请使用 `deploy/` 单机编排（nginx/app/init/mysql/redis + 自动生成密钥 + TLS），见下文「部署」。
+> 生产环境请使用 `deploy/` 单机编排（nginx/app/init/mysql/redis/backup + 按服务隔离的环境变量 + 自动生成密钥 + TLS），见下文「部署」。
 
 
 ## 静态官网
@@ -369,28 +371,34 @@ cp .env.docker .env
 docker compose up -d
 ```
 
-### 生产部署（单机 5 个服务）
+> **⚠ 仅限本地试跑**：`.env.docker` 默认密码/密钥为公开且故意无效的占位值，使用前先替换，禁止直接暴露公网；生产环境请使用下方 `deploy/` 编排。
 
-生产编排位于 `deploy/`，单机运行 `nginx`、`app`、`init`（一次性初始化）、`mysql`、`redis`，不依赖全文检索引擎：
+### 生产部署（单机 6 个服务）
+
+生产编排位于 `deploy/`，单机运行 `nginx`、`app`、`init`（一次性初始化）、`mysql`、`redis`、`backup`（每日自动备份），不依赖全文检索引擎：
 
 | 服务 | 说明 |
 |------|------|
-| `nginx` | 80/443，TLS 终止、静态官网、反向代理到 `app:8791` |
+| `nginx` | 80/443，TLS 终止、静态官网、反向代理到 `app:8791`；日志写 stdout/stderr |
 | `app` | webman PHP 8.3 应用，容器内监听 8791，仅经 Nginx 暴露 |
 | `init` | 一次性初始化：建表、创建管理员，完成后退出 |
-| `mysql` | MySQL 8.0，数据与日志绑定宿主机目录 |
+| `mysql` | MySQL 8.0，数据持久化到宿主机目录；错误/慢日志写 stderr |
 | `redis` | Redis 7，AOF 持久化到宿主机目录 |
+| `backup` | 每日 `mysqldump` 到 `deploy/data/backups`，保留 30 天 |
 
 ```bash
 cd deploy
-./generate-secrets.sh          # 生成 deploy/.env、密钥、自签名 TLS 证书与管理员密码
+./generate-secrets.sh          # 生成 master .env、各服务 env、密钥、自签名 TLS 证书与管理员密码
 docker compose up -d --build
 ```
 
-- `generate-secrets.sh` 默认幂等，只补齐缺失值；生成 `deploy/.env`、`deploy/secrets/rsa_public_key.pem`、管理员密码 `deploy/secrets/admin_password.txt`，RSA 私钥写入 `.env` 的 `RSA_PRIVATE_KEY`。
-- `--regenerate` 会先把当前 `deploy/.env` 与 `deploy/secrets/` 归档到 `deploy/secrets/archive/<时间戳>/`，再整体重新生成；旧密钥保留在归档中。
-- TLS：默认按 `DOMAIN`（默认 `localhost`）生成自签名证书；真实域名证书直接替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`，脚本不会覆盖已有证书（`--regenerate` 除外）。80 端口仅放行 `/.well-known/acme-challenge/`，其余 301 到 HTTPS。
-- 持久化与日志全部绑定宿主机：`deploy/data/{mysql,mysql-logs,redis,runtime,upload,nginx/logs,backups}`；Docker 日志按 `10m × 3` 轮转。
+- **环境变量按服务隔离**：`deploy/env/{app,init,mysql,redis,backup}.env`（目录 `700`、文件 `600`）；master `deploy/.env` 仅保存 compose 插值所需的域名、端口与 `APP_UID`/`APP_GID`。应用容器拿不到 MySQL root 密码和初始化管理员密码。生成脚本会原位更新已知键并追加缺失键，保留自定义项。
+- `generate-secrets.sh` 默认幂等，只补齐缺失值；同时生成 `deploy/secrets/rsa_public_key.pem`、管理员密码 `deploy/secrets/admin_password.txt`，RSA 私钥写入 `app.env` 的 `RSA_PRIVATE_KEY`。
+- `--regenerate` 先归档旧的 `deploy/.env`、`deploy/env/` 与 `deploy/secrets/` 到 `deploy/secrets/archive/<时间戳>/`，默认只轮换 JWT/HASHIDS/ENCRYPTION/RSA/Redis 等应用密钥，并保留 `ENCRYPTABLE_KEY`、现有 TLS 证书（真实域名证书不会被覆盖）、`DB_PASSWORD`、`MYSQL_ROOT_PASSWORD` 与管理员密码，不会破坏已有数据库。需要轮换字段加密密钥用 `--rotate-encryptable`（旧密钥自动加入 `ENCRYPTION_PREVIOUS_KEYS`，旧数据仍可读取；完成数据重加密后再移除旧密钥），轮换 TLS 用 `--rotate-tls`，轮换数据库密码用 `--rotate-db`（脚本会打印需手动执行的 `ALTER USER` 命令），重置管理员密码用 `--reset-admin`。
+- **宿主机属主**：`app`/`init` 以 `${APP_UID:-1000}:${APP_GID:-1000}` 运行，脚本用 `id -u`/`id -g` 写入 master `.env`，保证 `deploy/data/{runtime,upload}` 对宿主机用户可写。
+- **日志**：Nginx 与 MySQL 写 stdout/stderr，由 Docker 按 `10m × 3` 轮转，用 `docker compose logs -f app` 查看；宿主机持久化目录为 `deploy/data/{mysql,redis,runtime,upload,backups}`。
+- TLS：默认按 `DOMAIN`（默认 `localhost`）生成自签名证书；真实域名证书直接替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`，脚本不会覆盖已有证书（`--rotate-tls` 除外）。80 端口仅放行 `/.well-known/acme-challenge/`，其余 301 到 HTTPS；HSTS 默认关闭，配置真实域名证书后再启用。
+- 自动备份：`backup` 服务每天执行一次 `mysqldump`，写入 `deploy/data/backups` 并保留 30 天。
 - RSA 公钥：`GET /api/v1/auth/public-key` 返回当前公钥，Flutter 登录前动态获取、失败时回退内置公钥；`--regenerate` 换钥后需确认该端点可达，依赖内置回退的旧客户端需重新构建。
 
 PHP 镜像通过 `Dockerfile` 构建，基础镜像 `php:8.3-cli-alpine`，启用 OPcache 并安装 zip/redis 扩展。
@@ -404,6 +412,8 @@ GitHub Actions 持续集成流水线：`.github/workflows/ci.yml`
 - Flutter 静态分析 (`flutter analyze`)
 
 ### 数据库备份
+
+生产编排的 `backup` 服务每日自动备份到 `deploy/data/backups`（保留 30 天）；下面两个脚本适用于宿主机直连数据库的场景。
 
 `database/backup/` 目录：
 

@@ -419,34 +419,38 @@ RSA_PRIVATE_KEY     → 登录密码传输公钥对应的私钥（deploy 脚本�
 
 ```
 Nginx (:80/:443, TLS + static site) → app (webman :8791) → MySQL + Redis
-init (one-shot): schema + admin user; data/logs bind to deploy/data/
+init (one-shot): schema + admin user; backup (daily): mysqldump into deploy/data/backups
+Data persists to deploy/data/; logs go to stdout/stderr and are rotated by Docker
 ```
 
 ### 8.2 Docker Compose (Single-Machine Production)
 
-The production stack lives in `deploy/` and runs 5 services on one machine. No full-text search cluster is used.
+The production stack lives in `deploy/` and runs 6 services on one machine. No full-text search cluster is used.
 
 | Service | Image/Build | Description |
 |------|----------|------|
-| `nginx` | nginx:alpine | 80/443, TLS, static site, reverse proxy + Gzip |
-| `app` | Local `Dockerfile` build | 8791 (container network only), PHP 8.3 + OPcache + webman |
+| `nginx` | nginx:alpine | 80/443, TLS, static site, reverse proxy + Gzip; logs to stdout/stderr |
+| `app` | Local `Dockerfile` build | 8791 (container network only), PHP 8.3 + OPcache + webman, runs as host UID/GID |
 | `init` | Same app image | One-shot schema + admin creation, then exits |
-| `mysql` | mysql:8.0 | Primary database with data and logs on host bind mounts |
+| `mysql` | mysql:8.0 | Primary database with data on a host bind mount; error/slow logs to stderr |
 | `redis` | redis:7-alpine | Cache / rate limiting / captcha, AOF persistence |
+| `backup` | mysql:8.0 | Daily `mysqldump` into `deploy/data/backups`, 30-day retention |
 
 First deployment:
 
 ```bash
 cd deploy
-./generate-secrets.sh          # .env, keys, self-signed cert and admin password
+./generate-secrets.sh          # master .env, per-service env files, keys, self-signed cert and admin password
 docker compose up -d --build
 ```
 
-- `generate-secrets.sh` generates all keys into `deploy/.env`; it is idempotent by default, and `--regenerate` first archives the old `.env` and `secrets/` to `deploy/secrets/archive/<timestamp>/` before rebuilding.
-- Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; the admin password is in `deploy/secrets/admin_password.txt`.
-- Persistent directories: `deploy/data/{mysql,mysql-logs,redis,runtime,upload,nginx/logs,backups}`.
+- Per-service env isolation: `deploy/env/{app,init,mysql,redis,backup}.env` (directory `700`, files `600`); the master `deploy/.env` only holds domain, ports and `APP_UID`/`APP_GID`. The app container never holds the MySQL root password or the bootstrap admin password.
+- `generate-secrets.sh` generates all keys; it is idempotent by default. `--regenerate` archives the old `.env`, `env/` and `secrets/` to `deploy/secrets/archive/<timestamp>/` and rotates application secrets (JWT/HASHIDS/ENCRYPTION/RSA/Redis) by default, preserving `ENCRYPTABLE_KEY`, the existing TLS certificate, database and admin passwords; use `--rotate-encryptable`, `--rotate-tls`, `--rotate-db` and `--reset-admin` to rotate those explicitly.
+- `app`/`init` run as `${APP_UID:-1000}:${APP_GID:-1000}`; the script writes `id -u`/`id -g` into the master `.env`, keeping `deploy/data/{runtime,upload}` writable.
+- Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; the admin password is in `deploy/secrets/admin_password.txt`; HSTS is off by default and should be enabled after a real certificate is configured.
+- Persistent directories: `deploy/data/{mysql,redis,runtime,upload,backups}`; Docker rotates logs at `10m × 3`.
 
-The root `docker-compose.yml` is only the 4-service (nginx/app/mysql/redis) local quick-start stack; use `deploy/` for production.
+The root `docker-compose.yml` is only the 4-service (nginx/app/mysql/redis) local quick-start stack; its `.env.docker` defaults are public, deliberately invalid placeholders, so replace them before use and never expose it publicly — use `deploy/` for production.
 
 ### 8.3 CI/CD
 
@@ -457,7 +461,8 @@ GitHub Actions CI is defined in `.github/workflows/ci.yml`:
 
 ### 8.4 Database Backup
 
-`database/backup/backup.sh` — mysqldump + gzip backup, auto-clears backups older than 30 days.
+The production stack's `backup` service writes a daily backup to `deploy/data/backups` (30-day retention).
+`database/backup/backup.sh` — mysqldump + gzip backup, auto-clears backups older than 30 days (host with direct database access).
 `database/backup/restore.sh` — interactive selection and restore of backups.
 
 ### 8.5 Monitoring

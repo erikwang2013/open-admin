@@ -8,10 +8,6 @@
 # ============================================================
 set -euo pipefail
 
-# 日志目录以宿主机目录挂载，初始化阶段由 root 授权给 mysql 用户
-mkdir -p /var/log/mysql
-chown -R mysql:mysql /var/log/mysql 2>/dev/null || true
-
 : "${DB_DATABASE:?缺少 DB_DATABASE}"
 : "${DB_USERNAME:?缺少 DB_USERNAME}"
 : "${DB_PASSWORD:?缺少 DB_PASSWORD}"
@@ -25,10 +21,14 @@ for value in "$DB_DATABASE" "$DB_USERNAME"; do
     fi
 done
 
+# 密码按 MySQL 字符串字面量转义（反斜杠、单引号），避免拼接 SQL 被截断或注入
+SQL_PASSWORD="${DB_PASSWORD//\\/\\\\}"
+SQL_PASSWORD="${SQL_PASSWORD//\'/\\\'}"
+
 MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --protocol=socket -uroot <<SQL
 CREATE DATABASE IF NOT EXISTS \`${DB_DATABASE}\`
     CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS '${DB_USERNAME}'@'%' IDENTIFIED BY '${DB_PASSWORD}';
+CREATE USER IF NOT EXISTS '${DB_USERNAME}'@'%' IDENTIFIED BY '${SQL_PASSWORD}';
 GRANT ALL PRIVILEGES ON \`${DB_DATABASE}\`.* TO '${DB_USERNAME}'@'%';
 FLUSH PRIVILEGES;
 SQL

@@ -394,7 +394,8 @@ OperationLog 中间件对 POST / PUT / DELETE 请求自动记录操作日志。G
 - `.env` 文件已加入 `.gitignore`，严禁提交到版本库
 - `.env.example` 是公开模板文件，不包含真实密钥
 - 生产环境**必须**更换所有默认密钥为随机字符串
-- 单机生产部署使用 `deploy/generate-secrets.sh` 生成 `deploy/.env` 与 `deploy/secrets/`（`600/700` 权限）；默认幂等，`--regenerate` 会先把旧密钥归档到 `deploy/secrets/archive/<时间戳>/`，再整体轮换
+- 单机生产部署使用 `deploy/generate-secrets.sh` 生成 `deploy/env/{app,init,mysql,redis,backup}.env`（目录 `700`、文件 `600`）、`deploy/.env` 与 `deploy/secrets/`；`deploy/.env`、`deploy/env/`、`deploy/secrets/` 均已加入 `.gitignore`。环境变量按服务隔离，应用容器不持有 MySQL root 密码与初始化管理员密码
+- `--regenerate` 先把旧 `.env`、`env/` 与 `secrets/` 归档到 `deploy/secrets/archive/<时间戳>/`，默认只轮换 JWT/HASHIDS/ENCRYPTION/RSA/Redis 等应用密钥，保留 `ENCRYPTABLE_KEY`、现有 TLS 证书、`DB_PASSWORD`、`MYSQL_ROOT_PASSWORD` 与管理员密码，避免破坏已有数据库。需要轮换字段加密密钥用 `--rotate-encryptable`（旧密钥自动加入 `ENCRYPTION_PREVIOUS_KEYS`，旧数据仍可读取；完成数据重加密后再移除旧密钥），轮换 TLS 用 `--rotate-tls`，轮换数据库密码用 `--rotate-db`，重置管理员密码用 `--reset-admin`
 - RSA 公钥通过 `GET /api/v1/auth/public-key` 公开（仅公钥，可安全暴露）；换钥后确认该端点可达，依赖内置回退公钥的旧客户端需重新构建
 
 ### 密钥存储隔离
@@ -461,7 +462,7 @@ Policy: https://erik.xyz/security-policy
 
 **使用方式**：将 `docs/nginx-security.conf` 中的配置合并到您的 Nginx server 块中，根据实际域名和证书路径调整。
 
-单机生产编排使用 `deploy/nginx/default.conf`：80 端口除 `/.well-known/acme-challenge/` 外全部 301 到 HTTPS；证书读取 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`。真实域名证书直接替换这两个文件，脚本不会覆盖已有证书。
+单机生产编排使用 `deploy/nginx/default.conf`：80 端口除 `/.well-known/acme-challenge/` 外全部 301 到 HTTPS；证书读取 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`。真实域名证书直接替换这两个文件，脚本默认不会覆盖已有证书（`--rotate-tls` 除外）。`Strict-Transport-Security`（HSTS）默认注释关闭：自签证书或尚未确认的域名下开启会把浏览器锁在错误域名上，配置真实域名证书后再启用。Nginx/MySQL 日志写 stdout/stderr，由 Docker 按 `10m × 3` 轮转，不生成无上限的宿主机日志文件。
 
 ---
 

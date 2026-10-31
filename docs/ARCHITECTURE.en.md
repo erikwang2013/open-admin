@@ -645,10 +645,11 @@ flowchart TB
         INIT["init (one-shot)<br/>schema + admin user<br/>then exits"]
         MYSQL["MySQL 8.0<br/>deploy/data/mysql"]
         REDIS["Redis 7 · AOF<br/>deploy/data/redis"]
+        BACKUP["backup (daily)<br/>mysqldump · 30-day retention"]
     end
 
     subgraph "Host persistence"
-        DATA["deploy/data/<br/>mysql · mysql-logs · redis<br/>runtime · upload · nginx/logs · backups"]
+        DATA["deploy/data/<br/>mysql · redis<br/>runtime · upload · backups"]
     end
 
     subgraph "Monitoring"
@@ -660,9 +661,10 @@ flowchart TB
     WM --> MYSQL
     WM --> REDIS
     INIT --> MYSQL
+    BACKUP --> MYSQL
     MYSQL -.-> DATA
     REDIS -.-> DATA
-    NGX -.-> DATA
+    BACKUP -.-> DATA
     WM --> MON
 
     style NGX fill:#722ED1,color:#fff
@@ -670,8 +672,11 @@ flowchart TB
     style INIT fill:#52C41A,color:#fff
     style MYSQL fill:#1890FF,color:#fff
     style REDIS fill:#1890FF,color:#fff
+    style BACKUP fill:#52C41A,color:#fff
     style DATA fill:#F6F8FC,color:#1677FF
 ```
+
+> Environment variables are isolated per service in `deploy/env/{app,init,mysql,redis,backup}.env` (`600`, directory `700`); the master `deploy/.env` only holds compose interpolation values. The app and init containers run as the host `APP_UID`/`APP_GID`. Nginx/MySQL logs go to stdout/stderr and are rotated by Docker at `10m × 3`; HSTS is off by default and should be enabled after a real domain certificate is configured.
 
 ---
 

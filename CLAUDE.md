@@ -236,21 +236,26 @@ cp .env.docker .env
 docker compose up -d
 ```
 
-### 生产部署（单机 5 个服务）
+> **仅限本地试跑**：`.env.docker` 的密码/密钥是公开且故意无效的占位值，使用前先替换，禁止直接暴露公网；生产使用 `deploy/`。
 
-生产编排位于 `deploy/`，单机运行 `nginx`、`app`、`init`（一次性初始化）、`mysql`、`redis`；不依赖全文检索引擎。
+### 生产部署（单机 6 个服务）
+
+生产编排位于 `deploy/`，单机运行 `nginx`、`app`、`init`（一次性初始化）、`mysql`、`redis`、`backup`（每日自动备份）；不依赖全文检索引擎。
 
 ```bash
 cd deploy
-./generate-secrets.sh          # 生成 .env、密钥、自签名 TLS 证书与管理员密码
+./generate-secrets.sh          # 生成 master .env、各服务 env、密钥、自签名 TLS 证书与管理员密码
 docker compose up -d --build
 ```
 
-- `generate-secrets.sh` 默认幂等：只补齐缺失值。生成 `deploy/.env`、`deploy/secrets/rsa_public_key.pem`、管理员密码 `deploy/secrets/admin_password.txt`；RSA 私钥写入 `.env` 的 `RSA_PRIVATE_KEY`。
-- `--regenerate` 先归档当前 `deploy/.env` 与 `deploy/secrets/` 到 `deploy/secrets/archive/<时间戳>/`，再整体重建；旧密钥保留在归档中。
-- TLS 默认按 `DOMAIN`（默认 `localhost`）生成自签名证书；真实域名证书直接替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`，脚本不会覆盖已有证书。
+- 环境变量按服务隔离：`deploy/env/{app,init,mysql,redis,backup}.env`（目录 `700`、文件 `600`）；master `deploy/.env` 仅保存 compose 插值（域名、端口、`APP_UID`/`APP_GID`）。应用容器不持有 MySQL root 密码与初始化管理员密码。生成脚本原位更新已知键、追加缺失键，保留自定义项。
+- `generate-secrets.sh` 默认幂等：只补齐缺失值。生成 `deploy/secrets/rsa_public_key.pem`、管理员密码 `deploy/secrets/admin_password.txt`；RSA 私钥写入 `app.env` 的 `RSA_PRIVATE_KEY`。
+- `--regenerate` 先归档当前 `deploy/.env`、`deploy/env/` 与 `deploy/secrets/` 到 `deploy/secrets/archive/<时间戳>/`，默认只轮换 JWT/HASHIDS/ENCRYPTION/RSA/Redis 等应用密钥，并保留 `ENCRYPTABLE_KEY`、现有 TLS 证书、`DB_PASSWORD`、`MYSQL_ROOT_PASSWORD` 与管理员密码，不会破坏已有数据库。需要轮换字段加密密钥用 `--rotate-encryptable`（旧密钥自动加入 `ENCRYPTION_PREVIOUS_KEYS`，旧数据仍可读取；完成数据重加密后再移除旧密钥），轮换 TLS 用 `--rotate-tls`，轮换数据库密码用 `--rotate-db`（脚本打印需手动执行的 `ALTER USER`），重置管理员密码用 `--reset-admin`。
+- 宿主机属主：`app`/`init` 以 `${APP_UID:-1000}:${APP_GID:-1000}` 运行，脚本用 `id -u`/`id -g` 写入 master `.env`，保证 `deploy/data/{runtime,upload}` 可写。
+- TLS 默认按 `DOMAIN`（默认 `localhost`）生成自签名证书；真实域名证书直接替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`，脚本默认不会覆盖已有证书（`--rotate-tls` 除外）。HSTS 默认关闭，配置真实域名证书后再启用。
 - 端口：Nginx `80/443`（80 仅保留 `/.well-known/acme-challenge/`，其余 301 到 HTTPS）；webman 仅在容器内监听 `8791`。
-- 持久化目录均绑定到宿主机：`deploy/data/{mysql,mysql-logs,redis,runtime,upload,nginx/logs,backups}`；Docker 日志按 `10m × 3` 轮转。
+- 日志：Nginx/MySQL 写 stdout/stderr，Docker 按 `10m × 3` 轮转；用 `docker compose logs -f app` 查看。宿主机持久化目录：`deploy/data/{mysql,redis,runtime,upload,backups}`。
+- 自动备份：`backup` 服务每天 `mysqldump` 到 `deploy/data/backups`，保留 30 天。
 - RSA 公钥：`GET /api/v1/auth/public-key` 返回当前公钥，Flutter 登录前动态获取并在失败时回退内置公钥；`--regenerate` 换钥后需确认该端点可达，依赖内置回退的旧客户端需重新构建。
 
 ### CI/CD
@@ -263,7 +268,8 @@ docker compose up -d --build
 
 ### 数据库备份
 
-`database/backup/backup.sh` — mysqldump + gzip，自动清理 30 天前旧备份。
+生产编排的 `backup` 服务每日自动备份到 `deploy/data/backups`（保留 30 天）。
+`database/backup/backup.sh` — mysqldump + gzip，自动清理 30 天前旧备份（宿主机直连数据库）。
 `database/backup/restore.sh` — 交互式恢复，列出可用备份供选择。
 
 ### 监控

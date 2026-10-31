@@ -165,7 +165,7 @@
   <text class="chipS" x="364" y="869">限流 · 验证码 · 权限缓存 · 黑名单</text>
   <rect class="node" x="624" y="830" width="256" height="52" rx="12" fill="#E6F4FF" stroke="#91CAFF"/>
   <text class="chipT" x="644" y="851">单机部署 · 数据持久化</text>
-  <text class="chipS" x="644" y="869">deploy/data 宿主机绑定挂载</text>
+  <text class="chipS" x="644" y="869">backup 每日 mysqldump 到 deploy/data</text>
 
   <!-- ========== 右栏 ========== -->
   <rect class="railCard" x="948" y="112" width="252" height="190" rx="16"/>
@@ -185,7 +185,7 @@
     <text x="968" y="376">· GET /health 健康检查</text>
     <text x="968" y="398">· GET /metrics Prometheus 指标 ×5</text>
     <text x="968" y="420">· GET /api/docs OpenAPI 文档</text>
-    <text x="968" y="442">· Docker Compose：5 个服务</text>
+    <text x="968" y="442">· Docker Compose：6 个服务</text>
     <text x="968" y="464">· GitHub Actions：php -l / PHPUnit</text>
     <text x="968" y="486">· 备份：mysqldump + gzip（30 天）</text>
   </g>

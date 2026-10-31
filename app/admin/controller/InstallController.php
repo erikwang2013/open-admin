@@ -33,7 +33,7 @@ class InstallController
             return null;
         }
         return response($this->layout('系统已安装', <<<HTML
-            <div class="info">系统已安装完成。如需重新安装，请先删除 <code>runtime/install.lock</code> 文件。</div>
+            <div class="info">系统已安装完成。重新安装仅删除 <code>runtime/install.lock</code> 不够，还需清空数据库或从备份恢复到未安装状态，然后重新运行安装向导。</div>
             <div class="actions"><a href="/" style="display:inline-block;padding:10px 36px;background:#1890ff;color:#fff;border-radius:6px;text-decoration:none;font-size:15px">返回首页</a></div>
             HTML), 403);
     }
@@ -249,7 +249,7 @@ class InstallController
             <div style="text-align:center">
                 <h2 style="color:#52c41a;margin-bottom:16px">安装成功</h2>
                 <p>管理员账号: <strong>{$this->e($admin['username'])}</strong></p>
-                <p>管理员密码: <strong>{$this->e($admin['password'])}</strong></p>
+                <p>管理员密码已按你输入的内容设置，请妥善保管。</p>
                 <hr>
                 <a href="/" style="display:inline-block;padding:10px 32px;background:#1890ff;color:#fff;border-radius:6px;text-decoration:none;font-size:15px">进入系统</a>
                 <p style="margin-top:12px;font-size:12px;color:#999">安装完成，请勿删除 <code>runtime/install.lock</code>。</p>

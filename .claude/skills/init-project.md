@@ -23,6 +23,8 @@ skill_type: implementation
 composer create-project workerman/webman:~2.0 --no-interaction ./
 ```
 
+本项目在 `config/process.php` 中将监听端口设为 8791（webman 默认 8787），本技能后续示例统一使用该端口。
+
 ### 2. 安装后端依赖
 
 ```bash
@@ -32,7 +34,6 @@ composer require \
   erikwang2013/jwt-webman \
   erikwang2013/encryption \
   erikwang2013/encryptable \
-  erikwang2013/webman-scout \
   erikwang2013/season \
   phpoffice/phpspreadsheet \
   barryvdh/laravel-dompdf
@@ -161,27 +162,6 @@ return [
     'key' => 'your-db-encryption-key-here',
     // 加密算法
     'cipher' => 'AES-256-CBC',
-];
-```
-
-创建 `config/scout.php`（含中文注释）:
-```php
-<?php
-/*
- * Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
- */
-
-/**
- * Elasticsearch 搜索引擎配置
- * @link https://github.com/erikwang2013/webman-scout
- */
-return [
-    // ES 驱动
-    'driver' => 'elasticsearch',
-    // ES 主机地址
-    'hosts' => ['http://localhost:9200'],
-    // 索引名称前缀
-    'prefix' => 'erik_',
 ];
 ```
 

@@ -44,7 +44,7 @@
   <text class="sTitle" x="222" y="166">安装 Install</text>
   <text class="sWhere" x="352" y="166">InstallController · 免认证</text>
   <text class="sItem" x="222" y="188">① 数据库连接 → ② 管理员账号 → ③ 建表 + 播种权限，并写入 .env 数据库配置</text>
-  <text class="sItem" x="222" y="205">完成后生成 runtime/install.lock 锁定安装；需重装时删除该文件即可</text>
+  <text class="sItem" x="222" y="205">完成后生成 runtime/install.lock；重装需清空/恢复无管理员库</text>
 
   <path d="M 150 195 L 150 245" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
 

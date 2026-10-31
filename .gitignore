@@ -8,7 +8,15 @@
 .phpunit.result.cache
 /public/web
 
+# 数据库备份产物
+/database/backup/*.sql.gz
+/database/backup/*.sql
+
+# 上传目录
+/public/upload/
+
 # 单机生产部署：生成的密钥、数据与日志，仅保留 .env.example
 /deploy/.env
 /deploy/secrets/
 /deploy/data/
+/deploy/env/

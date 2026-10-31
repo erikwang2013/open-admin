@@ -177,7 +177,7 @@ Key environment variables:
 
 | Variable | Description | Default |
 |---------|-------------|---------|
-| `JWT_SECRET` | JWT signing key | `open-admin-jwt-secret-change-in-production` |
+| `JWT_SECRET_KEY` | JWT signing key (read by `config/jwt.php`; `JWT_SECRET` is a legacy alias, keep both in sync) | `open-admin-jwt-secret-change-in-production` |
 | `HASHIDS_SALT` | Hashids salt | `open-admin-hashids-salt-2026` |
 | `ENCRYPTION_KEY` | API encryption key | 32-byte default |
 | `SNOWFLAKE_DATACENTER_ID` | Datacenter ID (0-31) | `1` |
@@ -193,18 +193,18 @@ Start the server, then open the install wizard in your browser to set up the dat
 php start.php start
 ```
 
-Default: `http://0.0.0.0:8791` (change port in `config/server.php`).
+Default: `http://0.0.0.0:8791` (change port in `config/process.php`).
 
 Open **`http://localhost:8791/install`** and follow the wizard:
 
 | Step | Description |
 |------|-------------|
 | ① Database | Host, port, database name, username, password |
-| ② Admin Account | Admin username and password (default: admin / admin888) |
+| ② Admin Account | Admin username and password you choose (there is no built-in default account) |
 
 Click "Start Install" — tables are created, permissions seeded, admin account created, and `.env` is updated automatically.
 
-> After installation, `runtime/install.lock` is created to prevent re-installation. Delete this file to re-install.
+> After installation, `runtime/install.lock` is created to prevent re-installation. Deleting that file alone is **not** enough: the installer refuses to run again when admins already exist in the database. Re-installation requires an empty (or restored, admin-free) database, then delete `runtime/install.lock`.
 
 ### 4. Login
 
@@ -225,6 +225,8 @@ flutter run -d chrome    # Web (desktop admin panel style)
 Open `apps/harmonyos/` in DevEco Studio and run on a device or emulator.
 
 ### 6. Docker Compose Quick Start (local or single-host trial)
+
+> **⚠ Local trial only**: the database passwords and JWT/encryption keys in `.env.docker` are public, deliberately invalid placeholders. Replace them with valid values before first use, and **never expose this stack to the public internet**. For production use `deploy/` (per-service env files and generated random secrets).
 
 The `docker-compose.yml` at the project root provides a 4-service quick-start stack: Nginx, PHP (webman app), MySQL, Redis.
 
@@ -247,7 +249,7 @@ docker compose up -d
 - `docker-compose.yml`: 4 services; app listens on 8791 inside the container network only, exposed through Nginx on port 80
 - `.env.docker`: Docker-specific environment variables
 
-> For production, use the single-machine stack in `deploy/` (nginx/app/init/mysql/redis with generated secrets and TLS); see "Deployment" below.
+> For production, use the single-machine stack in `deploy/` (nginx/app/init/mysql/redis/backup with per-service env files, generated secrets and TLS); see "Deployment" below.
 
 ## Database Conventions
 
@@ -306,28 +308,34 @@ cp .env.docker .env
 docker compose up -d
 ```
 
-### Production (single machine, 5 services)
+> **⚠ Local trial only**: the default passwords/keys in `.env.docker` are public, deliberately invalid placeholders; replace them before use and never expose this stack directly to the public internet. Use the `deploy/` stack below for production.
 
-The production stack lives in `deploy/` and runs `nginx`, `app`, `init` (one-shot bootstrap), `mysql` and `redis` on one machine. No full-text search cluster is used.
+### Production (single machine, 6 services)
+
+The production stack lives in `deploy/` and runs `nginx`, `app`, `init` (one-shot bootstrap), `mysql`, `redis` and `backup` (daily automatic backups) on one machine. No full-text search cluster is used.
 
 | Service | Description |
 |------|------|
-| `nginx` | 80/443, TLS termination, static site, reverse proxy to `app:8791` |
+| `nginx` | 80/443, TLS termination, static site, reverse proxy to `app:8791`; logs to stdout/stderr |
 | `app` | webman PHP 8.3 application, listens on 8791 inside the container network only |
 | `init` | One-shot bootstrap: schema and admin user, then exits |
-| `mysql` | MySQL 8.0 with data and logs on host bind mounts |
+| `mysql` | MySQL 8.0 with data on a host bind mount; error/slow logs to stderr |
 | `redis` | Redis 7 with AOF persistence on a host bind mount |
+| `backup` | Daily `mysqldump` into `deploy/data/backups`, 30-day retention |
 
 ```bash
 cd deploy
-./generate-secrets.sh          # deploy/.env, keys, self-signed TLS cert, admin password
+./generate-secrets.sh          # master .env, per-service env files, keys, self-signed TLS cert, admin password
 docker compose up -d --build
 ```
 
-- `generate-secrets.sh` is idempotent and only fills in missing values. It creates `deploy/.env`, `deploy/secrets/rsa_public_key.pem` and `deploy/secrets/admin_password.txt`; the RSA private key goes into `RSA_PRIVATE_KEY` in `.env`.
-- `--regenerate` archives the current `deploy/.env` and `deploy/secrets/` to `deploy/secrets/archive/<timestamp>/` before rebuilding everything; old secrets remain in the archive.
-- TLS defaults to a self-signed certificate for `DOMAIN` (`localhost` by default). Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; existing certificates are not overwritten (`--regenerate` excepted). Port 80 only serves `/.well-known/acme-challenge/` and redirects everything else to HTTPS.
-- All persistent data and logs are host bind mounts: `deploy/data/{mysql,mysql-logs,redis,runtime,upload,nginx/logs,backups}`; Docker logs rotate at `10m × 3`.
+- **Per-service env isolation**: `deploy/env/{app,init,mysql,redis,backup}.env` (directory `700`, files `600`); the master `deploy/.env` only holds compose interpolation values (domain, ports, `APP_UID`/`APP_GID`). The app container never sees the MySQL root password or the bootstrap admin password. The generator updates known keys in place, appends missing ones, and preserves custom entries.
+- `generate-secrets.sh` is idempotent and only fills in missing values. It creates `deploy/secrets/rsa_public_key.pem` and `deploy/secrets/admin_password.txt`; the RSA private key goes into `RSA_PRIVATE_KEY` in `app.env`.
+- `--regenerate` archives the current `deploy/.env`, `deploy/env/` and `deploy/secrets/` to `deploy/secrets/archive/<timestamp>/`, then rotates application secrets (JWT/HASHIDS/ENCRYPTION/RSA/Redis) by default while preserving `ENCRYPTABLE_KEY`, the existing TLS certificate (real-domain certificates are never overwritten), `DB_PASSWORD`, `MYSQL_ROOT_PASSWORD` and the admin password, so an existing database keeps working. Use `--rotate-encryptable` to rotate the field-encryption key (the old key is appended to `ENCRYPTION_PREVIOUS_KEYS`, so existing data remains readable; remove the old key only after re-encrypting the data), `--rotate-tls` to rotate TLS, `--rotate-db` for database passwords (the script prints the manual `ALTER USER` commands), and `--reset-admin` to reset the admin password.
+- **Host ownership**: `app`/`init` run as `${APP_UID:-1000}:${APP_GID:-1000}`; the script writes `id -u`/`id -g` into the master `.env`, so `deploy/data/{runtime,upload}` stays writable for the host user.
+- **Logs**: Nginx and MySQL log to stdout/stderr and Docker rotates them at `10m × 3`; inspect with `docker compose logs -f app`. Host persistent directories are `deploy/data/{mysql,redis,runtime,upload,backups}`.
+- TLS defaults to a self-signed certificate for `DOMAIN` (`localhost` by default). Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; existing certificates are not overwritten (`--rotate-tls` excepted). Port 80 only serves `/.well-known/acme-challenge/` and redirects everything else to HTTPS. HSTS is commented out by default; enable it after a real domain certificate is configured.
+- Automatic backup: the `backup` service runs `mysqldump` daily into `deploy/data/backups` and keeps 30 days.
 - RSA public key: `GET /api/v1/auth/public-key` returns the current public key. Flutter fetches it before login and falls back to the embedded key on failure; after `--regenerate` rotates the keypair, verify the endpoint is reachable and rebuild clients that rely on the embedded fallback.
 
 The PHP image is built from `Dockerfile`, based on `php:8.3-cli` with OPcache enabled.
@@ -342,6 +350,8 @@ GitHub Actions CI pipeline: `.github/workflows/ci.yml`
 
 ### Database Backup
 
+The production stack's `backup` service writes a daily backup to `deploy/data/backups` (30-day retention); the two scripts below are for a host with direct database access.
+
 `database/backup/` directory:
 
 - `backup.sh` — mysqldump + gzip backup, auto-clears backups older than 30 days
@@ -355,7 +365,7 @@ See `docs/nginx-security.conf` for production reverse-proxy security hardening.
 
 | WeChat | Alipay |
 |:---:|:---:|
-| ![WeChat](./docs/weixinpay.png "WeChat") | ![Alipay](./docs/alipay.png "Alipay") |
+| ![WeChat](../weixinpay.png "WeChat") | ![Alipay](../alipay.png "Alipay") |
 
 ## 项目授权 / Project License
 

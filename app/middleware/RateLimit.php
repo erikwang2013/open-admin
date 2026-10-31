@@ -24,21 +24,28 @@ class RateLimit implements MiddlewareInterface
         '/api/v1/auth/login' => ['limit' => 10, 'window' => 60],
     ];
 
+    /**
+     * 解析路径对应的限流配置：命中敏感路由（含其子路径）用专属值，其余用默认值
+     *
+     * @return array{limit: int, window: int}
+     */
+    public function limitForPath(string $path): array
+    {
+        foreach ($this->sensitive as $pattern => $cfg) {
+            if ($path === $pattern || str_starts_with($path, rtrim($pattern, '/') . '/')) {
+                return $cfg;
+            }
+        }
+
+        return ['limit' => $this->defaultLimit, 'window' => $this->defaultWindow];
+    }
+
     public function process(Request $request, callable $handler): Response
     {
         $path = $request->path();
         $ip   = $request->getRealIp();
 
-        $limit  = $this->defaultLimit;
-        $window = $this->defaultWindow;
-
-        foreach ($this->sensitive as $pattern => $cfg) {
-            if ($path === $pattern || str_starts_with($path, rtrim($pattern, '/') . '/')) {
-                $limit  = $cfg['limit'];
-                $window = $cfg['window'];
-                break;
-            }
-        }
+        ['limit' => $limit, 'window' => $window] = $this->limitForPath($path);
 
         $safePath = preg_replace('/[^a-zA-Z0-9_-]/', '_', $path);
         $key = "rate_limit:{$ip}:{$safePath}";

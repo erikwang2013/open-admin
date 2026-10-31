@@ -1,6 +1,6 @@
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 >
-> [中文](CLAUDE.md) | [English](CLAUDE.en.md)
+> [中文](../CLAUDE.md) | [English](../CLAUDE.en.md)
 
 # Open Admin (open-admin)
 
@@ -146,7 +146,7 @@ open-admin/
 ├── docs/translations/          # English docs (README.en / CLAUDE.en)
 ├── .env                        # Environment variables (not version-controlled)
 ├── .env.example                # Environment variable template
-├── .env.docker                 # Docker environment variables (local quick start)
+├── .env.docker                 # Docker local-trial environment (never expose publicly)
 ├── composer.json               # PHP dependencies
 ├── Dockerfile                  # Docker build
 ├── docker-compose.yml          # Local quick-start stack (4 services)
@@ -239,21 +239,26 @@ cp .env.docker .env
 docker compose up -d
 ```
 
-### Production (single machine, 5 services)
+> **Local trial only**: the passwords/keys in `.env.docker` are public, deliberately invalid placeholders; replace them before use and never expose this stack directly to the public internet. Use `deploy/` for production.
 
-The production stack lives in `deploy/` and runs on one machine: `nginx`, `app`, `init` (one-shot bootstrap), `mysql`, `redis`. No full-text search cluster is used.
+### Production (single machine, 6 services)
+
+The production stack lives in `deploy/` and runs on one machine: `nginx`, `app`, `init` (one-shot bootstrap), `mysql`, `redis` and `backup` (daily automatic backups). No full-text search cluster is used.
 
 ```bash
 cd deploy
-./generate-secrets.sh          # .env, keys, self-signed TLS cert and admin password
+./generate-secrets.sh          # master .env, per-service env files, keys, self-signed TLS cert and admin password
 docker compose up -d --build
 ```
 
-- `generate-secrets.sh` is idempotent by default and only fills in missing values. It creates `deploy/.env`, `deploy/secrets/rsa_public_key.pem` and the admin password file `deploy/secrets/admin_password.txt`; the RSA private key goes into `RSA_PRIVATE_KEY` in `.env`.
-- `--regenerate` archives the current `deploy/.env` and `deploy/secrets/` to `deploy/secrets/archive/<timestamp>/` before rebuilding everything; old secrets stay in the archive.
-- TLS defaults to a self-signed certificate for `DOMAIN` (`localhost` by default). Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; existing certificates are never overwritten.
+- Per-service env isolation: `deploy/env/{app,init,mysql,redis,backup}.env` (directory `700`, files `600`); the master `deploy/.env` only holds compose interpolation values (domain, ports, `APP_UID`/`APP_GID`). The app container never holds the MySQL root password or the bootstrap admin password. The generator updates known keys in place, appends missing ones and preserves custom entries.
+- `generate-secrets.sh` is idempotent by default and only fills in missing values. It creates `deploy/secrets/rsa_public_key.pem` and the admin password file `deploy/secrets/admin_password.txt`; the RSA private key goes into `RSA_PRIVATE_KEY` in `app.env`.
+- `--regenerate` archives the current `deploy/.env`, `deploy/env/` and `deploy/secrets/` to `deploy/secrets/archive/<timestamp>/`, then rotates application secrets (JWT/HASHIDS/ENCRYPTION/RSA/Redis) by default while preserving `ENCRYPTABLE_KEY`, the existing TLS certificate, `DB_PASSWORD`, `MYSQL_ROOT_PASSWORD` and the admin password, so an existing database keeps working. Use `--rotate-encryptable` to rotate the field-encryption key (the old key is appended to `ENCRYPTION_PREVIOUS_KEYS`, so existing data remains readable; remove the old key only after re-encrypting the data), `--rotate-tls` to rotate TLS, `--rotate-db` for database passwords (the script prints the manual `ALTER USER` commands), and `--reset-admin` to reset the admin password.
+- Host ownership: `app`/`init` run as `${APP_UID:-1000}:${APP_GID:-1000}`; the script writes `id -u`/`id -g` into the master `.env`, keeping `deploy/data/{runtime,upload}` writable.
+- TLS defaults to a self-signed certificate for `DOMAIN` (`localhost` by default). Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; existing certificates are not overwritten unless `--rotate-tls` is used. HSTS is commented out by default; enable it after a real domain certificate is configured.
 - Ports: Nginx `80/443` (port 80 only keeps `/.well-known/acme-challenge/`, everything else 301 to HTTPS); webman listens on `8791` inside the container only.
-- Persistent data and logs are host bind mounts: `deploy/data/{mysql,mysql-logs,redis,runtime,upload,nginx/logs,backups}`; Docker logs rotate at `10m × 3`.
+- Logs: Nginx and MySQL write to stdout/stderr and Docker rotates at `10m × 3`; use `docker compose logs -f app`. Host persistent directories: `deploy/data/{mysql,redis,runtime,upload,backups}`.
+- Automatic backup: the `backup` service runs `mysqldump` daily into `deploy/data/backups` with 30-day retention.
 - RSA public key: `GET /api/v1/auth/public-key` returns the current public key. Flutter fetches it before login and falls back to the embedded key on failure; after `--regenerate` rotates the keypair, verify the endpoint is reachable and rebuild clients that rely on the embedded fallback.
 
 ### CI/CD
@@ -266,7 +271,8 @@ docker compose up -d --build
 
 ### Database Backup
 
-`database/backup/backup.sh` — mysqldump + gzip, auto-cleans backups older than 30 days.
+The production stack's `backup` service writes a daily backup to `deploy/data/backups` (30-day retention).
+`database/backup/backup.sh` — mysqldump + gzip, auto-cleans backups older than 30 days (host with direct database access).
 `database/backup/restore.sh` — interactive restore, lists available backups for selection.
 
 ### Monitoring

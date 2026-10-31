@@ -276,7 +276,7 @@ Decryption flow (server, stepwise fallback):
   3. Plaintext fallback → use the raw input directly
 ```
 
-The public key is fetched via `GET /api/v1/auth/public-key` before login; the Flutter client keeps an embedded copy as a fallback when the request fails. The private key is stored only in `RSA_PRIVATE_KEY` in `.env` and must not be leaked.
+The public key is fetched via `GET /api/v1/auth/public-key` before login; the Flutter client keeps an embedded copy as a fallback when the request fails. The private key lives only in the `RSA_PRIVATE_KEY` environment variable (`.env` for a direct install, `env/app.env` under `deploy/`) and must not be leaked.
 
 > AES symmetric encryption is a legacy compatibility scheme and will be removed once all clients migrate to RSA.
 
@@ -1771,9 +1771,11 @@ docker compose up -d
 # Install wizard: http://localhost/install (DB host: mysql)
 ```
 
-### Production (single machine, 5 services)
+> **Local trial only**: the default passwords/keys in `.env.docker` are public, deliberately invalid placeholders; replace them before use and never expose this stack directly to the public internet. Use `deploy/` for production.
 
-The production stack lives in `deploy/` and runs `nginx`, `app`, `init` (one-shot bootstrap), `mysql` and `redis` on one machine. No full-text search cluster is used. PHP is built via `Dockerfile` (based on `php:8.3-cli` with OPcache enabled); webman listens on 8791 inside the container network only, and Nginx exposes 80/443.
+### Production (single machine, 6 services)
+
+The production stack lives in `deploy/` and runs `nginx`, `app`, `init` (one-shot bootstrap), `mysql`, `redis` and `backup` (daily automatic backups) on one machine. No full-text search cluster is used. PHP is built via `Dockerfile` (based on `php:8.3-cli-alpine` with OPcache enabled); webman listens on 8791 inside the container network only, and Nginx exposes 80/443.
 
 ```bash
 cd deploy
@@ -1781,9 +1783,11 @@ cd deploy
 docker compose up -d --build
 ```
 
-- `generate-secrets.sh` creates `deploy/.env`, the RSA keypair, a self-signed TLS certificate and the admin password file `deploy/secrets/admin_password.txt`. It is idempotent by default; `--regenerate` first archives the old `.env` and `secrets/` to `deploy/secrets/archive/<timestamp>/`.
-- Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; port 80 only serves the ACME challenge path and redirects everything else to HTTPS.
-- Persistent directories: `deploy/data/{mysql,mysql-logs,redis,runtime,upload,nginx/logs,backups}`; Docker logs rotate at `10m × 3`.
+- Per-service env isolation: `deploy/env/{app,init,mysql,redis,backup}.env` (directory `700`, files `600`); the master `deploy/.env` only holds compose interpolation values such as domain, ports and `APP_UID`/`APP_GID`. The app container never holds the MySQL root password or the bootstrap admin password; `app`/`init` run as that UID/GID so `deploy/data/{runtime,upload}` stays writable.
+- `generate-secrets.sh` creates the RSA keypair, a self-signed TLS certificate and the admin password file `deploy/secrets/admin_password.txt`; the RSA private key goes into `app.env`. It is idempotent by default; `--regenerate` archives the old `.env`, `env/` and `secrets/` to `deploy/secrets/archive/<timestamp>/` and rotates application secrets only, preserving `ENCRYPTABLE_KEY`, the existing TLS certificate, database and admin passwords. Rotate the field-encryption key, TLS, database passwords and admin password explicitly with `--rotate-encryptable` (the old key is appended to `ENCRYPTION_PREVIOUS_KEYS`, so existing data remains readable; remove the old key only after re-encrypting the data), `--rotate-tls`, `--rotate-db` and `--reset-admin`.
+- Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; port 80 only serves the ACME challenge path and redirects everything else to HTTPS; HSTS is commented out by default and should be enabled after a real certificate is configured.
+- Logs: Nginx/MySQL write to stdout/stderr and Docker rotates at `10m × 3`; persistent directories: `deploy/data/{mysql,redis,runtime,upload,backups}`.
+- The `backup` service runs `mysqldump` daily into `deploy/data/backups` with 30-day retention.
 
 ### CI/CD
 
@@ -1794,7 +1798,7 @@ docker compose up -d --build
 
 ### Database Backup
 
-The `database/backup/` directory provides backup and restore scripts:
+The production stack's `backup` service writes a daily backup to `deploy/data/backups` (30-day retention). The scripts in `database/backup/` are for a host with direct database access:
 - `backup.sh` — mysqldump + gzip compressed backup, auto-clears backups older than 30 days
 - `restore.sh` — interactive restore, lists existing backups for selection
 

@@ -16,10 +16,11 @@ flowchart TB
         wm["webman app :8791<br/>container network"]
         mysql[("MySQL 8.0<br/>deploy/data/mysql")]
         redis[("Redis 7 · AOF<br/>deploy/data/redis")]
+        backup["backup (daily)<br/>mysqldump · gzip<br/>30-day retention"]
     end
 
     subgraph persist["Host persistence"]
-        data["deploy/data/<br/>mysql · mysql-logs · redis<br/>runtime · upload · nginx/logs · backups"]
+        data["deploy/data/<br/>mysql · redis<br/>runtime · upload · backups"]
     end
 
     subgraph monitor["Monitoring"]
@@ -31,9 +32,11 @@ flowchart TB
     wm --> mysql
     wm --> redis
     bootstrap --> mysql
+    backup --> mysql
+    wm -.-> data
     mysql -.-> data
     redis -.-> data
-    nginx -.-> data
+    backup -.-> data
     wm --> health
 
     style nginx fill:#722ED1,color:#fff
@@ -41,5 +44,6 @@ flowchart TB
     style wm fill:#1677FF,color:#fff
     style mysql fill:#1890FF,color:#fff
     style redis fill:#1890FF,color:#fff
+    style backup fill:#FA8C16,color:#fff
     style data fill:#F6F8FC,color:#1677FF
 ```

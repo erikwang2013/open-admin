@@ -1,5 +1,7 @@
 # 后端增强 — 实现计划
 
+> **历史文档（2026-05-20）**：Elasticsearch 全文检索已从项目移除（下文相关步骤仅作历史记录），现仅使用 MySQL + Redis；示例端口已统一为 8791。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 实现 13 项后端增强：3 个新中间件 (CORS, RateLimit, OperationLog)、6 个新控制器、2 个模型修改、路由 + 中间件配置。
@@ -339,7 +341,6 @@ class HealthController
                 'php'           => PHP_VERSION,
                 'database'      => $this->checkDb(),
                 'redis'         => $this->checkRedis(),
-                'elasticsearch' => $this->checkES(),
                 'timestamp'     => time(),
             ],
         ]);
@@ -365,18 +366,6 @@ class HealthController
         }
     }
 
-    private function checkES(): string
-    {
-        try {
-            $hosts = config('plugin.erikwang2013.webman-scout.scout.hosts', ['http://localhost:9200']);
-            $client = new \GuzzleHttp\Client(['timeout' => 2]);
-            $resp = $client->get(rtrim($hosts[0], '/') . '/_cluster/health');
-            $body = json_decode((string) $resp->getBody(), true);
-            return $body['status'] ?? 'unknown';
-        } catch (Throwable $e) {
-            return $e->getMessage();
-        }
-    }
 }
 ```
 
@@ -1209,13 +1198,13 @@ sleep 2
 php start.php status
 
 # 3. 健康检查
-curl http://localhost:8787/health
+curl http://localhost:8791/health
 
 # 4. 验证码 + 登录
-curl -X POST http://localhost:8787/api/captcha/generate -H "API-Version: v1"
+curl -X POST http://localhost:8791/api/captcha/generate -H "API-Version: v1"
 
 # 5. CORS 预检
-curl -X OPTIONS http://localhost:8787/api/auth/login -H "Origin: http://example.com" -I
+curl -X OPTIONS http://localhost:8791/api/auth/login -H "Origin: http://example.com" -I
 
 # 6. 停止服务
 php start.php stop

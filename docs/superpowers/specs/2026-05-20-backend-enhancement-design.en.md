@@ -4,6 +4,8 @@
 
 # Sub-project A: Backend Enhancement — Design Specification
 
+> **Historical document (2026-05-20)**: Elasticsearch full-text search has been removed from the project (the related design below is kept for history only); the stack now uses MySQL + Redis only. Example ports are now 8791.
+
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
 ## Scope
@@ -215,7 +217,6 @@ Returns the connection status of each component:
     "php": "8.3.0",
     "database": "ok",
     "redis": "ok",
-    "elasticsearch": "ok",
     "timestamp": 1747737600
   }
 }

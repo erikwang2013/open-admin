@@ -40,6 +40,14 @@ class CaptchaController
             $difficulty = 'medium';
         }
 
+        // 低概率（1%）清理过期验证码文件；任何异常都不能影响生成
+        try {
+            if (random_int(1, 100) === 1) {
+                $this->cleanupExpiredCaptchaFiles();
+            }
+        } catch (Throwable) {
+        }
+
         try {
             $result = captcha_create($type, ['difficulty' => $difficulty]);
 
@@ -101,5 +109,27 @@ class CaptchaController
             'message' => $valid ? trans('messages.captcha_verify_pass') : trans('messages.captcha_verify_fail'),
             'data' => ['valid' => $valid],
         ]);
+    }
+
+    /**
+     * 清理过期验证码文件
+     *
+     * 文件驱动不会主动回收过期 key，这里按 poster 的 TTL 删除过期 *.json。
+     * 路径与 poster FileStorage 保持一致：配置优先，未配置时用系统临时目录。
+     */
+    private function cleanupExpiredCaptchaFiles(): void
+    {
+        $dir = config('poster.captcha.file.path') ?: sys_get_temp_dir() . '/poster-captcha';
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        $expireBefore = time() - (int) (config('poster.captcha.ttl') ?: 300);
+        foreach (glob($dir . '/*.json') ?: [] as $file) {
+            $mtime = @filemtime($file);
+            if ($mtime !== false && $mtime < $expireBefore) {
+                @unlink($file);
+            }
+        }
     }
 }

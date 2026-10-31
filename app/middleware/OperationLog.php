@@ -39,6 +39,13 @@ class OperationLog implements MiddlewareInterface
             $log->input      = json_encode($input, JSON_UNESCAPED_UNICODE);
             $log->created_at = date('Y-m-d H:i:s');
             $log->save();
+
+            // 低概率（1/1000）清理 180 天前日志，单次最多 1000 行，避免阻塞请求
+            if (random_int(1, 1000) === 1) {
+                \app\model\OperationLog::where('created_at', '<', date('Y-m-d H:i:s', time() - 180 * 86400))
+                    ->limit(1000)
+                    ->delete();
+            }
         } catch (\Throwable $e) {
             // 日志记录失败不应影响业务请求
         }

@@ -643,10 +643,11 @@ flowchart TB
         INIT["init（一次性）<br/>建表 + 创建管理员<br/>完成后退出"]
         MYSQL["MySQL 8.0<br/>deploy/data/mysql"]
         REDIS["Redis 7 · AOF<br/>deploy/data/redis"]
+        BACKUP["backup（每日）<br/>mysqldump · 保留 30 天"]
     end
 
     subgraph "宿主机持久化"
-        DATA["deploy/data/<br/>mysql · mysql-logs · redis<br/>runtime · upload · nginx/logs · backups"]
+        DATA["deploy/data/<br/>mysql · redis<br/>runtime · upload · backups"]
     end
 
     subgraph "监控"
@@ -658,9 +659,10 @@ flowchart TB
     WM --> MYSQL
     WM --> REDIS
     INIT --> MYSQL
+    BACKUP --> MYSQL
     MYSQL -.-> DATA
     REDIS -.-> DATA
-    NGX -.-> DATA
+    BACKUP -.-> DATA
     WM --> MON
 
     style NGX fill:#722ED1,color:#fff
@@ -668,8 +670,11 @@ flowchart TB
     style INIT fill:#52C41A,color:#fff
     style MYSQL fill:#1890FF,color:#fff
     style REDIS fill:#1890FF,color:#fff
+    style BACKUP fill:#52C41A,color:#fff
     style DATA fill:#F6F8FC,color:#1677FF
 ```
+
+> 环境变量按服务隔离在 `deploy/env/{app,init,mysql,redis,backup}.env`（`600`，目录 `700`），master `deploy/.env` 只保存 compose 插值；应用与 init 以宿主机 `APP_UID`/`APP_GID` 运行。Nginx/MySQL 日志写 stdout/stderr，由 Docker 按 `10m × 3` 轮转；HSTS 默认关闭，配置真实域名证书后再启用。
 
 ---
 

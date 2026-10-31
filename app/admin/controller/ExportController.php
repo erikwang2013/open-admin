@@ -19,6 +19,7 @@ use app\model\OperationLog;
 use app\model\AdminRole;
 use app\model\SystemConfig;
 use support\Request;
+use support\Response;
 
 /**
  * @Apidoc\Title("数据导出")
@@ -53,8 +54,11 @@ class ExportController extends BaseController
             $columns = array_keys($exportColumns);
         }
 
-        // 查询数据
+        // 查询数据（多取 1 行用于判断是否超限）
         $data = $this->fetchExportData($table, $columns, $conditions);
+        if (count($data) > 5000) {
+            return $this->fail('导出数据超过 5000 行，请缩小筛选范围', 422);
+        }
         $sensitiveFields = $this->getSensitiveFields($table);
 
         $spreadsheet = new Spreadsheet();
@@ -264,7 +268,7 @@ class ExportController extends BaseController
             }
         }
 
-        return $query->limit(10000)->get()->toArray();
+        return $query->limit(5001)->get()->toArray();
     }
 
     private function getExportColumns(string $table): array
