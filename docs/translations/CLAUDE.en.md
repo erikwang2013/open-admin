@@ -1,6 +1,6 @@
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 >
-> [中文](../CLAUDE.md) | [English](CLAUDE.en.md) | [한국어](CLAUDE.ko.md) | [Русский](CLAUDE.ru.md) | [Deutsch](CLAUDE.de.md) | [Français](CLAUDE.fr.md) | [Español](CLAUDE.es.md) | [Português](CLAUDE.pt.md) | [हिन्दी](CLAUDE.hi.md) | [العربية](CLAUDE.ar.md) | [বাংলা](CLAUDE.bn.md) | [Bahasa Indonesia](CLAUDE.id.md) | [日本語](CLAUDE.ja.md)
+> [中文](CLAUDE.md) | [English](CLAUDE.en.md)
 
 # Open Admin (open-admin)
 
@@ -50,7 +50,6 @@ The shield-shaped guard robot "Xiao An" (小安) takes its name from 「**安**�
 - JWT authentication: `erikwang2013/jwt-webman`
 - API sensitive data encryption/decryption: `erikwang2013/encryption`
 - DB sensitive field encryption/decryption: `erikwang2013/encryptable`
-- ES sync and query: `erikwang2013/webman-scout`
 - Country flags: `erikwang2013/season`
 
 ### Frontend
@@ -131,24 +130,26 @@ open-admin/
 │   │   ├── architecture.svg    # System architecture design (hand-written SVG)
 │   │   ├── features.svg        # Feature design (hand-written SVG)
 │   │   ├── lifecycle.svg       # Lifecycle diagram (hand-written SVG)
-│   │   └── 01..12-*.md         # Decomposed architecture diagrams (Mermaid, 12 languages)
+│   │   └── 01..12-*.md         # Decomposed architecture diagrams (Mermaid, Chinese/English)
 │   └── superpowers/            # Specs & plans
 │       ├── specs/              # Design specs
 │       └── plans/              # Implementation plans
 ├── public/                     # Public entry
 │   └── img/pet.svg             # Project pet "Xiao An" (SVG, also the site icon)
+├── site/                       # Responsive static site (Chinese/English, search, install/architecture/changelog)
+├── deploy/                     # Single-machine production stack (compose + secret generation + Nginx/TLS)
 ├── runtime/                    # Runtime files
 ├── tests/                      # Tests
 ├── vendor/                     # Composer dependencies
 ├── CLAUDE.md                   # This file
 ├── README.md                   # Chinese README
-├── README_EN.md                # English README
+├── docs/translations/          # English docs (README.en / CLAUDE.en)
 ├── .env                        # Environment variables (not version-controlled)
 ├── .env.example                # Environment variable template
-├── .env.docker                 # Docker environment variables
+├── .env.docker                 # Docker environment variables (local quick start)
 ├── composer.json               # PHP dependencies
 ├── Dockerfile                  # Docker build
-├── docker-compose.yml          # Docker orchestration
+├── docker-compose.yml          # Local quick-start stack (4 services)
 └── .github/
     └── workflows/
         └── ci.yml              # CI/CD pipeline (PHP syntax + PHPUnit + Flutter analyze)
@@ -181,7 +182,7 @@ open-admin/
 The version number is reflected in the URL prefix (`/api/v1/...`, `/api/v2/...`), not in request headers:
 
 ```bash
-curl http://localhost:8787/api/v1/auth/login
+curl http://localhost:8791/api/v1/auth/login
 ```
 
 Adding a new version only requires creating the `app/api/{version}/controller/` directory and registering the corresponding route group in `config/route.php`.
@@ -229,22 +230,31 @@ Redis sliding window (Lua atomic), default 60 req/min/IP/route:
 
 ## Deployment
 
-### Docker Compose (recommended for production)
+### Quick Start (4 services)
 
-The `docker-compose.yml` at the project root orchestrates 5 services:
-
-| Service | Description |
-|------|------|
-| `nginx` | Nginx reverse proxy (80/443), static file serving |
-| `app` | webman PHP 8.3 application, built via `Dockerfile` (with OPcache) |
-| `mysql` | MySQL 8.0, persistent data volume |
-| `redis` | Redis 7 Alpine, cache/rate limiting/Session |
-| `elasticsearch` | Elasticsearch 8.x, full-text search |
+The `docker-compose.yml` at the project root is the local/single-host trial stack: `nginx`, `app`, `mysql`, `redis`.
 
 ```bash
 cp .env.docker .env
-docker-compose up -d
+docker compose up -d
 ```
+
+### Production (single machine, 5 services)
+
+The production stack lives in `deploy/` and runs on one machine: `nginx`, `app`, `init` (one-shot bootstrap), `mysql`, `redis`. No full-text search cluster is used.
+
+```bash
+cd deploy
+./generate-secrets.sh          # .env, keys, self-signed TLS cert and admin password
+docker compose up -d --build
+```
+
+- `generate-secrets.sh` is idempotent by default and only fills in missing values. It creates `deploy/.env`, `deploy/secrets/rsa_public_key.pem` and the admin password file `deploy/secrets/admin_password.txt`; the RSA private key goes into `RSA_PRIVATE_KEY` in `.env`.
+- `--regenerate` archives the current `deploy/.env` and `deploy/secrets/` to `deploy/secrets/archive/<timestamp>/` before rebuilding everything; old secrets stay in the archive.
+- TLS defaults to a self-signed certificate for `DOMAIN` (`localhost` by default). Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; existing certificates are never overwritten.
+- Ports: Nginx `80/443` (port 80 only keeps `/.well-known/acme-challenge/`, everything else 301 to HTTPS); webman listens on `8791` inside the container only.
+- Persistent data and logs are host bind mounts: `deploy/data/{mysql,mysql-logs,redis,runtime,upload,nginx/logs,backups}`; Docker logs rotate at `10m × 3`.
+- RSA public key: `GET /api/v1/auth/public-key` returns the current public key. Flutter fetches it before login and falls back to the embedded key on failure; after `--regenerate` rotates the keypair, verify the endpoint is reachable and rebuild clients that rely on the embedded fallback.
 
 ### CI/CD
 

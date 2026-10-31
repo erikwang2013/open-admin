@@ -19,6 +19,7 @@ class Redis
 
     private static ?string $prefix = null;
     private static ?RedisClient $instance = null;
+    private static int $lastPing = 0;
 
     private static function getPrefix(): string
     {
@@ -32,18 +33,25 @@ class Redis
     private static function getInstance(): RedisClient
     {
         if (self::$instance !== null) {
-            try {
-                self::$instance->ping();
+            // 连接存活检查节流：5 秒内直接复用，避免每条命令都 PING 一次
+            if (time() - self::$lastPing <= 5) {
                 return self::$instance;
-            } catch (\Throwable) {
-                self::$instance = null;
             }
+            try {
+                if (self::$instance->ping()) {
+                    self::$lastPing = time();
+                    return self::$instance;
+                }
+            } catch (\Throwable) {
+                // 连接已失效，重建
+            }
+            self::$instance = null;
         }
 
         $host = getenv('REDIS_HOST') ?: '127.0.0.1';
         $port = (int)(getenv('REDIS_PORT') ?: 6379);
         $pass = getenv('REDIS_PASSWORD') ?: null;
-        $db   = (int)(getenv('REDIS_DB') ?: 0);
+        $db   = (int)(getenv('REDIS_DATABASE') ?: 0);
 
         $redis = new RedisClient();
         if (!$redis->connect($host, $port)) {
@@ -57,6 +65,7 @@ class Redis
         }
 
         self::$instance = $redis;
+        self::$lastPing = time();
         return self::$instance;
     }
 
@@ -71,12 +80,20 @@ class Redis
     public static function __callStatic(string $name, array $arguments): mixed
     {
         if ($name === 'eval') {
-            // eval(script, keyCount, key1, key2, ..., arg1, arg2, ...)
-            // keys start at index 2, count = $arguments[1]
-            $keyCount = (int)($arguments[1] ?? 0);
-            for ($i = 0; $i < $keyCount; $i++) {
-                $idx = 2 + $i;
-                $arguments[$idx] = self::prefixKey((string)$arguments[$idx]);
+            // phpredis 原生形式: eval(script, [key1, ..., argN], num_keys)，键在参数数组开头
+            if (isset($arguments[1]) && is_array($arguments[1])) {
+                $keyCount = (int)($arguments[2] ?? 0);
+                for ($i = 0; $i < $keyCount && array_key_exists($i, $arguments[1]); $i++) {
+                    $arguments[1][$i] = self::prefixKey((string)$arguments[1][$i]);
+                }
+            } else {
+                // 兼容旧形式 eval(script, keyCount, key1, ..., argN)：转为原生三参数形式
+                $keyCount = (int)($arguments[1] ?? 0);
+                $evalArgs = array_slice($arguments, 2);
+                for ($i = 0; $i < $keyCount && array_key_exists($i, $evalArgs); $i++) {
+                    $evalArgs[$i] = self::prefixKey((string)$evalArgs[$i]);
+                }
+                $arguments = [$arguments[0], $evalArgs, $keyCount];
             }
         } elseif (!empty($arguments) && is_string($arguments[0])) {
             $arguments[0] = self::prefixKey($arguments[0]);

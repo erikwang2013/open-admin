@@ -1,9 +1,9 @@
 // Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'dashboard_controller.dart';
-import '../../i18n/translations.dart';
 
 class DashboardPage extends GetView<DashboardController> {
   const DashboardPage({super.key});
@@ -75,7 +75,7 @@ class DashboardPage extends GetView<DashboardController> {
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
           ),
-          itemCount: 4,
+          itemCount: min(4, controller.stats.length),
           itemBuilder: (context, index) {
             final stat = controller.stats[index];
             final color = Color(int.parse('0xFF${stat['color'].replaceFirst('#', '')}'));

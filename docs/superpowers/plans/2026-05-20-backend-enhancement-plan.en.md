@@ -1,6 +1,6 @@
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 >
-> [中文](2026-05-20-backend-enhancement-plan.md) | [English](2026-05-20-backend-enhancement-plan.en.md) | [한국어](2026-05-20-backend-enhancement-plan.ko.md) | [Русский](2026-05-20-backend-enhancement-plan.ru.md) | [Deutsch](2026-05-20-backend-enhancement-plan.de.md) | [Français](2026-05-20-backend-enhancement-plan.fr.md) | [Español](2026-05-20-backend-enhancement-plan.es.md) | [Português](2026-05-20-backend-enhancement-plan.pt.md) | [हिन्दी](2026-05-20-backend-enhancement-plan.hi.md) | [العربية](2026-05-20-backend-enhancement-plan.ar.md) | [বাংলা](2026-05-20-backend-enhancement-plan.bn.md) | [Bahasa Indonesia](2026-05-20-backend-enhancement-plan.id.md) | [日本語](2026-05-20-backend-enhancement-plan.ja.md)
+> [中文](2026-05-20-backend-enhancement-plan.md) | [English](2026-05-20-backend-enhancement-plan.en.md)
 
 # Backend Enhancement — Implementation Plan
 

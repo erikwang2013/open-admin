@@ -17,12 +17,20 @@ class SnowflakeService
 {
     private static ?Snowflake $instance = null;
 
+    /** worker 进程偏移量，由 SnowflakeWorker 启动引导按进程 id 设置 */
+    private static int $workerOffset = 0;
+
+    public static function setWorkerOffset(int $offset): void
+    {
+        self::$workerOffset = $offset;
+    }
+
     public static function generate(): int
     {
         if (self::$instance === null) {
             $config = config('snowflake', []);
             self::$instance = new Snowflake(
-                workerId: (int)($config['worker_id'] ?? 1),
+                workerId: ((int)($config['worker_id'] ?? 1) + self::$workerOffset) % 32,
                 datacenterId: (int)($config['datacenter_id'] ?? 1),
                 epoch: $config['start_timestamp'] ?? null,
             );

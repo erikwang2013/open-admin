@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace app\admin\controller;
 
 use app\model\AdminPermission;
+use support\Db;
 use support\Request;
 use support\Response;
 use Webman\Validation\Validator;
@@ -118,10 +119,20 @@ class PermissionController extends BaseController
             return $this->fail($error, 422);
         }
 
-        // 级联删除子权限
-        AdminPermission::where('parent_id', $id)->delete();
-        $perm->roles()->detach();
-        $perm->delete();
+        // 级联收集所有后代 ID（多层级）
+        $ids = [$id];
+        $parentIds = [$id];
+        while (!empty($parentIds)) {
+            // whereNotIn 防止被构造的 parent_id 环导致死循环
+            $parentIds = AdminPermission::whereIn('parent_id', $parentIds)
+                ->whereNotIn('id', $ids)
+                ->pluck('id')
+                ->all();
+            $ids = array_merge($ids, $parentIds);
+        }
+
+        Db::table('admin_role_permission')->whereIn('permission_id', $ids)->delete();
+        AdminPermission::whereIn('id', $ids)->delete();
 
         return $this->success([], '删除成功');
     }

@@ -15,9 +15,9 @@ class RotateCaptchaState extends State<RotateCaptcha> {
   double val = 0;
 
   @override
-  void didUpdateWidget(RotateCaptcha old) {
-    super.didUpdateWidget(old);
-    if (widget.data != old.data) setState(() => val = 0);
+  void didUpdateWidget(RotateCaptcha oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.data != oldWidget.data) setState(() => val = 0);
   }
 
   @override

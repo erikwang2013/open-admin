@@ -45,8 +45,6 @@ dependencies:
   printing: ^5.12.0
   # Excel文件操作
   excel: ^4.0.0
-  # 文件保存
-  file_saver: ^0.2.0
   # 本地存储
   shared_preferences: ^2.2.0
   # 响应式布局

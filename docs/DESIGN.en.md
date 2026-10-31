@@ -1,6 +1,6 @@
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 >
-> [中文](DESIGN.md) | [English](DESIGN.en.md) | [한국어](DESIGN.ko.md) | [Русский](DESIGN.ru.md) | [Deutsch](DESIGN.de.md) | [Français](DESIGN.fr.md) | [Español](DESIGN.es.md) | [Português](DESIGN.pt.md) | [हिन्दी](DESIGN.hi.md) | [العربية](DESIGN.ar.md) | [বাংলা](DESIGN.bn.md) | [Bahasa Indonesia](DESIGN.id.md) | [日本語](DESIGN.ja.md)
+> [中文](DESIGN.md) | [English](DESIGN.en.md)
 
 # Open Admin — Design Document
 
@@ -48,10 +48,10 @@
 │                             │                                  │
 │  ┌──────────────────────────┼───────────────────────────┐    │
 │  │              数据存储层                                │    │
-│  │  ┌──────────┐  ┌──────────────┐  ┌──────────┐        │    │
-│  │  │  MySQL   │  │ Elasticsearch│  │  Redis   │        │    │
-│  │  │ (主存储)  │  │ (全文检索)    │  │ (缓存)   │        │    │
-│  │  └──────────┘  └──────────────┘  └──────────┘        │    │
+│  │  ┌──────────┐  ┌──────────┐                          │    │
+│  │  │  MySQL   │  │  Redis   │                          │    │
+│  │  │ (主存储)  │  │ (缓存)   │                          │    │
+│  │  └──────────┘  └──────────┘                          │    │
 │  └──────────────────────────────────────────────────────┘    │
 │                       webman v2                               │
 └──────────────────────────────────────────────────────────────┘
@@ -217,10 +217,10 @@ Extension example — adding a v2 API:
 
 ```bash
 # v1
-curl http://localhost:8787/api/v1/auth/login
+curl http://localhost:8791/api/v1/auth/login
 
 # v2 (after adding the new version)
-curl http://localhost:8787/api/v2/auth/login
+curl http://localhost:8791/api/v2/auth/login
 ```
 
 ### 4.3 Rate Limiting Strategy
@@ -378,7 +378,7 @@ JWT_SECRET          → 环境变量注入，64位随机字符串
 HASHIDS_SALT        → 唯一盐值，泄漏后需全局更换
 ENCRYPTION_KEY      → API 传输加密密钥，32字节
 ENCRYPTABLE_KEY     → DB 存储加密密钥，与传输密钥独立
-SCOUT_HOSTS         → ES 地址，内网部署
+RSA_PRIVATE_KEY     → 登录密码传输公钥对应的私钥（deploy 脚本自动生成）
 ```
 
 ### 6.3 Sensitive Data Protection
@@ -418,28 +418,35 @@ SCOUT_HOSTS         → ES 地址，内网部署
 ### 8.1 Recommended Topology
 
 ```
-Nginx (:443 HTTPS) → webman worker × N (:8787) → MySQL + ES + Redis
-                    静态文件: Flutter Web build/
+Nginx (:80/:443, TLS + static site) → app (webman :8791) → MySQL + Redis
+init (one-shot): schema + admin user; data/logs bind to deploy/data/
 ```
 
-### 8.2 Docker Compose (Recommended for Production)
+### 8.2 Docker Compose (Single-Machine Production)
 
-The `docker-compose.yml` at the project root orchestrates all services of the topology above:
+The production stack lives in `deploy/` and runs 5 services on one machine. No full-text search cluster is used.
 
-| Service | Image/Build | Port | Description |
-|------|----------|------|------|
-| `nginx` | nginx:alpine | 80, 443 | Reverse proxy + static files + Gzip |
-| `app` | Local `Dockerfile` build | 8787 | PHP 8.3 + OPcache + webman |
-| `mysql` | mysql:8.0 | 3306 | Primary database, persistent volume |
-| `redis` | redis:7-alpine | 6379 | Cache / rate limiting / captcha |
-| `elasticsearch` | elasticsearch:8.x | 9200 | Full-text search |
+| Service | Image/Build | Description |
+|------|----------|------|
+| `nginx` | nginx:alpine | 80/443, TLS, static site, reverse proxy + Gzip |
+| `app` | Local `Dockerfile` build | 8791 (container network only), PHP 8.3 + OPcache + webman |
+| `init` | Same app image | One-shot schema + admin creation, then exits |
+| `mysql` | mysql:8.0 | Primary database with data and logs on host bind mounts |
+| `redis` | redis:7-alpine | Cache / rate limiting / captcha, AOF persistence |
 
-Before startup, replace the keys in `docker-compose.yml` (`JWT_SECRET`, `HASHIDS_SALT`, `ENCRYPTION_KEY`, etc.) with random strings.
+First deployment:
 
 ```bash
-cp .env.docker .env
-docker-compose up -d
+cd deploy
+./generate-secrets.sh          # .env, keys, self-signed cert and admin password
+docker compose up -d --build
 ```
+
+- `generate-secrets.sh` generates all keys into `deploy/.env`; it is idempotent by default, and `--regenerate` first archives the old `.env` and `secrets/` to `deploy/secrets/archive/<timestamp>/` before rebuilding.
+- Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; the admin password is in `deploy/secrets/admin_password.txt`.
+- Persistent directories: `deploy/data/{mysql,mysql-logs,redis,runtime,upload,nginx/logs,backups}`.
+
+The root `docker-compose.yml` is only the 4-service (nginx/app/mysql/redis) local quick-start stack; use `deploy/` for production.
 
 ### 8.3 CI/CD
 
@@ -462,9 +469,8 @@ The `GET /metrics` endpoint (`MetricsController`) exposes 5 gauge metrics in Pro
 | Component | Minimum version | Recommended config |
 |------|---------|---------|
 | PHP | 8.3+ | 8.3+ OPcache enabled |
-| MySQL | 8.0+ | 8.0+ master-slave replication |
-| Elasticsearch | 7.x | 8.x 3-node cluster |
-| Redis | 6.x | 7.x sentinel mode |
+| MySQL | 8.0+ | Single-machine 8.0 with host-directory persistence |
+| Redis | 6.x | 7.x with AOF persistence |
 | Nginx | 1.20+ | Reverse proxy + gzip + SSL |
 | Flutter SDK | 3.41+ | Latest stable |
 | HarmonyOS | API 12 | DevEco Studio 5.x |

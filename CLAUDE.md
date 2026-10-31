@@ -47,7 +47,6 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 - JWT 认证: `erikwang2013/jwt-webman`
 - API 敏感数据加解密: `erikwang2013/encryption`
 - 数据库敏感字段加解密: `erikwang2013/encryptable`
-- ES 同步与查询: `erikwang2013/webman-scout`
 - 国家旗帜: `erikwang2013/season`
 
 ### 前端
@@ -128,27 +127,26 @@ open-admin/
 │   │   ├── architecture.svg    # 系统架构设计图（手写 SVG）
 │   │   ├── features.svg        # 功能设计图（手写 SVG）
 │   │   ├── lifecycle.svg       # 生命周期图（手写 SVG）
-│   │   └── 01..12-*.md         # 分解架构图（Mermaid，12 种语言）
+│   │   └── 01..12-*.md         # 分解架构图（Mermaid，中英双语）
 │   └── superpowers/            # 规范与计划
 │       ├── specs/              # 设计规范
 │       └── plans/              # 实现计划
 ├── public/                     # 公共入口
 │   └── img/pet.svg             # 项目宠物「小安」（SVG，兼作站点图标）
 ├── site/                       # 响应式静态官网（中英文、搜索、安装/架构/版本日志）
+├── deploy/                     # 单机生产编排（compose + 密钥生成 + Nginx/TLS）
 ├── runtime/                    # 运行时文件
 ├── tests/                      # 测试
 ├── vendor/                     # Composer 依赖
 ├── CLAUDE.md                   # 本文件
 ├── README.md                   # 中文说明
-├── docs/translations/          # 多语言文档（12 种语言 × README/CLAUDE）
-│   ├── README.en.md            # 英文说明
-│   └── README.ko.md ... README.ja.md  # 其他语言说明（韩/俄/德/法/西/葡/印地/阿拉伯/孟加拉/印尼/日）
+├── docs/translations/          # 英文文档（README.en / CLAUDE.en）
 ├── .env                        # 环境变量（不纳入版本控制）
 ├── .env.example                # 环境变量模板
-├── .env.docker                 # Docker 环境变量
+├── .env.docker                 # Docker 环境变量（本地快速开始）
 ├── composer.json               # PHP 依赖
 ├── Dockerfile                  # Docker 构建
-├── docker-compose.yml          # Docker 编排
+├── docker-compose.yml          # 本地快速开始编排（4 个服务）
 └── .github/
     └── workflows/
         └── ci.yml              # CI/CD 流水线（PHP语法+PHPUnit+Flutter analyze）
@@ -181,7 +179,7 @@ open-admin/
 版本号体现在 URL 前缀中（`/api/v1/...`、`/api/v2/...`），不使用请求头：
 
 ```bash
-curl http://localhost:8787/api/v1/auth/login
+curl http://localhost:8791/api/v1/auth/login
 ```
 
 新增版本只需创建 `app/api/{version}/controller/` 目录，并在 `config/route.php` 注册对应版本的路由组。
@@ -229,22 +227,31 @@ Redis 滑动窗口（Lua 原子化），默认 60 次/分钟/IP/路由：
 
 ## 部署
 
-### Docker Compose（推荐生产环境）
+### 快速开始（4 个服务）
 
-项目根目录 `docker-compose.yml` 编排 5 个服务：
-
-| 服务 | 说明 |
-|------|------|
-| `nginx` | Nginx 反向代理（80/443），静态文件服务 |
-| `app` | webman PHP 8.3 应用，`Dockerfile` 构建（含 OPcache） |
-| `mysql` | MySQL 8.0，数据卷持久化 |
-| `redis` | Redis 7 Alpine，缓存/限流/Session |
-| `elasticsearch` | Elasticsearch 8.x，全文检索 |
+项目根目录 `docker-compose.yml` 提供本地/单机试跑编排：`nginx`、`app`、`mysql`、`redis`。
 
 ```bash
 cp .env.docker .env
-docker-compose up -d
+docker compose up -d
 ```
+
+### 生产部署（单机 5 个服务）
+
+生产编排位于 `deploy/`，单机运行 `nginx`、`app`、`init`（一次性初始化）、`mysql`、`redis`；不依赖全文检索引擎。
+
+```bash
+cd deploy
+./generate-secrets.sh          # 生成 .env、密钥、自签名 TLS 证书与管理员密码
+docker compose up -d --build
+```
+
+- `generate-secrets.sh` 默认幂等：只补齐缺失值。生成 `deploy/.env`、`deploy/secrets/rsa_public_key.pem`、管理员密码 `deploy/secrets/admin_password.txt`；RSA 私钥写入 `.env` 的 `RSA_PRIVATE_KEY`。
+- `--regenerate` 先归档当前 `deploy/.env` 与 `deploy/secrets/` 到 `deploy/secrets/archive/<时间戳>/`，再整体重建；旧密钥保留在归档中。
+- TLS 默认按 `DOMAIN`（默认 `localhost`）生成自签名证书；真实域名证书直接替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`，脚本不会覆盖已有证书。
+- 端口：Nginx `80/443`（80 仅保留 `/.well-known/acme-challenge/`，其余 301 到 HTTPS）；webman 仅在容器内监听 `8791`。
+- 持久化目录均绑定到宿主机：`deploy/data/{mysql,mysql-logs,redis,runtime,upload,nginx/logs,backups}`；Docker 日志按 `10m × 3` 轮转。
+- RSA 公钥：`GET /api/v1/auth/public-key` 返回当前公钥，Flutter 登录前动态获取并在失败时回退内置公钥；`--regenerate` 换钥后需确认该端点可达，依赖内置回退的旧客户端需重新构建。
 
 ### CI/CD
 

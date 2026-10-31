@@ -7,7 +7,6 @@ import 'package:get/get.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/encryption_service.dart';
-import '../../i18n/translations.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -109,7 +108,7 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
     );
     if (ok != true) return;
-    try { await _api.post('/admin/profile/logout'); } catch (_) {}
+    try { await _api.post('/admin/profile/logout', data: {'refresh_token': await AuthService.getRefreshToken()}); } catch (_) {}
     await AuthService.clearToken();
     Get.offAllNamed('/login');
   }

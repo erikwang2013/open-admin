@@ -53,7 +53,13 @@ class SecurityFilter implements MiddlewareInterface
 
         // 文件上传数据
         foreach ($request->file() ?? [] as $key => $file) {
-            if (is_array($file) && isset($file['tmp_name'], $file['name'])) {
+            if ($file instanceof \Webman\Http\UploadFile) {
+                // webman 上传对象
+                $data[$key] = [
+                    'name'     => $file->getUploadName(),
+                    'tmp_name' => $file->getPathname(),
+                ];
+            } elseif (is_array($file) && isset($file['tmp_name'], $file['name'])) {
                 $data[$key] = [
                     'name'     => $file['name'],
                     'tmp_name' => $file['tmp_name'],

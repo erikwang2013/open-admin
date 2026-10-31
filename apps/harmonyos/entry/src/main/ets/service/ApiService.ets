@@ -3,13 +3,9 @@
  */
 
 import http from '@ohos.net.http';
-import { ApiResponse } from '../model/DataModels';
+import { ApiResponse, LoginResponse } from '../model/DataModels';
 import { TokenManager } from '../utils/TokenManager';
-
-// 开发环境地址 — 真机部署时修改为实际服务器地址
-// 模拟器: http://10.0.2.2:8787
-// 真机: http://<服务器IP>:8787
-const BASE_URL = 'http://10.0.2.2:8787'; // 模拟器访问宿主机
+import AppConfig from '../config/AppConfig';
 
 /**
  * HTTP API 服务 — 支持 JWT 无感刷新
@@ -42,27 +38,31 @@ export class ApiService {
       options.extraData = JSON.stringify(body);
     }
 
-    const url = `${BASE_URL}${path}`;
-    const response = await this.httpRequest.request(url, options);
+    const response = await this.httpRequest.request(`${AppConfig.baseUrl}${path}`, options);
 
-    // 401 时先尝试刷新 token，而不是直接踢回登录页
-    if (response.responseCode === 401 && retryCount === 0) {
-      const refreshed = await this.tryRefreshToken();
-      if (refreshed) {
+    let result: ApiResponse<T> | null = null;
+    try {
+      result = JSON.parse(response.result as string) as ApiResponse<T>;
+    } catch (_) {
+      // 非 JSON 响应（如网关错误页）按业务失败处理
+    }
+
+    // 后端历史上以 HTTP 200 + body.code=401 表示未授权，两种形态都要触发刷新；
+    // 认证接口的 401 是凭证错误，交给调用方展示服务端消息，不刷新也不清会话
+    const unauthorized = response.responseCode === 401 || (result !== null && result.code === 401);
+    const isAuthPath = path.indexOf('/api/v1/auth/') === 0;
+    if (unauthorized && !isAuthPath) {
+      if (retryCount === 0 && await this.tryRefreshToken()) {
         // 刷新成功，用新 token 重试原始请求
         return this.request<T>(method, path, body, retryCount + 1);
       }
-      // 刷新失败，清除 token 并通知调用方
       TokenManager.clearTokens();
       throw new Error('UNAUTHORIZED');
     }
 
-    if (response.responseCode === 401) {
-      TokenManager.clearTokens();
-      throw new Error('UNAUTHORIZED');
+    if (result === null) {
+      throw new Error(`HTTP_${response.responseCode}`);
     }
-
-    const result: ApiResponse<T> = JSON.parse(response.result as string);
     return result;
   }
 
@@ -78,7 +78,7 @@ export class ApiService {
 
     try {
       const refreshResponse = await this.httpRequest.request(
-        `${BASE_URL}/api/v1/auth/refresh`,
+        `${AppConfig.baseUrl}/api/v1/auth/refresh`,
         {
           method: http.RequestMethod.POST,
           header: {
@@ -91,9 +91,10 @@ export class ApiService {
       );
 
       if (refreshResponse.responseCode === 200) {
-        const data = JSON.parse(refreshResponse.result as string);
+        const data: ApiResponse<LoginResponse> =
+          JSON.parse(refreshResponse.result as string) as ApiResponse<LoginResponse>;
         if (data.code === 0 && data.data) {
-          TokenManager.saveTokens(
+          await TokenManager.saveTokens(
             data.data.access_token,
             data.data.refresh_token
           );

@@ -46,10 +46,10 @@
 │                             │                                  │
 │  ┌──────────────────────────┼───────────────────────────┐    │
 │  │              数据存储层                                │    │
-│  │  ┌──────────┐  ┌──────────────┐  ┌──────────┐        │    │
-│  │  │  MySQL   │  │ Elasticsearch│  │  Redis   │        │    │
-│  │  │ (主存储)  │  │ (全文检索)    │  │ (缓存)   │        │    │
-│  │  └──────────┘  └──────────────┘  └──────────┘        │    │
+│  │  ┌──────────┐  ┌──────────┐                          │    │
+│  │  │  MySQL   │  │  Redis   │                          │    │
+│  │  │ (主存储)  │  │ (缓存)   │                          │    │
+│  │  └──────────┘  └──────────┘                          │    │
 │  └──────────────────────────────────────────────────────┘    │
 │                       webman v2                               │
 └──────────────────────────────────────────────────────────────┘
@@ -215,10 +215,10 @@ API 版本号体现在 URL 前缀中（`/api/v1/...`、`/api/v2/...`），**不�
 
 ```bash
 # v1
-curl http://localhost:8787/api/v1/auth/login
+curl http://localhost:8791/api/v1/auth/login
 
 # v2（新增版本后）
-curl http://localhost:8787/api/v2/auth/login
+curl http://localhost:8791/api/v2/auth/login
 ```
 
 ### 4.3 限流策略
@@ -376,7 +376,6 @@ JWT_SECRET          → 环境变量注入，64位随机字符串
 HASHIDS_SALT        → 唯一盐值，泄漏后需全局更换
 ENCRYPTION_KEY      → API 传输加密密钥，32字节
 ENCRYPTABLE_KEY     → DB 存储加密密钥，与传输密钥独立
-SCOUT_HOSTS         → ES 地址，内网部署
 ```
 
 ### 6.3 敏感数据保护
@@ -416,28 +415,35 @@ SCOUT_HOSTS         → ES 地址，内网部署
 ### 8.1 推荐拓扑
 
 ```
-Nginx (:443 HTTPS) → webman worker × N (:8787) → MySQL + ES + Redis
-                    静态文件: Flutter Web build/
+Nginx (:80/:443，TLS 终止 + 静态官网) → app (webman :8791) → MySQL + Redis
+init（一次性）：建表 + 创建管理员；数据/日志绑定 deploy/data/
 ```
 
-### 8.2 Docker Compose（推荐生产环境）
+### 8.2 Docker Compose（单机生产部署）
 
-项目根目录的 `docker-compose.yml` 编排了上述拓扑的全部服务：
+生产编排位于 `deploy/`，单机运行 5 个服务，不依赖全文检索引擎：
 
-| 服务 | 镜像/构建 | 端口 | 说明 |
-|------|----------|------|------|
-| `nginx` | nginx:alpine | 80, 443 | 反向代理 + 静态文件 + Gzip |
-| `app` | 本地 `Dockerfile` 构建 | 8787 | PHP 8.3 + OPcache + webman |
-| `mysql` | mysql:8.0 | 3306 | 主数据库，数据卷持久化 |
-| `redis` | redis:7-alpine | 6379 | 缓存 / 限流 / 验证码 |
-| `elasticsearch` | elasticsearch:8.x | 9200 | 全文检索 |
+| 服务 | 镜像/构建 | 说明 |
+|------|----------|------|
+| `nginx` | nginx:alpine | 80/443，TLS、静态官网、反向代理 + Gzip |
+| `app` | 本地 `Dockerfile` 构建 | 8791（仅容器内网），PHP 8.3 + OPcache + webman |
+| `init` | 同 app 镜像 | 一次性建表 + 创建管理员，完成后退出 |
+| `mysql` | mysql:8.0 | 主数据库，数据与日志绑定宿主机目录 |
+| `redis` | redis:7-alpine | 缓存 / 限流 / 验证码，AOF 持久化 |
 
-启动前将 `docker-compose.yml` 中的 `JWT_SECRET`、`HASHIDS_SALT`、`ENCRYPTION_KEY` 等密钥替换为随机字符串。
+首次部署：
 
 ```bash
-cp .env.docker .env
-docker-compose up -d
+cd deploy
+./generate-secrets.sh          # 生成 .env、密钥、自签名证书与管理员密码
+docker compose up -d --build
 ```
+
+- 密钥由 `generate-secrets.sh` 自动生成并写入 `deploy/.env`；默认幂等，`--regenerate` 先归档旧 `.env` 与 `secrets/` 到 `deploy/secrets/archive/<时间戳>/` 再重建。
+- 真实域名证书替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`；管理员密码见 `deploy/secrets/admin_password.txt`。
+- 持久化目录：`deploy/data/{mysql,mysql-logs,redis,runtime,upload,nginx/logs,backups}`。
+
+项目根目录的 `docker-compose.yml` 仅保留 4 个服务（nginx/app/mysql/redis）的本地快速开始编排；生产请使用 `deploy/`。
 
 ### 8.3 CI/CD
 
@@ -460,9 +466,8 @@ GitHub Actions 持续集成定义在 `.github/workflows/ci.yml`：
 | 组件 | 最低版本 | 推荐配置 |
 |------|---------|---------|
 | PHP | 8.3+ | 8.3+ OPcache enabled |
-| MySQL | 8.0+ | 8.0+ 主从复制 |
-| Elasticsearch | 7.x | 8.x 3节点集群 |
-| Redis | 6.x | 7.x 哨兵模式 |
+| MySQL | 8.0+ | 单机 8.0，宿主目录持久化 |
+| Redis | 6.x | 7.x，AOF 持久化 |
 | Nginx | 1.20+ | 反向代理 + gzip + SSL |
 | Flutter SDK | 3.41+ | 最新稳定版 |
 | HarmonyOS | API 12 | DevEco Studio 5.x |

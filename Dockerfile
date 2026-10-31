@@ -16,12 +16,13 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
         freetype-dev \
         oniguruma-dev \
         libxml2-dev \
+        libzip-dev \
         curl \
         git \
         unzip \
     && docker-php-source extract
 
-# PHP 扩展
+# PHP 扩展（zip 供 PhpSpreadsheet 使用）
 RUN docker-php-ext-install -j$(nproc) \
         pdo pdo_mysql \
         pcntl \
@@ -30,7 +31,15 @@ RUN docker-php-ext-install -j$(nproc) \
         xml \
         dom \
         xmlwriter \
+        zip \
     && docker-php-ext-enable opcache pcntl
+
+# 原生 Redis 扩展（support\Redis 硬依赖），编译后清理构建依赖
+RUN apk add --no-cache --virtual .pecl-deps $PHPIZE_DEPS \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    && apk del .pecl-deps \
+    && rm -rf /tmp/pear
 
 # OPcache 生产配置
 RUN echo "opcache.enable=1" >> "$PHP_INI_DIR/php.ini" \
@@ -41,16 +50,21 @@ RUN echo "opcache.enable=1" >> "$PHP_INI_DIR/php.ini" \
 # Composer
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
-RUN docker-php-source delete && rm -rf /var/cache/apk/*
+RUN docker-php-source delete \
+    && rm -rf /var/cache/apk/* /tmp/*
 
 RUN mkdir -p /app
 WORKDIR /app
 
-# 依赖安装（利用 Docker 层缓存）
+# 依赖安装（利用 Docker 层缓存，锁定版本可复现）
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --no-interaction --optimize-autoloader
+RUN composer install --no-dev --no-interaction --optimize-autoloader \
+    && rm -rf /root/.composer/cache /tmp/*
 
 COPY . .
 
-EXPOSE 8787
+# 运行时 / 上传目录预建，生产 compose 以宿主机目录覆盖挂载
+RUN mkdir -p /app/runtime /app/public/upload
+
+EXPOSE 8791
 CMD ["php", "start.php", "start"]

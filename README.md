@@ -11,7 +11,7 @@
 >
 > 项目官网：[中文](https://package.erik.xyz/open-admin/) · [English](https://package.erik.xyz/open-admin/en/) · [本地源码](site/index.html)（响应式静态站点，无后端依赖）
 
-> [English](docs/translations/README.en.md) | [한국어](docs/translations/README.ko.md) | [Русский](docs/translations/README.ru.md) | [Deutsch](docs/translations/README.de.md) | [Français](docs/translations/README.fr.md) | [Español](docs/translations/README.es.md) | [Português](docs/translations/README.pt.md) | [हिन्दी](docs/translations/README.hi.md) | [العربية](docs/translations/README.ar.md) | [বাংলা](docs/translations/README.bn.md) | [Bahasa Indonesia](docs/translations/README.id.md) | [日本語](docs/translations/README.ja.md) | [架构设计图](docs/ARCHITECTURE.md) | [设计文档](docs/DESIGN.md) | [安全架构](docs/SECURITY.md) | [API 参考](docs/API.md)
+> [English](docs/translations/README.en.md) | [架构设计图](docs/ARCHITECTURE.md) | [设计文档](docs/DESIGN.md) | [安全架构](docs/SECURITY.md) | [API 参考](docs/API.md)
 
 ## 项目宠物 · 小安
 
@@ -90,7 +90,6 @@ SVG / PNG）**不是开源资产**，版权归作者所有。未经书面许可�
 | 后端框架 | webman v2 (workerman) | 超高性能 PHP 常驻进程框架 |
 | PHP 版本 | 8.3+ | |
 | 数据库 | MySQL 8.0+ | 表前缀 `erik_`，BIGINT 非自增主键 |
-| 搜索引擎 | Elasticsearch | 通过 `webman-scout` 同步与查询 |
 | 管理端前端 | Flutter 3.x | Web 端为 PC 管理后台风格（`apps/flutter/`） |
 | 移动端 | HarmonyOS ArkTS | 鸿蒙原生客户端（`apps/harmonyos/`），支持手机/平板/2in1 |
 
@@ -103,7 +102,6 @@ SVG / PNG）**不是开源资产**，版权归作者所有。未经书面许可�
 | `erikwang2013/jwt-webman` | JWT 认证令牌签发与校验 |
 | `erikwang2013/encryption` | 接口传输层敏感数据加解密 |
 | `erikwang2013/encryptable` | 数据库存储层敏感字段自动加解密 |
-| `erikwang2013/webman-scout` | Elasticsearch 数据同步与全文检索 |
 | `erikwang2013/season` | 国家旗帜数据 |
 | `erikwang2013/poster-php` | 点击验证码生成与校验 + 海报生成 |
 | `phpoffice/phpspreadsheet` | Excel 导出 |
@@ -172,12 +170,13 @@ open-admin/
 │   │   ├── architecture.svg    # 系统架构设计图（SVG）
 │   │   ├── features.svg        # 功能设计图（SVG）
 │   │   ├── lifecycle.svg       # 生命周期图（SVG）
-│   │   └── 01..12-*.md         # 分解图（Mermaid，12 种语言译本）
-│   └── translations/           # 多语言文档（12 种语言 × README/CLAUDE）
+│   │   └── 01..12-*.md         # 分解图（Mermaid，中英双语）
+│   └── translations/           # 英文文档（README.en / CLAUDE.en）
 ├── public/                     # 公共入口（Web 根目录）
 │   ├── img/pet.svg             # 项目宠物「小安」（SVG，兼作站点图标）
 │   └── favicon.ico             # 兼容旧浏览器的 .ico 兜底
 ├── site/                       # 响应式静态官网（HTML/CSS/JS + 本地资源）
+├── deploy/                     # 单机生产编排（compose + 密钥生成 + Nginx/TLS）
 ├── resource/translations/      # 运行时语言包（zh_CN / en）
 ├── tests/                      # PHPUnit 测试
 ├── runtime/                    # 运行时文件
@@ -208,7 +207,6 @@ open-admin/
 - Composer 2.x
 - MySQL >= 8.0
 - Flutter >= 3.41（仅前端开发需要）
-- Elasticsearch >= 7.x（可选，搜索功能需要）
 
 ## 快速开始
 
@@ -235,7 +233,6 @@ cp .env.example .env
 | `ENCRYPTION_KEY` | API 加密密钥 | 32 字节默认值 |
 | `SNOWFLAKE_DATACENTER_ID` | 数据中心 ID (0-31) | `1` |
 | `SNOWFLAKE_WORKER_ID` | 工作节点 ID (0-31) | `1` |
-| `SCOUT_HOSTS` | ES 地址 | `http://localhost:9200` |
 
 **生产环境务必修改所有密钥为随机字符串。**
 
@@ -247,14 +244,14 @@ cp .env.example .env
 php start.php start
 ```
 
-默认监听 `http://0.0.0.0:8787`（端口可在 `config/server.php` 修改）。
+默认监听 `http://0.0.0.0:8791`（端口可在 `config/process.php` 修改）。
 
-浏览器打开 **`http://localhost:8787/install`**，按向导填入：
+浏览器打开 **`http://localhost:8791/install`**，按向导填入：
 
 | 步骤 | 内容 |
 |------|------|
 | ① 数据库配置 | 主机地址、端口、数据库名、用户名、密码 |
-| ② 管理员设置 | 管理员用户名、密码（默认 admin / admin888） |
+| ② 管理员设置 | 由向导创建管理员账号，表单为空，请自行填写用户名和密码（系统无内置默认账号） |
 
 点击「开始安装」后自动完成建表、播种权限数据、创建管理员账号，并写入 `.env` 数据库配置。
 
@@ -262,7 +259,7 @@ php start.php start
 
 ### 4. 登录
 
-访问 `http://localhost:8787`，使用安装时设置的管理员账号密码登录。
+访问 `http://localhost:8791`，使用安装时设置的管理员账号密码登录。
 
 ### 5. 启动前端（可选）
 
@@ -278,30 +275,31 @@ flutter run -d chrome    # Web 端（PC 管理后台风格）
 
 使用 DevEco Studio 打开 `apps/harmonyos/` 目录，连接真机或模拟器运行。
 
-### 6. Docker Compose 一键部署（推荐生产环境）
+### 6. Docker Compose 快速开始（本地/单机试跑）
 
-项目提供完整的 Docker 编排方案，包含 5 个服务：Nginx、PHP (webman app)、MySQL、Redis、Elasticsearch。
+项目根目录的 `docker-compose.yml` 提供 4 个服务的快速开始编排：Nginx、PHP (webman app)、MySQL、Redis。
 
 ```bash
-# 1. 配置 Docker 环境变量
+# 1. 配置 Docker 环境变量（DB_HOST=mysql、REDIS_HOST=redis 已指向 compose 服务）
 cp .env.docker .env
 
 # 2. 启动所有服务
-docker-compose up -d
+docker compose up -d
 
-# 3. 浏览器访问安装向导完成初始化
-# http://localhost:8787/install  (填入数据库和管理员信息)
-# 或手动执行 SQL 迁移（进入 app 容器）:
-# docker-compose exec app mysql -h mysql -u root -p < database/install.sql
+# 3. 浏览器访问安装向导完成初始化（Nginx 转发到 app:8791）
+# http://localhost/install
+# 数据库主机填写 mysql，端口 3306，库名/用户名/密码见 .env
 
 # 4. 访问
-# http://localhost:8787  (webman)
-# http://localhost:8080  (Nginx 反向代理)
+# http://localhost  (Nginx: 静态官网 + 反向代理 webman)
+# http://localhost/api/v1/...  (API)
 ```
 
-- `Dockerfile`: PHP 8.3 + OPcache + Composer，基于 `php:8.3-cli`
-- `docker-compose.yml`: 5 个服务编排，网络隔离，数据卷持久化
+- `Dockerfile`: PHP 8.3（Alpine）+ OPcache + zip/redis 扩展 + Composer
+- `docker-compose.yml`: 4 个服务编排；app 仅在容器内网监听 8791，对外由 Nginx 暴露 80
 - `.env.docker`: Docker 环境专用环境变量
+
+> 生产环境请使用 `deploy/` 单机编排（nginx/app/init/mysql/redis + 自动生成密钥 + TLS），见下文「部署」。
 
 
 ## 静态官网
@@ -362,24 +360,40 @@ docker-compose up -d
 
 ## 部署
 
-### Docker Compose（推荐）
+### 快速开始（4 个服务）
 
-项目根目录提供 `docker-compose.yml`，编排 5 个服务：
-
-| 服务 | 镜像 | 端口 |
-|------|------|------|
-| `nginx` | nginx:alpine | 80, 443 |
-| `app` | 本地 `Dockerfile` 构建 | 8787 |
-| `mysql` | mysql:8.0 | 3306 |
-| `redis` | redis:7-alpine | 6379 |
-| `elasticsearch` | elasticsearch:8.x | 9200 |
-
-PHP 镜像通过 `Dockerfile` 构建，基础镜像 `php:8.3-cli`，启用 OPcache。
+项目根目录 `docker-compose.yml` 编排 `nginx`、`app`、`mysql`、`redis`，适合本地或单机试跑：
 
 ```bash
 cp .env.docker .env
-docker-compose up -d
+docker compose up -d
 ```
+
+### 生产部署（单机 5 个服务）
+
+生产编排位于 `deploy/`，单机运行 `nginx`、`app`、`init`（一次性初始化）、`mysql`、`redis`，不依赖全文检索引擎：
+
+| 服务 | 说明 |
+|------|------|
+| `nginx` | 80/443，TLS 终止、静态官网、反向代理到 `app:8791` |
+| `app` | webman PHP 8.3 应用，容器内监听 8791，仅经 Nginx 暴露 |
+| `init` | 一次性初始化：建表、创建管理员，完成后退出 |
+| `mysql` | MySQL 8.0，数据与日志绑定宿主机目录 |
+| `redis` | Redis 7，AOF 持久化到宿主机目录 |
+
+```bash
+cd deploy
+./generate-secrets.sh          # 生成 deploy/.env、密钥、自签名 TLS 证书与管理员密码
+docker compose up -d --build
+```
+
+- `generate-secrets.sh` 默认幂等，只补齐缺失值；生成 `deploy/.env`、`deploy/secrets/rsa_public_key.pem`、管理员密码 `deploy/secrets/admin_password.txt`，RSA 私钥写入 `.env` 的 `RSA_PRIVATE_KEY`。
+- `--regenerate` 会先把当前 `deploy/.env` 与 `deploy/secrets/` 归档到 `deploy/secrets/archive/<时间戳>/`，再整体重新生成；旧密钥保留在归档中。
+- TLS：默认按 `DOMAIN`（默认 `localhost`）生成自签名证书；真实域名证书直接替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`，脚本不会覆盖已有证书（`--regenerate` 除外）。80 端口仅放行 `/.well-known/acme-challenge/`，其余 301 到 HTTPS。
+- 持久化与日志全部绑定宿主机：`deploy/data/{mysql,mysql-logs,redis,runtime,upload,nginx/logs,backups}`；Docker 日志按 `10m × 3` 轮转。
+- RSA 公钥：`GET /api/v1/auth/public-key` 返回当前公钥，Flutter 登录前动态获取、失败时回退内置公钥；`--regenerate` 换钥后需确认该端点可达，依赖内置回退的旧客户端需重新构建。
+
+PHP 镜像通过 `Dockerfile` 构建，基础镜像 `php:8.3-cli-alpine`，启用 OPcache 并安装 zip/redis 扩展。
 
 ### CI/CD
 

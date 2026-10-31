@@ -54,7 +54,8 @@ return [
         ],
         // 文件存储配置（storage=file 时生效）
         'file' => [
-            'path' => null, // null=使用系统临时目录
+            // 容器部署指向宿主机挂载的 runtime/captcha，避免缓存写进容器层
+            'path' => getenv('POSTER_CAPTCHA_FILE_PATH') ?: null,
         ],
          'click_words' => [
             '合',

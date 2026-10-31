@@ -14,9 +14,6 @@ use Throwable;
 /**
  * @Apidoc\Title("验证码")
  */
-/**
- * @Apidoc\Title("验证码")
- */
 class CaptchaController
 {
     /**
@@ -33,26 +30,40 @@ class CaptchaController
      */
     public function generate(Request $request): Response
     {
+        // input 可能是数组（JSON body），is_string 不通过时用默认值，避免 Array to string 异常
+        $type = $request->input('type', 'random');
+        if (!is_string($type) || !in_array($type, ['click', 'slider', 'rotate', 'random'], true)) {
+            $type = 'random';
+        }
         $difficulty = $request->input('difficulty', 'medium');
+        if (!is_string($difficulty) || !in_array($difficulty, ['easy', 'medium', 'hard'], true)) {
+            $difficulty = 'medium';
+        }
 
         try {
-            $result = captcha_create('random');
+            $result = captcha_create($type, ['difficulty' => $difficulty]);
+
+            // 客户端从 extra.targets 读取点击提示；poster 包返回的键名是 extra.texts
+            $extra = is_array($result['extra'] ?? null) ? $result['extra'] : [];
+            $extra['targets'] = $extra['texts'] ?? [];
 
             return json([
                 'code' => 0,
                 'message' => 'success',
                 'data' => [
-                    'key'   => $result['key'],
-                    'type'  => $result['type'],
-                    'image' => $result['image'], // POSTER 返回 data URI，经 json_encode 后为 base64
-                    'extra' => $result['extra'] ?? new \stdClass(),
+                    'key'     => $result['key'],
+                    'type'    => $result['type'],
+                    'image'   => $result['image'], // POSTER 返回 data URI，经 json_encode 后为 base64
+                    'extra'   => $extra,
+                    'targets' => $extra['targets'], // HarmonyOS 客户端读取顶层 data.targets
                 ],
             ]);
-        } catch (Throwable $e) {
+        } catch (Throwable) {
+            // 不向客户端暴露异常细节
             return json([
                 'code' => 500,
-                'message' => '验证码生成失败: ' . $e->getMessage(),
-                'data' => ['file' => $e->getFile(), 'line' => $e->getLine()],
+                'message' => '验证码生成失败',
+                'data' => [],
             ]);
         }
     }

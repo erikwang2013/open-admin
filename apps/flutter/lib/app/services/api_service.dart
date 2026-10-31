@@ -2,7 +2,6 @@
  * Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
  */
 
-import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:get/get.dart' hide Response;
 import 'auth_service.dart';
@@ -15,6 +14,8 @@ class ApiService {
 
   late final Dio dio;
   static String get baseUrl => AppConfig.baseUrl;
+
+  Future<bool>? _refreshFuture;
 
   ApiService._() {
     dio = Dio(BaseOptions(
@@ -29,7 +30,6 @@ class ApiService {
     dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         final token = await AuthService.getToken();
-        print('ApiService.onRequest: token=${token != null ? token.substring(0, min(20, token.length)) : "null"} url=${options.uri}');
         if (token != null && token.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $token';
         }
@@ -40,12 +40,21 @@ class ApiService {
         handler.next(options);
       },
       onError: (error, handler) async {
-        if (error.response?.statusCode == 401) {
-          final refreshed = await tryRefresh();
-          if (!refreshed) {
-            await AuthService.clearToken();
-            Future.microtask(() => Get.offAllNamed('/login'));
+        final options = error.requestOptions;
+        // 登录/刷新接口的 401 是凭证错误，不是会话过期，不触发刷新和跳转
+        final isAuthRequest = options.path.contains('/api/v1/auth/');
+        final isRetry = options.extra['_retried'] == true;
+        if (error.response?.statusCode == 401 && !isAuthRequest) {
+          if (!isRetry && await tryRefresh()) {
+            options.extra['_retried'] = true;
+            try {
+              return handler.resolve(await dio.fetch(options));
+            } catch (retryError) {
+              return handler.next(retryError is DioException ? retryError : error);
+            }
           }
+          await AuthService.clearToken();
+          Future.microtask(() => Get.offAllNamed('/login'));
         }
         handler.next(error);
       },
@@ -80,17 +89,23 @@ class ApiService {
     return body;
   }
 
-  Future<bool> tryRefresh() async {
+  /// 并发 401 共享同一次刷新，避免重复刷新导致 refresh_token 失效
+  Future<bool> tryRefresh() {
+    return _refreshFuture ??= _doRefresh().whenComplete(() => _refreshFuture = null);
+  }
+
+  Future<bool> _doRefresh() async {
     final refreshToken = await AuthService.getRefreshToken();
     if (refreshToken == null) return false;
     try {
       final resp = await dio.post('/api/v1/auth/refresh', data: {'refresh_token': refreshToken});
-      final data = resp.data['data'];
-      if (resp.data['code'] == 0) {
+      final body = resp.data as Map<String, dynamic>;
+      final data = body['data'];
+      if (body['code'] == 0) {
         await AuthService.saveLogin(
           token: data['access_token'],
           refreshToken: data['refresh_token'],
-          username: data['user']?['username'] ?? '',
+          username: data['user']?['username'] ?? await AuthService.getUsername() ?? '',
         );
         return true;
       }

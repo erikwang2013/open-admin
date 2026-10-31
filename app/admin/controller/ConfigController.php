@@ -30,8 +30,7 @@ class ConfigController extends BaseController
      */
     public function index(Request $request): Response
     {
-        $page  = (int) $request->input('page', 1);
-        $limit = (int) $request->input('limit', 15);
+        [$page, $limit] = self::clampPage((int) $request->input('page', 1), (int) $request->input('limit', 15));
         $group = $request->input('group', '');
 
         $query = SystemConfig::query();

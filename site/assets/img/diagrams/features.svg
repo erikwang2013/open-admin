@@ -164,7 +164,7 @@
   <text class="fItem" x="50" y="549">· Accept-Language 自动协商</text>
   <text class="fItem" x="50" y="568">· ?lang= 显式覆盖</text>
   <text class="fItem" x="50" y="587">· zh_CN / en 运行时语言包</text>
-  <text class="fItem" x="50" y="606">· 文档 12 种语言译本</text>
+  <text class="fItem" x="50" y="606">· 文档中英双语</text>
 
   <!-- 运维 -->
   <rect class="card" x="330" y="456" width="280" height="152" rx="14"/>

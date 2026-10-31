@@ -17,7 +17,7 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _userCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
-  final _dio = Dio(BaseOptions(baseUrl: ApiService.baseUrl));
+  final _api = ApiService();
 
   bool _loading = false;
   String? _error;
@@ -33,18 +33,23 @@ class _LoginPageState extends State<LoginPage> {
     if (captchaKey == null) { setState(() => _loading = false); return; }
 
     try {
-      final resp = await _dio.post('/api/v1/auth/login', data: {
+      // 服务端生成新 RSA 密钥后，先拉取当前公钥；失败时回退内置公钥
+      await EncryptionService.ensurePublicKey();
+      final resp = await _api.post('/api/v1/auth/login', data: {
         'username': u,
         'password': EncryptionService.encrypt(p),
         'captcha_key': captchaKey,
       });
-      if (resp.data['code'] == 0) {
-        final d = resp.data['data'];
-        await AuthService.saveLogin(token: d['access_token'], refreshToken: d['refresh_token'], username: d['user']['username']);
-        if (mounted) Get.offAllNamed('/dashboard');
-      } else {
-        if (mounted) setState(() => _error = resp.data['message'] ?? t('login_failed'));
-      }
+      final d = resp['data'];
+      await AuthService.saveLogin(token: d['access_token'], refreshToken: d['refresh_token'], username: d['user']['username']);
+      if (mounted) Get.offAllNamed('/dashboard');
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } on DioException catch (e) {
+      // 网络层异常或其他 HTTP 错误；凭证错误是 HTTP 200 + code 401，走上面的 ApiException 分支
+      final body = e.response?.data;
+      final message = body is Map ? body['message'] : null;
+      if (mounted) setState(() => _error = message?.toString() ?? t('login_network_error'));
     } catch (_) {
       if (mounted) setState(() => _error = t('login_network_error'));
     } finally {

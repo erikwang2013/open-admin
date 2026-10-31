@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace app\admin\controller;
 
+use app\common\SnowflakeService;
 use support\Request;
 use support\Response;
 
@@ -55,7 +56,7 @@ class InstallController
         $db = $request->post();
         $errors = $this->validateDb($db);
         if ($errors) {
-            return response($this->renderStep1(implode('<br>', $errors)));
+            return response($this->renderStep1(implode("\n", $errors)));
         }
         $connError = $this->testConnection($db);
         if ($connError) {
@@ -76,29 +77,58 @@ class InstallController
 
         $dbErrors = $this->validateDb($db);
         if ($dbErrors) {
-            return response($this->renderStep1(implode('<br>', $dbErrors)));
+            return response($this->renderStep1(implode("\n", $dbErrors)));
         }
         $adminErrors = $this->validateAdmin($admin);
         if ($adminErrors) {
-            return response($this->renderStep2($db, implode('<br>', $adminErrors)));
+            return response($this->renderStep2($db, implode("\n", $adminErrors)));
         }
 
         try {
             $pdo = $this->getPdo($db);
-            $sqlFile = base_path() . '/database/install.sql';
-            $sql = file_get_contents($sqlFile);
 
-            // 替换默认管理员凭证
-            $hash = password_hash($admin['password'], PASSWORD_BCRYPT);
-            $user = addslashes($admin['username']);
-            $name = addslashes($admin['real_name'] ?? '系统管理员');
-            $sql = str_replace(
-                ["'__ADMIN_USER__'", "'__ADMIN_PASS__'", "'__ADMIN_NAME__'"],
-                ["'{$user}'", "'{$hash}'", "'{$name}'"],
-                $sql
-            );
+            // 判断目标库状态，避免 DROP TABLE 覆盖已有数据
+            $schemaReady = false;
+            if ($pdo->query("SHOW TABLES LIKE 'erik\\_admin\\_user'")->fetchColumn()) {
+                if ((int) $pdo->query('SELECT COUNT(*) FROM erik_admin_user')->fetchColumn() > 0) {
+                    return response($this->renderStep2($db, '系统已安装'));
+                }
+                // 表已存在但为空：Docker 入口已执行过 install.sql，只补建管理员
+                $schemaReady = true;
+            } else {
+                $otherTables = (int) $pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name LIKE 'erik\\_%'")->fetchColumn();
+                if ($otherTables > 0) {
+                    return response($this->renderStep2($db, '数据库非空（存在 erik_ 表但缺少用户表），已拒绝安装以避免覆盖数据'));
+                }
+            }
 
-            $pdo->exec($sql);
+            if (!$schemaReady) {
+                $sqlFile = base_path() . '/database/install.sql';
+                $sql = file_get_contents($sqlFile);
+                $pdo->exec($sql);
+            }
+
+            // 创建首个管理员并绑定超级管理员角色（事务保证不留无角色管理员）
+            $pdo->beginTransaction();
+            try {
+                $userId = SnowflakeService::generate();
+                $stmt = $pdo->prepare('INSERT INTO `erik_admin_user` (`id`, `username`, `password`, `real_name`, `status`, `created_at`, `updated_at`) VALUES (?, ?, ?, ?, 1, NOW(), NOW())');
+                $stmt->execute([
+                    $userId,
+                    $admin['username'],
+                    password_hash($admin['password'], PASSWORD_BCRYPT),
+                    $admin['real_name'] ?? '系统管理员',
+                ]);
+
+                $pdo->prepare('INSERT INTO `erik_admin_user_role` (`user_id`, `role_id`) VALUES (?, ?)')
+                    ->execute([$userId, '10000000000000001']);
+
+                $pdo->commit();
+            } catch (\Throwable $e) {
+                $pdo->rollBack();
+                throw $e;
+            }
+
             $this->writeEnv($db);
             file_put_contents(runtime_path('install.lock'), date('Y-m-d H:i:s'));
 
@@ -159,6 +189,17 @@ class InstallController
                 $env .= "\n{$key}={$val}";
             }
         }
+
+        // 缺失或为空时补充随机 hashids 盐值，避免空盐部署
+        foreach (['HASHIDS_SALT', 'HASHIDS_ALT_SALT'] as $key) {
+            if (preg_match("/^{$key}=\S/m", $env)) {
+                continue;
+            }
+            $salt = bin2hex(random_bytes(16));
+            $pattern = "/^{$key}=.*$/m";
+            $env = preg_match($pattern, $env) ? preg_replace($pattern, "{$key}={$salt}", $env) : $env . "\n{$key}={$salt}";
+        }
+
         file_put_contents($envFile, $env);
     }
 
@@ -186,16 +227,16 @@ class InstallController
         $info = "{$db['username']}@{$db['host']}:{$db['port']}/{$db['database']}";
         $hidden = '';
         foreach ($db as $k => $v) {
-            $hidden .= '<input type="hidden" name="db[' . htmlspecialchars($k) . ']" value="' . htmlspecialchars($v) . '">';
+            $hidden .= '<input type="hidden" name="db[' . $this->e((string) $k) . ']" value="' . $this->e((string) $v) . '">';
         }
         return $this->layout('步骤 2/3 · 管理员账号', <<<HTML
-            <div class="info">数据库连接成功: <code>{$info}</code></div>
+            <div class="info">数据库连接成功: <code>{$this->e($info)}</code></div>
             {$this->alert($error, 'error')}
             <form method="post" action="/install/install">
                 {$hidden}
-                <div class="field"><label>管理员用户名</label><input name="admin[username]" value="admin" required></div>
-                <div class="field"><label>管理员密码</label><div class="pwd-wrap"><input name="admin[password]" type="password" value="admin888" required><span class="eye" onclick="togglePwd(this)">👁</span></div></div>
-                <div class="field"><label>确认密码</label><div class="pwd-wrap"><input name="admin[password_confirm]" type="password" value="admin888" required><span class="eye" onclick="togglePwd(this)">👁</span></div></div>
+                <div class="field"><label>管理员用户名</label><input name="admin[username]" required></div>
+                <div class="field"><label>管理员密码</label><div class="pwd-wrap"><input name="admin[password]" type="password" required><span class="eye" onclick="togglePwd(this)">👁</span></div></div>
+                <div class="field"><label>确认密码</label><div class="pwd-wrap"><input name="admin[password_confirm]" type="password" required><span class="eye" onclick="togglePwd(this)">👁</span></div></div>
                 <div class="field"><label>姓名</label><input name="admin[real_name]" value="系统管理员"></div>
                 <div class="actions"><button type="submit">开始安装</button></div>
             </form>
@@ -207,11 +248,11 @@ class InstallController
         return $this->layout('安装完成', <<<HTML
             <div style="text-align:center">
                 <h2 style="color:#52c41a;margin-bottom:16px">安装成功</h2>
-                <p>管理员账号: <strong>{$admin['username']}</strong></p>
-                <p>管理员密码: <strong>{$admin['password']}</strong></p>
+                <p>管理员账号: <strong>{$this->e($admin['username'])}</strong></p>
+                <p>管理员密码: <strong>{$this->e($admin['password'])}</strong></p>
                 <hr>
                 <a href="/" style="display:inline-block;padding:10px 32px;background:#1890ff;color:#fff;border-radius:6px;text-decoration:none;font-size:15px">进入系统</a>
-                <p style="margin-top:12px;font-size:12px;color:#999">安装完成，请删除 <code>runtime/install.lock</code> 以防意外重复安装。</p>
+                <p style="margin-top:12px;font-size:12px;color:#999">安装完成，请勿删除 <code>runtime/install.lock</code>。</p>
             </div>
         HTML);
     }
@@ -222,7 +263,15 @@ class InstallController
         $color = $type === 'error' ? '#cf1322' : '#0050b3';
         $bg   = $type === 'error' ? '#fff2f0' : '#e6f7ff';
         $border = $type === 'error' ? '#ffccc7' : '#91d5ff';
-        return "<div style='background:{$bg};border:1px solid {$border};color:{$color};padding:12px;border-radius:6px;margin-bottom:16px;font-size:13px'>{$msg}</div>";
+        return "<div style='background:{$bg};border:1px solid {$border};color:{$color};padding:12px;border-radius:6px;margin-bottom:16px;font-size:13px'>" . nl2br($this->e($msg)) . "</div>";
+    }
+
+    /**
+     * HTML 转义
+     */
+    private function e(string $value): string
+    {
+        return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
     }
 
     private function layout(string $title, string $body): string
@@ -232,7 +281,7 @@ class InstallController
         <html lang="zh-CN">
         <head>
             <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-            <title>{$title} — 开放管理后台</title>
+            <title>{$this->e($title)} — 开放管理后台</title>
             <link rel="icon" type="image/svg+xml" href="/img/pet.svg">
             <style>
                 *{margin:0;padding:0;box-sizing:border-box}
@@ -259,7 +308,7 @@ class InstallController
             <div class="box">
                 <img class="pet" src="/img/pet.svg" alt="小安 — open-admin 项目宠物" width="76" height="101">
                 <h1>开放管理后台</h1>
-                <div class="sub">安装向导 · {$title}</div>
+                <div class="sub">安装向导 · {$this->e($title)}</div>
                 {$body}
             </div>
             <script>function togglePwd(el){var inp=el.parentNode.querySelector('input');if(inp.type==='password'){inp.type='text';el.classList.add('show')}else{inp.type='password';el.classList.remove('show')}}</script>

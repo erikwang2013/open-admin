@@ -55,7 +55,7 @@
   <text class="sTitle" x="222" y="256">Boot</text>
   <text class="sWhere" x="330" y="256">php start.php start · webman v2</text>
   <text class="sItem" x="222" y="278">Load .env and config/*.php, start Http / Monitor and keep them resident (no FPM cold start)</text>
-  <text class="sItem" x="222" y="295">Build MySQL / Redis / Elasticsearch pools, register global middleware and routes</text>
+  <text class="sItem" x="222" y="295">Build MySQL / Redis pools, register global middleware and routes</text>
 
   <path d="M 150 285 L 150 335" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
 
@@ -110,7 +110,7 @@
   <text class="sTitle" x="222" y="706">Persist</text>
   <text class="sWhere" x="342" y="706">Model / Service</text>
   <text class="sItem" x="222" y="728">Snowflake BIGINT key → encryptable sensitive fields → MySQL write</text>
-  <text class="sItem" x="222" y="745">webman-scout syncs Elasticsearch; Redis stores cache / captcha / permissions / rate counts</text>
+  <text class="sItem" x="222" y="745">Redis stores cache / captcha / permissions / rate counts; data persists under deploy/data</text>
 
   <path d="M 150 735 L 150 785" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
 

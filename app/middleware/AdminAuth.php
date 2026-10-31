@@ -29,18 +29,18 @@ class AdminAuth
 
     public function process(Request $request, callable $next): Response
     {
-        $token = $request->header('Authorization', '');
-        $token = str_replace('Bearer ', '', $token);
+        $header = $request->header('Authorization', '');
+        $token  = preg_replace('/^Bearer\s+/i', '', trim($header));
 
         if (empty($token)) {
-            return json(['code' => 401, 'message' => '未登录', 'data' => []]);
+            return json(['code' => 401, 'message' => '未登录', 'data' => []])->withStatus(401);
         }
 
         // 检查 JWT 黑名单
         $blacklistKey = 'jwt_blacklist:' . md5($token);
         try {
             if (Redis::get($blacklistKey)) {
-                return json(['code' => 401, 'message' => 'Token已失效，请重新登录', 'data' => []]);
+                return json(['code' => 401, 'message' => 'Token已失效，请重新登录', 'data' => []])->withStatus(401);
             }
         } catch (\Throwable $e) {
             // Redis down, skip blacklist check
@@ -48,10 +48,14 @@ class AdminAuth
 
         try {
             $payload = self::getJWT()->decode($token);
+            // 仅接受 access token（旧令牌无 token_type 字段，按 access 处理）
+            if (($payload['token_type'] ?? 'access') !== 'access') {
+                return json(['code' => 401, 'message' => 'Token已过期或无效', 'data' => []])->withStatus(401);
+            }
             $request->adminId = $payload['sub'] ?? 0;
             $request->adminUsername = $payload['username'] ?? '';
         } catch (JWTException | \Exception $e) {
-            return json(['code' => 401, 'message' => 'Token已过期或无效', 'data' => []]);
+            return json(['code' => 401, 'message' => 'Token已过期或无效', 'data' => []])->withStatus(401);
         }
 
         return $next($request);

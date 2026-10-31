@@ -9,6 +9,7 @@ namespace app\admin\controller;
 
 use app\model\AdminUser;
 use app\common\EncryptionService;
+use Illuminate\Database\QueryException;
 use support\Request;
 use support\Response;
 use Webman\Validation\Validator;
@@ -34,8 +35,7 @@ class UserController extends BaseController
      */
     public function index(Request $request): Response
     {
-        $page = (int) $request->input('page', 1);
-        $limit = (int) $request->input('limit', 15);
+        [$page, $limit] = self::clampPage((int) $request->input('page', 1), (int) $request->input('limit', 15));
         $keyword = $request->input('keyword', '');
         $status = $request->input('status');
 
@@ -113,7 +113,7 @@ class UserController extends BaseController
             return $this->fail($validator->errors()->first(), 422);
         }
 
-        $exists = AdminUser::where('username', $request->input('username'))->exists();
+        $exists = AdminUser::withTrashed()->where('username', $request->input('username'))->exists();
         if ($exists) {
             return $this->fail(trans('messages.username_exists'), 422);
         }
@@ -126,7 +126,12 @@ class UserController extends BaseController
         $user->status = (int) $request->input('status', 1);
         $user->phone = $phone;
         $user->email = $email;
-        $user->save();
+        try {
+            $user->save();
+        } catch (QueryException $e) {
+            // 并发创建同名用户时唯一索引兜底
+            return $this->fail(trans('messages.username_exists'), 422);
+        }
 
         $udata = $user->toArray();
         unset($udata['password'], $udata['id_card']);
@@ -218,6 +223,10 @@ class UserController extends BaseController
             return $this->fail($error, 422);
         }
 
+        // 软删除前腾出用户名，释放唯一索引；截断以适配 username varchar(50)
+        $suffix = '#deleted' . $user->id;
+        $user->username = mb_substr($user->username, 0, max(0, 50 - mb_strlen($suffix))) . $suffix;
+        $user->save();
         $user->delete();
         return $this->success([], trans('messages.delete_success'));
     }
@@ -259,7 +268,12 @@ class UserController extends BaseController
             return $this->fail(trans('messages.invalid_ids') . ': ' . implode(', ', $invalidIds), 422);
         }
 
-        AdminUser::whereIn('id', $decodedIds)->delete();
+        foreach (AdminUser::whereIn('id', $decodedIds)->get() as $user) {
+            $suffix = '#deleted' . $user->id;
+            $user->username = mb_substr($user->username, 0, max(0, 50 - mb_strlen($suffix))) . $suffix;
+            $user->save();
+            $user->delete();
+        }
 
         return $this->success(['count' => count($decodedIds)], '删除成功');
     }

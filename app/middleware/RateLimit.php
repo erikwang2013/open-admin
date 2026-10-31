@@ -57,7 +57,7 @@ redis.call('EXPIRE', KEYS[1], ARGV[5])
 return {1, count + 1}
 LUA;
         try {
-            $result = Redis::eval($lua, 1, $key, $windowStart, $limit, $now, $now . '.' . mt_rand(), $window + 10);
+            $result = Redis::eval($lua, [$key, $windowStart, $limit, $now, $now . '.' . mt_rand(), $window + 10], 1);
         } catch (\Throwable $e) {
             return $handler($request); // Redis down, fail open
         }

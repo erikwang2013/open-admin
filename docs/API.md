@@ -6,7 +6,7 @@
 
 开放管理后台 (open-admin) 基于 webman v2 构建，提供 RESTful JSON API。所有管理端接口需要 JWT 认证与 RBAC 权限校验，公开接口的版本号体现在 URL 前缀中（如 `/api/v1/auth/login`），路由到对应的版本化控制器。
 
-- **基础 URL**: `http://localhost:8787`
+- **基础 URL**: `http://localhost:8791`（本地直连 webman；Docker 部署经 Nginx 访问 `http://localhost/api/v1/...`）
 - **API 版本**: 版本号体现在 URL 前缀中（`/api/v1/...`、`/api/v2/...`），不使用请求头
 - **语言**: 通过 `Accept-Language` 头或 `?lang=zh_CN|en` 参数切换（默认 zh_CN），Locale 中间件自动检测
 
@@ -63,13 +63,12 @@ GET /health
     "php": "8.3.0",
     "database": "ok",
     "redis": "ok",
-    "elasticsearch": "ok",
     "timestamp": 1716249600
   }
 }
 ```
 
-`database`、`redis`、`elasticsearch` 取值: `"ok"` | `"unavailable"`。`elasticsearch` 在 ES 不可达时返回 `"unavailable"`，集群健康状态为非 green/yellow 则返回实际的 status 值（如 `"red"`）。
+`database`、`redis` 取值: `"ok"` | `"unavailable"`。
 
 ### 3.2 API 文档
 
@@ -259,7 +258,7 @@ POST /api/v1/auth/login
 | 字段 | 类型 | 必填 | 验证规则 | 说明 |
 |------|------|------|---------|------|
 | username | string | 是 | min:3, max:50 | 用户名 |
-| password | string | 是 | min:6, max:32 (明文) | AES-256-CBC-HMAC 加密后 Base64 编码（兼容明文） |
+| password | string | 是 | min:6, max:32 (明文) | RSA-2048 PKCS1v1.5 加密后 Base64 编码（兼容 AES/明文回退） |
 | captcha_key | string | 是 | | 验证码 key（需先通过 `/api/v1/captcha/verify` 校验） |
 
 ### 密码加密协议
@@ -276,9 +275,31 @@ POST /api/v1/auth/login
   3. 明文回退 → 直接使用原始输入
 ```
 
-公钥内置在前端应用中，无需通过网络传输。私钥仅存储在 `.env` 的 `RSA_PRIVATE_KEY` 中，不可泄露。
+公钥通过 `GET /api/v1/auth/public-key` 在登录前动态获取，Flutter 客户端同时保留内置公钥作为请求失败时的回退。私钥仅存储在 `.env` 的 `RSA_PRIVATE_KEY` 中，不可泄露。
 
 > AES 对称加密为旧版兼容方案，待所有客户端迁移至 RSA 后将移除。
+
+#### 登录公钥
+
+```
+GET /api/v1/auth/public-key
+```
+
+- **认证**: 无需
+- **限流**: 全局默认 (60次/分钟)
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "public_key": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n"
+  }
+}
+```
+
+服务端未配置 `RSA_PRIVATE_KEY` 时返回 `code: 404`。`deploy/generate-secrets.sh --regenerate` 会轮换 RSA 密钥对：换钥后请确认该端点可达；仍依赖内置回退公钥的旧客户端需重新构建。
 
 **响应示例**:
 ```json
@@ -1739,14 +1760,29 @@ OperationLog 中间件自动识别客户端平台，写入操作日志 `source` 
 
 ## 15. 部署运维
 
-### Docker Compose
+### 快速开始（4 个服务）
 
-项目根目录提供 `docker-compose.yml`，编排 5 个服务（Nginx、webman app、MySQL、Redis、Elasticsearch）。PHP 通过 `Dockerfile` 构建（基于 `php:8.3-cli`，启用 OPcache）。
+项目根目录提供 `docker-compose.yml`，编排 Nginx、webman app、MySQL、Redis 4 个服务，适合本地或单机试跑：
 
 ```bash
 cp .env.docker .env
-docker-compose up -d
+docker compose up -d
+# 安装向导: http://localhost/install（数据库主机填 mysql）
 ```
+
+### 生产部署（单机 5 个服务）
+
+生产编排位于 `deploy/`，单机运行 `nginx`、`app`、`init`（一次性初始化）、`mysql`、`redis`，不依赖全文检索引擎。PHP 通过 `Dockerfile` 构建（基于 `php:8.3-cli-alpine`，启用 OPcache 并安装 zip/redis 扩展）；webman 仅在容器内网监听 8791，由 Nginx 对外暴露 80/443。
+
+```bash
+cd deploy
+./generate-secrets.sh
+docker compose up -d --build
+```
+
+- `generate-secrets.sh` 生成 `deploy/.env`、RSA 密钥、自签名 TLS 证书与管理员密码 `deploy/secrets/admin_password.txt`；默认幂等，`--regenerate` 先把旧 `.env` 与 `secrets/` 归档到 `deploy/secrets/archive/<时间戳>/`。
+- 真实域名证书替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`；80 端口仅保留 ACME 校验路径，其余 301 到 HTTPS。
+- 持久化目录：`deploy/data/{mysql,mysql-logs,redis,runtime,upload,nginx/logs,backups}`；Docker 日志按 `10m × 3` 轮转。
 
 ### CI/CD
 

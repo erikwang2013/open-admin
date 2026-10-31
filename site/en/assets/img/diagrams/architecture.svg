@@ -40,7 +40,7 @@
 
   <!-- 标题 -->
   <text class="t1" x="40" y="56">open-admin · System Architecture</text>
-  <text class="t2" x="40" y="82">Flutter Web / HarmonyOS → Nginx → webman v2 middleware → controllers → MySQL / Redis / Elasticsearch</text>
+  <text class="t2" x="40" y="82">Flutter Web / HarmonyOS → Nginx → webman v2 middleware → controllers → MySQL / Redis</text>
 
   <g font-size="11.5" font-weight="600">
     <rect x="944" y="38" width="76" height="26" rx="13" fill="#EAF2FF" stroke="#BEDAFF"/>
@@ -155,7 +155,7 @@
   <rect class="band" x="40" y="772" width="880" height="128" rx="16"/>
   <rect x="40" y="798" width="4" height="20" rx="2" fill="#1890FF"/>
   <text class="bandName" x="56" y="814">Storage layer</text>
-  <text class="bandHint" x="155" y="814">Three stores, one Snowflake-generated key</text>
+  <text class="bandHint" x="155" y="814">Two stores, one Snowflake-generated key</text>
 
   <rect class="node" x="64" y="830" width="256" height="52" rx="12" fill="#E6F4FF" stroke="#91CAFF"/>
   <text class="chipT" x="84" y="851">MySQL 8.0 · primary</text>
@@ -164,8 +164,8 @@
   <text class="chipT" x="364" y="851">Redis 7 · cache &amp; sessions</text>
   <text class="chipS" x="364" y="869">rate limits · captcha · permissions · blacklist</text>
   <rect class="node" x="624" y="830" width="256" height="52" rx="12" fill="#E6F4FF" stroke="#91CAFF"/>
-  <text class="chipT" x="644" y="851">Elasticsearch 8 · search</text>
-  <text class="chipS" x="644" y="869">webman-scout sync &amp; full-text search</text>
+  <text class="chipT" x="644" y="851">Single-machine deploy · persistence</text>
+  <text class="chipS" x="644" y="869">deploy/data host bind mounts</text>
 
   <!-- ========== 右栏 ========== -->
   <rect class="railCard" x="948" y="112" width="252" height="190" rx="16"/>

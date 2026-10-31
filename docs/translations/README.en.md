@@ -9,7 +9,7 @@ A full-stack admin dashboard built on **webman v2 + Flutter**: authentication an
 >
 > Design diagrams: [System Architecture](../../docs/diagrams/architecture.svg) · [Feature Design](../../docs/diagrams/features.svg) · [Lifecycle](../../docs/diagrams/lifecycle.svg)
 
-> [中文](../../README.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Español](README.es.md) | [Português](README.pt.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md) | [বাংলা](README.bn.md) | [Bahasa Indonesia](README.id.md) | [日本語](README.ja.md) | [Architecture Diagrams](../ARCHITECTURE.en.md) | [Design Doc](../DESIGN.en.md) | [Security](../SECURITY.en.md) | [API Reference](../API.en.md)
+> [中文](../../README.md) | [Architecture Diagrams](../ARCHITECTURE.en.md) | [Design Doc](../DESIGN.en.md) | [Security](../SECURITY.en.md) | [API Reference](../API.en.md)
 
 ## Features
 
@@ -67,7 +67,6 @@ This copyright notice is permanent, must not be modified, removed, or reversed. 
 | Backend | webman v2 (workerman) | High-performance PHP daemon framework |
 | PHP | 8.3+ | |
 | Database | MySQL 8.0+ | Table prefix `erik_`, BIGINT non-auto-increment PKs |
-| Search | Elasticsearch | Synced via `webman-scout` |
 | Admin Frontend | Flutter 3.x | Web renders as desktop admin panel (`apps/flutter/`) |
 | Mobile | HarmonyOS ArkTS | Native HarmonyOS client (`apps/harmonyos/`), supports phone/tablet/2in1 |
 
@@ -80,7 +79,6 @@ This copyright notice is permanent, must not be modified, removed, or reversed. 
 | `erikwang2013/jwt-webman` | JWT token issuance and verification |
 | `erikwang2013/encryption` | Transport-layer sensitive data encryption |
 | `erikwang2013/encryptable` | Database-layer sensitive field auto encryption |
-| `erikwang2013/webman-scout` | Elasticsearch sync and full-text search |
 | `erikwang2013/season` | Country flag data |
 | `erikwang2013/poster-php` | Click captcha generation/verification + poster generation |
 | `phpoffice/phpspreadsheet` | Excel export |
@@ -127,10 +125,12 @@ open-admin/
 │   │   ├── architecture.svg    # System architecture design diagram (hand-written SVG)
 │   │   ├── features.svg        # Feature design diagram (hand-written SVG)
 │   │   ├── lifecycle.svg       # Lifecycle diagram (hand-written SVG)
-│   │   └── 01..12-*.md         # Decomposed diagrams (Mermaid, 12 language editions)
-│   └── translations/           # Multilingual docs (12 languages × README/CLAUDE)
+│   │   └── 01..12-*.md         # Decomposed diagrams (Mermaid, Chinese/English)
+│   └── translations/           # English docs (README.en / CLAUDE.en)
 ├── public/                     # Public entry (Web root)
 │   └── img/pet.svg             # Project pet "Xiao An" (SVG, also the site icon)
+├── site/                       # Responsive static site (Chinese/English, search, install/architecture/changelog)
+├── deploy/                     # Single-machine production stack (compose + secret generation + Nginx/TLS)
 └── vendor/                     # Composer dependencies
 ```
 
@@ -151,7 +151,6 @@ All three diagrams are **pure hand-written SVG** (no scripts, no external font d
 ![open-admin lifecycle diagram](../../docs/diagrams/lifecycle.svg)
 
 > For editable source-level diagrams, see [`docs/ARCHITECTURE.en.md`](../ARCHITECTURE.en.md) and [`docs/diagrams/`](../../docs/diagrams/) (Mermaid, can be pasted into [Mermaid Live](https://mermaid.live/) for editing).
-```
 
 ## Requirements
 
@@ -159,7 +158,6 @@ All three diagrams are **pure hand-written SVG** (no scripts, no external font d
 - Composer 2.x
 - MySQL >= 8.0
 - Flutter >= 3.41 (frontend development only)
-- Elasticsearch >= 7.x (optional, for search)
 
 ## Quick Start
 
@@ -184,7 +182,6 @@ Key environment variables:
 | `ENCRYPTION_KEY` | API encryption key | 32-byte default |
 | `SNOWFLAKE_DATACENTER_ID` | Datacenter ID (0-31) | `1` |
 | `SNOWFLAKE_WORKER_ID` | Worker ID (0-31) | `1` |
-| `SCOUT_HOSTS` | ES hosts | `http://localhost:9200` |
 
 **Always change all keys to random strings in production.**
 
@@ -196,9 +193,9 @@ Start the server, then open the install wizard in your browser to set up the dat
 php start.php start
 ```
 
-Default: `http://0.0.0.0:8787` (change port in `config/server.php`).
+Default: `http://0.0.0.0:8791` (change port in `config/server.php`).
 
-Open **`http://localhost:8787/install`** and follow the wizard:
+Open **`http://localhost:8791/install`** and follow the wizard:
 
 | Step | Description |
 |------|-------------|
@@ -211,7 +208,7 @@ Click "Start Install" — tables are created, permissions seeded, admin account 
 
 ### 4. Login
 
-Visit `http://localhost:8787` and log in with the admin credentials set during installation.
+Visit `http://localhost:8791` and log in with the admin credentials set during installation.
 
 ### 5. Start Frontend (Optional)
 
@@ -227,30 +224,30 @@ flutter run -d chrome    # Web (desktop admin panel style)
 
 Open `apps/harmonyos/` in DevEco Studio and run on a device or emulator.
 
-### 6. Docker Compose (Recommended for Production)
+### 6. Docker Compose Quick Start (local or single-host trial)
 
-Full Docker orchestration with 5 services: Nginx, PHP (webman app), MySQL, Redis, Elasticsearch.
+The `docker-compose.yml` at the project root provides a 4-service quick-start stack: Nginx, PHP (webman app), MySQL, Redis.
 
 ```bash
 # 1. Configure Docker environment variables
 cp .env.docker .env
 
 # 2. Start all services
-docker-compose up -d
+docker compose up -d
 
 # 3. Open the install wizard in your browser
-# http://localhost:8787/install  (fill in DB and admin info)
-# Or run SQL migration manually (inside the app container):
-# docker-compose exec app mysql -h mysql -u root -p < database/install.sql
+# http://localhost/install  (fill in DB and admin info; DB host: mysql)
 
 # 4. Access
-# http://localhost:8787  (webman)
-# http://localhost:8080  (Nginx reverse proxy)
+# http://localhost  (Nginx: static site + reverse proxy to webman)
+# http://localhost/api/v1/...  (API)
 ```
 
 - `Dockerfile`: PHP 8.3 + OPcache + Composer, based on `php:8.3-cli`
-- `docker-compose.yml`: 5 services, isolated network, persistent volumes
+- `docker-compose.yml`: 4 services; app listens on 8791 inside the container network only, exposed through Nginx on port 80
 - `.env.docker`: Docker-specific environment variables
+
+> For production, use the single-machine stack in `deploy/` (nginx/app/init/mysql/redis with generated secrets and TLS); see "Deployment" below.
 
 ## Database Conventions
 
@@ -300,24 +297,40 @@ The complete API reference (response format, error codes, all endpoint details, 
 
 ## Deployment
 
-### Docker Compose (Recommended)
+### Quick Start (4 services)
 
-`docker-compose.yml` in the project root orchestrates 5 services:
-
-| Service | Image | Port |
-|------|------|------|
-| `nginx` | nginx:alpine | 80, 443 |
-| `app` | Local `Dockerfile` build | 8787 |
-| `mysql` | mysql:8.0 | 3306 |
-| `redis` | redis:7-alpine | 6379 |
-| `elasticsearch` | elasticsearch:8.x | 9200 |
-
-The PHP image is built from `Dockerfile`, based on `php:8.3-cli` with OPcache enabled.
+The root `docker-compose.yml` orchestrates `nginx`, `app`, `mysql` and `redis` for local or single-host trials:
 
 ```bash
 cp .env.docker .env
-docker-compose up -d
+docker compose up -d
 ```
+
+### Production (single machine, 5 services)
+
+The production stack lives in `deploy/` and runs `nginx`, `app`, `init` (one-shot bootstrap), `mysql` and `redis` on one machine. No full-text search cluster is used.
+
+| Service | Description |
+|------|------|
+| `nginx` | 80/443, TLS termination, static site, reverse proxy to `app:8791` |
+| `app` | webman PHP 8.3 application, listens on 8791 inside the container network only |
+| `init` | One-shot bootstrap: schema and admin user, then exits |
+| `mysql` | MySQL 8.0 with data and logs on host bind mounts |
+| `redis` | Redis 7 with AOF persistence on a host bind mount |
+
+```bash
+cd deploy
+./generate-secrets.sh          # deploy/.env, keys, self-signed TLS cert, admin password
+docker compose up -d --build
+```
+
+- `generate-secrets.sh` is idempotent and only fills in missing values. It creates `deploy/.env`, `deploy/secrets/rsa_public_key.pem` and `deploy/secrets/admin_password.txt`; the RSA private key goes into `RSA_PRIVATE_KEY` in `.env`.
+- `--regenerate` archives the current `deploy/.env` and `deploy/secrets/` to `deploy/secrets/archive/<timestamp>/` before rebuilding everything; old secrets remain in the archive.
+- TLS defaults to a self-signed certificate for `DOMAIN` (`localhost` by default). Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; existing certificates are not overwritten (`--regenerate` excepted). Port 80 only serves `/.well-known/acme-challenge/` and redirects everything else to HTTPS.
+- All persistent data and logs are host bind mounts: `deploy/data/{mysql,mysql-logs,redis,runtime,upload,nginx/logs,backups}`; Docker logs rotate at `10m × 3`.
+- RSA public key: `GET /api/v1/auth/public-key` returns the current public key. Flutter fetches it before login and falls back to the embedded key on failure; after `--regenerate` rotates the keypair, verify the endpoint is reachable and rebuild clients that rely on the embedded fallback.
+
+The PHP image is built from `Dockerfile`, based on `php:8.3-cli` with OPcache enabled.
 
 ### CI/CD
 

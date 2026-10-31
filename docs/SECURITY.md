@@ -388,12 +388,14 @@ OperationLog 中间件对 POST / PUT / DELETE 请求自动记录操作日志。G
 | SNOWFLAKE_DATACENTER_ID | 数据中心 ID (0-31) | erikwang2013/snowflake-php | 单机房保持默认 |
 | ENCRYPTION_KEY | API 传输层加密密钥 | erikwang2013/encryption | 32 字节随机字符串 |
 | ENCRYPTABLE_KEY | DB 存储层加密密钥 | erikwang2013/encryptable | 32 字节随机字符串，与传输密钥不同 |
+| RSA_PRIVATE_KEY | 登录密码 RSA-2048 私钥（Base64 PEM） | erikwang2013/encryption | 由部署脚本生成，禁止泄露 |
 
 **安全要求**：
 - `.env` 文件已加入 `.gitignore`，严禁提交到版本库
 - `.env.example` 是公开模板文件，不包含真实密钥
 - 生产环境**必须**更换所有默认密钥为随机字符串
-- 建议使用 `openssl rand -base64 32` 生成密钥
+- 单机生产部署使用 `deploy/generate-secrets.sh` 生成 `deploy/.env` 与 `deploy/secrets/`（`600/700` 权限）；默认幂等，`--regenerate` 会先把旧密钥归档到 `deploy/secrets/archive/<时间戳>/`，再整体轮换
+- RSA 公钥通过 `GET /api/v1/auth/public-key` 公开（仅公钥，可安全暴露）；换钥后确认该端点可达，依赖内置回退公钥的旧客户端需重新构建
 
 ### 密钥存储隔离
 
@@ -458,6 +460,8 @@ Policy: https://erik.xyz/security-policy
 | 隐藏后端头 | `proxy_hide_header` 移除 webman 版本等敏感头 |
 
 **使用方式**：将 `docs/nginx-security.conf` 中的配置合并到您的 Nginx server 块中，根据实际域名和证书路径调整。
+
+单机生产编排使用 `deploy/nginx/default.conf`：80 端口除 `/.well-known/acme-challenge/` 外全部 301 到 HTTPS；证书读取 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`。真实域名证书直接替换这两个文件，脚本不会覆盖已有证书。
 
 ---
 

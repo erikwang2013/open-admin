@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../services/api_service.dart';
 import '../../services/encryption_service.dart';
-import '../../i18n/translations.dart';
 
 class ConfigController extends GetxController {
   final api = ApiService();
@@ -99,7 +98,7 @@ class ConfigPage extends GetView<ConfigController> {
     ]);
   }
 
-  void _showDialog(BuildContext context, ConfigController ctrl, {dynamic? item}) {
+  void _showDialog(BuildContext context, ConfigController ctrl, {dynamic item}) {
     final gCtrl = TextEditingController(text: item?['group'] ?? '');
     final kCtrl = TextEditingController(text: item?['key'] ?? '');
     final vCtrl = TextEditingController(text: item?['value'] ?? '');

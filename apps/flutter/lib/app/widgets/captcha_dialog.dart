@@ -1,6 +1,5 @@
 // Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
 import '../services/api_service.dart';
 import '../services/captcha_service.dart';
 import '../i18n/translations.dart';
@@ -23,7 +22,7 @@ class CaptchaDialog extends StatefulWidget {
 
   /// 显示验证码弹框，返回 captcha key（取消返回 null）
   static Future<String?> show(BuildContext context) {
-    final svc = CaptchaService(Dio(BaseOptions(baseUrl: ApiService.baseUrl)));
+    final svc = CaptchaService(ApiService().dio);
     final clickKey = GlobalKey<ClickCaptchaState>();
     final sliderKey = GlobalKey<SliderCaptchaState>();
     final rotateKey = GlobalKey<RotateCaptchaState>();

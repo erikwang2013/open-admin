@@ -124,6 +124,23 @@ class ProfileController extends BaseController
         $user->password = password_hash($newPassword, PASSWORD_BCRYPT);
         $user->save();
 
+        // 密码已变更：吊销该用户所有在线 access/refresh token
+        try {
+            // 水位线让未登记过的旧 refresh token 也失效（iat 早于改密时间的一律拒绝）
+            $refreshExpire = (int)(config('plugin.erikwang2013.jwt.jwt.refresh_expire') ?: 1209600);
+            Redis::setex("user_pwd_changed:{$adminId}", $refreshExpire + 60, (string) time());
+
+            foreach (['user_tokens', 'user_refresh_tokens'] as $set) {
+                $key = "{$set}:{$adminId}";
+                foreach (Redis::zrange($key, 0, -1, true) as $member => $exp) {
+                    Redis::setex('jwt_blacklist:' . $member, max((int) $exp - time(), 1), '1');
+                }
+                Redis::del($key);
+            }
+        } catch (\Throwable $e) {
+            // Redis 故障不影响密码修改
+        }
+
         return $this->success([], trans('messages.password_changed'));
     }
 
@@ -136,19 +153,37 @@ class ProfileController extends BaseController
      */
     public function logout(Request $request): Response
     {
-        $token = $request->header('Authorization', '');
-        $token = str_replace('Bearer ', '', $token);
+        $header = $request->header('Authorization', '');
+        $token  = preg_replace('/^Bearer\s+/i', '', trim($header));
+        $refreshToken = (string) $request->input('refresh_token', '');
 
         if (empty($token)) {
             return $this->fail(trans('messages.not_logged_in'), 401);
         }
 
+        $jwt = self::getJWT();
+
         try {
-            $payload = self::getJWT()->decode($token);
-            $ttl     = max((int)($payload['exp'] ?? 0) - time(), 0);
+            $payload = $jwt->decode($token);
+            $ttl     = max((int)($payload['exp'] ?? 0) - time(), 1);
             Redis::setex('jwt_blacklist:' . md5($token), $ttl, '1');
         } catch (\Throwable $e) {
             // token 无效也视为登出成功
+        }
+
+        // 同时吊销 refresh token，防止登出后继续刷新
+        if ($refreshToken !== '') {
+            try {
+                $payload = $jwt->decode($refreshToken, true);
+                $ttl     = max((int)($payload['exp'] ?? 0) - time(), 1);
+                Redis::setex('jwt_blacklist:' . md5($refreshToken), $ttl, '1');
+                $userId = (int) ($request->adminId ?? 0);
+                if ($userId) {
+                    Redis::zrem("user_refresh_tokens:{$userId}", md5($refreshToken));
+                }
+            } catch (\Throwable $e) {
+                // refresh token 无效时忽略
+            }
         }
 
         return $this->success([], trans('messages.logout_success'));

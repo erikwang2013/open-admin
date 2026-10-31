@@ -118,6 +118,8 @@ Route::group('/api/v1', function () {
     // 认证
     Route::post('/auth/login', [app\api\v1\controller\AuthController::class, 'login']);
     Route::post('/auth/refresh', [app\api\v1\controller\AuthController::class, 'refresh']);
+    // 传输加密公钥（无认证，公钥可安全公开）
+    Route::get('/auth/public-key', [app\api\v1\controller\AuthController::class, 'publicKey']);
 });
 
 // CORS 预检兜底 — OPTIONS 不匹配已注册路由，fallback 不走中间件链，

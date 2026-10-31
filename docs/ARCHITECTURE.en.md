@@ -1,6 +1,6 @@
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 >
-> [中文](ARCHITECTURE.md) | [English](ARCHITECTURE.en.md) | [한국어](ARCHITECTURE.ko.md) | [Русский](ARCHITECTURE.ru.md) | [Deutsch](ARCHITECTURE.de.md) | [Français](ARCHITECTURE.fr.md) | [Español](ARCHITECTURE.es.md) | [Português](ARCHITECTURE.pt.md) | [हिन्दी](ARCHITECTURE.hi.md) | [العربية](ARCHITECTURE.ar.md) | [বাংলা](ARCHITECTURE.bn.md) | [Bahasa Indonesia](ARCHITECTURE.id.md) | [日本語](ARCHITECTURE.ja.md)
+> [中文](ARCHITECTURE.md) | [English](ARCHITECTURE.en.md)
 
 # Architecture and Business Logic Diagrams
 
@@ -33,7 +33,6 @@ flowchart TB
 
     subgraph "Storage Layer"
         D1[("MySQL 8.0<br/>Primary Storage<br/>Table Prefix erik_")]
-        D2[("Elasticsearch<br/>Full-Text Search<br/>Index Prefix erik_")]
         D3[("Redis<br/>Session / Cache<br/>Captcha Storage")]
     end
 
@@ -52,8 +51,6 @@ flowchart TB
     C4 --> C5
     C3 --> D1
     C4 --> D1
-    C3 --> D2
-    C4 --> D2
     C1 --> D3
 
     style A1 fill:#1677FF,color:#fff
@@ -65,7 +62,6 @@ flowchart TB
     style C4 fill:#52C41A,color:#fff
     style C5 fill:#52C41A,color:#fff
     style D1 fill:#1890FF,color:#fff
-    style D2 fill:#1890FF,color:#fff
     style D3 fill:#1890FF,color:#fff
 ```
 
@@ -113,7 +109,6 @@ flowchart TD
 
     subgraph "Driver Layer"
         D1["MySQL PDO"]
-        D2["Elasticsearch HTTP"]
         D3["Redis"]
     end
 
@@ -126,7 +121,6 @@ flowchart TD
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> S1 & S2 & S3
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> MD1 & MD2 & MD3 & MD4 & MD5
     MD1 & MD2 & MD3 & MD4 & MD5 --> D1
-    MD1 --> D2
     CT7 --> D3
 
     style R1 fill:#722ED1,color:#fff
@@ -641,46 +635,42 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    subgraph "DNS / CDN"
-        DNS["erik.xyz"]
+    subgraph "DNS / Domain"
+        DNS["DOMAIN (default localhost)"]
     end
 
-    subgraph "Web Server"
-        NGX["Nginx<br/>:443 HTTPS<br/>:80 → 443 redirect<br/>gzip on"]
-        STA["Static Files<br/>Flutter Web build/"]
+    subgraph "Single-machine Docker Compose (deploy/)"
+        NGX["Nginx :80/:443<br/>TLS termination · static site<br/>reverse proxy to app:8791"]
+        WM["webman app :8791<br/>container network only"]
+        INIT["init (one-shot)<br/>schema + admin user<br/>then exits"]
+        MYSQL["MySQL 8.0<br/>deploy/data/mysql"]
+        REDIS["Redis 7 · AOF<br/>deploy/data/redis"]
     end
 
-    subgraph "Application Servers (Horizontally Scalable)"
-        WM1["webman worker 1<br/>:8787"]
-        WM2["webman worker 2<br/>:8787"]
-        WM3["webman worker N<br/>:8787"]
-    end
-
-    subgraph "Data Layer"
-        MYSQL["MySQL 8.0<br/>Master-Slave Replication<br/>erik_ Prefix"]
-        ES["Elasticsearch 8.x<br/>3-Node Cluster<br/>erik_ Prefix"]
-        REDIS["Redis 7.x<br/>Sentinel Mode<br/>poster:captcha:*"]
+    subgraph "Host persistence"
+        DATA["deploy/data/<br/>mysql · mysql-logs · redis<br/>runtime · upload · nginx/logs · backups"]
     end
 
     subgraph "Monitoring"
-        MON["Grafana<br/>+ Prometheus"]
+        MON["GET /health<br/>GET /metrics (Prometheus)"]
     end
 
     DNS --> NGX
-    NGX --> STA
-    NGX --> WM1 & WM2 & WM3
-    WM1 & WM2 & WM3 --> MYSQL
-    WM1 & WM2 & WM3 --> ES
-    WM1 & WM2 & WM3 --> REDIS
-    WM1 & WM2 & WM3 --> MON
+    NGX --> WM
+    WM --> MYSQL
+    WM --> REDIS
+    INIT --> MYSQL
+    MYSQL -.-> DATA
+    REDIS -.-> DATA
+    NGX -.-> DATA
+    WM --> MON
 
     style NGX fill:#722ED1,color:#fff
-    style WM1 fill:#1677FF,color:#fff
-    style WM2 fill:#1677FF,color:#fff
-    style WM3 fill:#1677FF,color:#fff
+    style WM fill:#1677FF,color:#fff
+    style INIT fill:#52C41A,color:#fff
     style MYSQL fill:#1890FF,color:#fff
-    style ES fill:#1890FF,color:#fff
     style REDIS fill:#1890FF,color:#fff
+    style DATA fill:#F6F8FC,color:#1677FF
 ```
 
 ---

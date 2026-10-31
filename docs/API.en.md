@@ -1,6 +1,6 @@
 > Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 >
-> [中文](API.md) | [English](API.en.md) | [한국어](API.ko.md) | [Русский](API.ru.md) | [Deutsch](API.de.md) | [Français](API.fr.md) | [Español](API.es.md) | [Português](API.pt.md) | [हिन्दी](API.hi.md) | [العربية](API.ar.md) | [বাংলা](API.bn.md) | [Bahasa Indonesia](API.id.md) | [日本語](API.ja.md)
+> [中文](API.md) | [English](API.en.md)
 
 # API Reference
 
@@ -8,7 +8,7 @@
 
 open-admin is built on webman v2 and provides a RESTful JSON API. All admin endpoints require JWT authentication and RBAC permission checks; public endpoints carry the API version in the URL prefix (e.g. `/api/v1/auth/login`) and route directly to the corresponding versioned controllers.
 
-- **Base URL**: `http://localhost:8787`
+- **Base URL**: `http://localhost:8791`
 - **API version**: embedded in the URL prefix (`/api/v1/...`, `/api/v2/...`); no request header is used
 - **Language**: switched via the `Accept-Language` header or the `?lang=zh_CN|en` parameter (default zh_CN), auto-detected by the Locale middleware
 
@@ -64,13 +64,12 @@ GET /health
     "php": "8.3.0",
     "database": "ok",
     "redis": "ok",
-    "elasticsearch": "ok",
     "timestamp": 1716249600
   }
 }
 ```
 
-`database`, `redis`, and `elasticsearch` take the values `"ok"` | `"unavailable"`. `elasticsearch` returns `"unavailable"` when ES is unreachable; when the cluster health status is neither green nor yellow, the actual status value is returned (e.g. `"red"`).
+`database` and `redis` take the values `"ok"` | `"unavailable"`.
 
 ### 3.2 API Docs
 
@@ -260,7 +259,7 @@ POST /api/v1/auth/login
 | Field | Type | Required | Validation | Description |
 |------|------|------|---------|------|
 | username | string | Yes | min:3, max:50 | Username |
-| password | string | Yes | min:6, max:32 (plaintext) | AES-256-CBC-HMAC encrypted then Base64 encoded (plaintext accepted) |
+| password | string | Yes | min:6, max:32 (plaintext) | RSA-2048 PKCS1v1.5 encrypted then Base64 encoded (AES/plaintext fallback accepted) |
 | captcha_key | string | Yes | | Captcha key (must first pass `/api/v1/captcha/verify`) |
 
 ### Password Encryption Protocol
@@ -277,9 +276,31 @@ Decryption flow (server, stepwise fallback):
   3. Plaintext fallback → use the raw input directly
 ```
 
-The public key is built into the frontend application and is never transmitted over the network. The private key is stored only in `RSA_PRIVATE_KEY` in `.env` and must not be leaked.
+The public key is fetched via `GET /api/v1/auth/public-key` before login; the Flutter client keeps an embedded copy as a fallback when the request fails. The private key is stored only in `RSA_PRIVATE_KEY` in `.env` and must not be leaked.
 
 > AES symmetric encryption is a legacy compatibility scheme and will be removed once all clients migrate to RSA.
+
+#### Login Public Key
+
+```
+GET /api/v1/auth/public-key
+```
+
+- **Authentication**: none
+- **Rate limit**: global default (60/min)
+
+**Example response**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "public_key": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n"
+  }
+}
+```
+
+Returns `code: 404` when `RSA_PRIVATE_KEY` is not configured. `deploy/generate-secrets.sh --regenerate` rotates the RSA keypair: after rotation, verify this endpoint is reachable and rebuild old clients that still rely on the embedded fallback key.
 
 **Example response**:
 ```json
@@ -1740,14 +1761,29 @@ The OperationLog middleware auto-detects the client platform and writes it to th
 
 ## 15. Deployment & Ops
 
-### Docker Compose
+### Quick Start (4 services)
 
-The project root provides `docker-compose.yml` orchestrating 5 services (Nginx, webman app, MySQL, Redis, Elasticsearch). PHP is built via `Dockerfile` (based on `php:8.3-cli` with OPcache enabled).
+The `docker-compose.yml` at the project root orchestrates Nginx, webman app, MySQL and Redis for local or single-host trials:
 
 ```bash
 cp .env.docker .env
-docker-compose up -d
+docker compose up -d
+# Install wizard: http://localhost/install (DB host: mysql)
 ```
+
+### Production (single machine, 5 services)
+
+The production stack lives in `deploy/` and runs `nginx`, `app`, `init` (one-shot bootstrap), `mysql` and `redis` on one machine. No full-text search cluster is used. PHP is built via `Dockerfile` (based on `php:8.3-cli` with OPcache enabled); webman listens on 8791 inside the container network only, and Nginx exposes 80/443.
+
+```bash
+cd deploy
+./generate-secrets.sh
+docker compose up -d --build
+```
+
+- `generate-secrets.sh` creates `deploy/.env`, the RSA keypair, a self-signed TLS certificate and the admin password file `deploy/secrets/admin_password.txt`. It is idempotent by default; `--regenerate` first archives the old `.env` and `secrets/` to `deploy/secrets/archive/<timestamp>/`.
+- Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; port 80 only serves the ACME challenge path and redirects everything else to HTTPS.
+- Persistent directories: `deploy/data/{mysql,mysql-logs,redis,runtime,upload,nginx/logs,backups}`; Docker logs rotate at `10m × 3`.
 
 ### CI/CD
 

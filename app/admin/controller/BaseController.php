@@ -69,6 +69,14 @@ class BaseController
     }
 
     /**
+     * 校正分页参数 — 页码至少为 1，每页条数限制在 1~100
+     */
+    protected static function clampPage(int $page, int $limit): array
+    {
+        return [max(1, $page), $limit < 1 ? 15 : min($limit, 100)];
+    }
+
+    /**
      * 二次确认 — 验证当前登录用户密码
      * 敏感操作（删除、导出等）调用此方法确认身份
      *

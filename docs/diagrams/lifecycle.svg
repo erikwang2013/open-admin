@@ -55,7 +55,7 @@
   <text class="sTitle" x="222" y="256">启动 Boot</text>
   <text class="sWhere" x="330" y="256">php start.php start · webman v2</text>
   <text class="sItem" x="222" y="278">加载 .env 与 config/*.php，启动 Http / Monitor 进程并常驻内存（无 FPM 冷启动）</text>
-  <text class="sItem" x="222" y="295">建立 MySQL / Redis / Elasticsearch 连接池，注册全局中间件与路由表</text>
+  <text class="sItem" x="222" y="295">建立 MySQL / Redis 连接池，注册全局中间件与路由表</text>
 
   <path d="M 150 285 L 150 335" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
 
@@ -110,7 +110,7 @@
   <text class="sTitle" x="222" y="706">持久化 Persist</text>
   <text class="sWhere" x="342" y="706">Model / Service</text>
   <text class="sItem" x="222" y="728">Snowflake 生成 BIGINT 主键 → encryptable 敏感字段加解密 → MySQL 落库</text>
-  <text class="sItem" x="222" y="745">webman-scout 同步 Elasticsearch；Redis 写缓存 / 验证码 / 权限 / 限流计数</text>
+  <text class="sItem" x="222" y="745">Redis 写缓存 / 验证码 / 权限 / 限流计数；数据挂载到 deploy/data 持久化</text>
 
   <path d="M 150 735 L 150 785" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
 

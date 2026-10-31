@@ -19,4 +19,6 @@
 return [
     support\bootstrap\Session::class,
     \Erikwang2013\Poster\Adapters\Webman\CaptchaPlugin::class,
+    // 按 worker 进程隔离 Snowflake 工作节点 ID，避免多进程生成重复主键
+    \app\bootstrap\SnowflakeWorker::class,
 ];

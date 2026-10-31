@@ -5,7 +5,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../services/api_service.dart';
-import '../../i18n/translations.dart';
 
 class LogController extends GetxController {
   final api = ApiService();

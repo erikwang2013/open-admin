@@ -164,7 +164,7 @@
   <text class="fItem" x="50" y="549">· Accept-Language negotiation</text>
   <text class="fItem" x="50" y="568">· ?lang= override</text>
   <text class="fItem" x="50" y="587">· zh_CN / en runtime packs</text>
-  <text class="fItem" x="50" y="606">· Docs in 12 languages</text>
+  <text class="fItem" x="50" y="606">· Docs in Chinese/English</text>
 
   <!-- 运维 -->
   <rect class="card" x="330" y="456" width="280" height="152" rx="14"/>

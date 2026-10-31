@@ -12,6 +12,7 @@
 /// 编译时也可通过参数覆盖:
 ///   flutter run --dart-define=ENV=test
 ///   flutter build web --dart-define=ENV=prod
+library;
 
 enum Environment { dev, test, prod }
 

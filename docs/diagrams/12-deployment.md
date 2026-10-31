@@ -2,46 +2,40 @@
 
 ```mermaid
 flowchart TB
-    subgraph dns["DNS/CDN"]
-        domain["erik.xyz"]
+    subgraph dns["DNS / 域名"]
+        domain["DOMAIN（默认 localhost）"]
     end
 
-    subgraph web["Web服务器"]
-        nginx["Nginx :443 HTTPS<br/>:80→443 redirect<br/>gzip on"]
-        static["静态文件<br/>Flutter Web build/"]
+    subgraph host["单机 Docker Compose（deploy/）"]
+        nginx["Nginx :80/:443<br/>TLS 终止 · 静态官网<br/>反向代理"]
+        bootstrap["init（一次性）<br/>建表 + 创建管理员"]
+        wm["webman app :8791<br/>容器内网"]
+        mysql[("MySQL 8.0<br/>deploy/data/mysql")]
+        redis[("Redis 7 · AOF<br/>deploy/data/redis")]
     end
 
-    subgraph app["应用服务器(可横向扩展)"]
-        wm1["webman worker 1 :8787"]
-        wm2["webman worker 2 :8787"]
-        wm3["webman worker N :8787"]
-    end
-
-    subgraph data["数据层"]
-        mysql[("MySQL 8.0<br/>主从复制<br/>erik_前缀")]
-        es[("Elasticsearch 8.x<br/>3节点集群<br/>erik_前缀")]
-        redis[("Redis 7.x<br/>哨兵模式<br/>poster:captcha:*")]
+    subgraph persist["宿主机持久化"]
+        data["deploy/data/<br/>mysql · mysql-logs · redis<br/>runtime · upload · nginx/logs · backups"]
     end
 
     subgraph monitor["监控"]
-        grafana["Grafana+Prometheus"]
+        health["GET /health<br/>GET /metrics（Prometheus）"]
     end
 
     domain --> nginx
-    nginx --> static
-    nginx --> wm1
-    nginx --> wm2
-    nginx --> wm3
-    wm1 & wm2 & wm3 --> mysql
-    wm1 & wm2 & wm3 --> es
-    wm1 & wm2 & wm3 --> redis
-    wm1 & wm2 & wm3 --> grafana
+    nginx --> wm
+    wm --> mysql
+    wm --> redis
+    bootstrap --> mysql
+    mysql -.-> data
+    redis -.-> data
+    nginx -.-> data
+    wm --> health
 
     style nginx fill:#722ED1,color:#fff
-    style wm1 fill:#1677FF,color:#fff
-    style wm2 fill:#1677FF,color:#fff
-    style wm3 fill:#1677FF,color:#fff
+    style bootstrap fill:#52C41A,color:#fff
+    style wm fill:#1677FF,color:#fff
     style mysql fill:#1890FF,color:#fff
-    style es fill:#1890FF,color:#fff
     style redis fill:#1890FF,color:#fff
+    style data fill:#F6F8FC,color:#1677FF
 ```

@@ -16,9 +16,9 @@ class SliderCaptchaState extends State<SliderCaptcha> {
   final _val = ValueNotifier<double>(0);
 
   @override
-  void didUpdateWidget(SliderCaptcha old) {
-    super.didUpdateWidget(old);
-    if (widget.data != old.data) _val.value = 0;
+  void didUpdateWidget(SliderCaptcha oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.data != oldWidget.data) _val.value = 0;
   }
 
   @override

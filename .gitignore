@@ -7,4 +7,8 @@
 /tests/tmp
 .phpunit.result.cache
 /public/web
-composer.lock
+
+# 单机生产部署：生成的密钥、数据与日志，仅保留 .env.example
+/deploy/.env
+/deploy/secrets/
+/deploy/data/

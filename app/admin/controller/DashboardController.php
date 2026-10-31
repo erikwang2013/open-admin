@@ -33,9 +33,13 @@ class DashboardController extends BaseController
     {
         // Redis 缓存 5 分钟，避免每次请求跑 5+ 条 SQL
         $cacheKey = 'dashboard:data';
-        $cached = Redis::get($cacheKey);
-        if ($cached) {
-            return $this->success(json_decode($cached, true));
+        try {
+            $cached = Redis::get($cacheKey);
+            if ($cached) {
+                return $this->success(json_decode($cached, true));
+            }
+        } catch (\Throwable $e) {
+            // Redis 不可用时跳过缓存，直接查询
         }
 
         $today = date('Y-m-d');
@@ -48,7 +52,11 @@ class DashboardController extends BaseController
             'recent_logs' => $this->getRecentLogs(),
         ];
 
-        Redis::setex($cacheKey, 300, json_encode($data, JSON_UNESCAPED_UNICODE));
+        try {
+            Redis::setex($cacheKey, 300, json_encode($data, JSON_UNESCAPED_UNICODE));
+        } catch (\Throwable $e) {
+            // 缓存写入失败不影响响应
+        }
 
         return $this->success($data);
     }

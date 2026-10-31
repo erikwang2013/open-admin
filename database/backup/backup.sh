@@ -12,6 +12,13 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 
+# 优先加载项目 .env（与 webman 共用同一套 DB_* 配置），环境变量作为回退
+if [ -f .env ]; then
+    set -a
+    . ./.env
+    set +a
+fi
+
 # 从 .env 或默认值读取数据库配置
 DB_HOST="${DB_HOST:-127.0.0.1}"
 DB_PORT="${DB_PORT:-3306}"

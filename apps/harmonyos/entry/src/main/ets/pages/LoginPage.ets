@@ -4,13 +4,9 @@
 
 import router from '@ohos.router';
 import promptAction from '@ohos.promptAction';
-import http from '@ohos.net.http';
 import { TokenManager } from '../utils/TokenManager';
-
-// 开发环境地址 — 真机部署时修改为实际服务器地址
-// 模拟器: http://10.0.2.2:8787
-// 真机: http://<服务器IP>:8787
-const BASE_URL = 'http://10.0.2.2:8787';
+import { apiService } from '../service/ApiService';
+import { LoginResponse } from '../model/DataModels';
 
 interface CaptchaTarget {
   order: number;
@@ -21,6 +17,7 @@ interface CaptchaTarget {
 
 interface CaptchaData {
   key: string;
+  type: string;
   image: string; // base64
   targets: CaptchaTarget[];
 }
@@ -28,6 +25,27 @@ interface CaptchaData {
 interface ClickPoint {
   x: number;
   y: number;
+}
+
+interface CaptchaRequest {
+  difficulty: string;
+  type: string;
+}
+
+interface CaptchaVerifyRequest {
+  key: string;
+  type: string;
+  clicks: number[][];
+}
+
+interface CaptchaVerifyResult {
+  valid: boolean;
+}
+
+interface LoginRequest {
+  username: string;
+  password: string;
+  captcha_key: string;
 }
 
 @Entry
@@ -45,8 +63,9 @@ struct LoginPage {
   @State clickMarkers: {x: number, y: number, order: number}[] = [];
   @State captchaError: string = '';
   @State loginError: string = '';
-
-  private httpClient: http.HttpRequest = http.createHttp();
+  // 验证码图片显示区域的实际尺寸（用于点击坐标换算）
+  @State imageBoxW: number = 0;
+  @State imageBoxH: number = 0;
 
   aboutToAppear(): void {
     this.loadCaptcha();
@@ -59,15 +78,8 @@ struct LoginPage {
     this.captchaError = '';
 
     try {
-      const resp = await this.httpClient.request(`${BASE_URL}/api/v1/captcha/generate`, {
-        method: http.RequestMethod.POST,
-        header: { 'Content-Type': 'application/json', 'X-Client-Platform': 'harmonyos' },
-        extraData: JSON.stringify({ difficulty: 'medium' }),
-        connectTimeout: 10000,
-        readTimeout: 10000
-      });
-
-      const result = JSON.parse(resp.result as string);
+      const body: CaptchaRequest = { difficulty: 'medium', type: 'click' };
+      const result = await apiService.post<CaptchaData>('/api/v1/captcha/generate', body);
       if (result.code === 0) {
         this.captchaData = result.data;
         this.captchaData!.targets.sort((a, b) => a.order - b.order);
@@ -84,15 +96,21 @@ struct LoginPage {
   onCaptchaClick(event: ClickEvent): void {
     if (!this.captchaData || this.clicks.length >= this.captchaData.targets.length) return;
 
-    // 点击坐标 (相对于组件)
-    const widgetW = 400; // 组件近似宽度
-    const widgetH = 250;
-    const imgW = 400;
-    const imgH = 250;
-    const scaleX = imgW / widgetW;
-    const scaleY = imgH / widgetH;
-    const imgX = Math.round(event.x * scaleX);
-    const imgY = Math.round(event.y * scaleY);
+    // 图片以 ImageFit.Contain 居中显示在组件内，先定位实际绘制区域再换算回 300x200 原图坐标
+    const boxW = this.imageBoxW;
+    const boxH = this.imageBoxH;
+    if (boxW <= 0 || boxH <= 0) return;
+    const scale = Math.min(boxW / 300, boxH / 200);
+    const dispW = 300 * scale;
+    const dispH = 200 * scale;
+    const offsetX = (boxW - dispW) / 2;
+    const offsetY = (boxH - dispH) / 2;
+    // 点在留白区域不记录
+    if (event.x < offsetX || event.x > offsetX + dispW
+      || event.y < offsetY || event.y > offsetY + dispH) return;
+
+    const imgX = Math.round((event.x - offsetX) / scale);
+    const imgY = Math.round((event.y - offsetY) / scale);
 
     const order = this.clicks.length;
     this.clicks.push({ x: imgX, y: imgY });
@@ -121,20 +139,25 @@ struct LoginPage {
     this.loginError = '';
 
     try {
-      const resp = await this.httpClient.request(`${BASE_URL}/api/v1/auth/login`, {
-        method: http.RequestMethod.POST,
-        header: { 'Content-Type': 'application/json', 'X-Client-Platform': 'harmonyos' },
-        extraData: JSON.stringify({
-          username: trimmedUsername,
-          password: this.password,
-          captcha_key: this.captchaData!.key,
-          clicks: this.clicks
-        }),
-        connectTimeout: 15000,
-        readTimeout: 15000
-      });
+      const captchaKey = this.captchaData!.key;
+      const verifyBody: CaptchaVerifyRequest = {
+        key: captchaKey,
+        type: 'click',
+        clicks: this.clicks.map((p: ClickPoint): number[] => [p.x, p.y])
+      };
+      const verifyResult = await apiService.post<CaptchaVerifyResult>('/api/v1/captcha/verify', verifyBody);
+      if (verifyResult.code !== 0) {
+        this.loginError = '验证码校验失败';
+        this.loadCaptcha();
+        return;
+      }
 
-      const result = JSON.parse(resp.result as string);
+      const body: LoginRequest = {
+        username: trimmedUsername,
+        password: this.password,
+        captcha_key: captchaKey
+      };
+      const result = await apiService.post<LoginResponse>('/api/v1/auth/login', body);
       if (result.code === 0) {
         await TokenManager.saveTokens(result.data.access_token, result.data.refresh_token);
         AppStorage.setOrCreate('adminUsername', trimmedUsername);
@@ -144,7 +167,8 @@ struct LoginPage {
         this.loadCaptcha();
       }
     } catch (e) {
-      this.loginError = '网络错误，请检查连接';
+      // 凭证错误以 HTTP 401 返回时统一由 ApiService 抛出 UNAUTHORIZED
+      this.loginError = (e as Error).message === 'UNAUTHORIZED' ? '用户名或密码错误' : '网络错误，请检查连接';
       this.loadCaptcha();
     } finally {
       this.isLoading = false;
@@ -276,6 +300,10 @@ struct LoginPage {
                 }
                 .width('100%')
                 .height(200)
+                .onAreaChange((oldValue: Area, newValue: Area) => {
+                  this.imageBoxW = Number(newValue.width);
+                  this.imageBoxH = Number(newValue.height);
+                })
                 .margin({ top: 4 })
 
                 // 操作栏

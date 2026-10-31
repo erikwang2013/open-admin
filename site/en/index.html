@@ -231,14 +231,14 @@
         <article class="platform-card" data-reveal>
           <p class="card-label">Observability</p>
           <h3>See it after deploy</h3>
-          <p>Health checks, 5 Prometheus gauges, OpenAPI docs, Docker Compose and database backups.</p>
+          <p>Health checks, 5 Prometheus gauges, OpenAPI docs, a single-machine Docker Compose stack (deploy/) and database backups.</p>
           <a class="text-link" href="https://github.com/erikwang2013/open-admin/blob/main/docs/API.md" target="_blank" rel="noopener">API docs</a>
         </article>
 
         <article class="platform-card" data-reveal>
           <p class="card-label">i18n</p>
           <h3>Locale packs and docs</h3>
-          <p>Accept-Language negotiation, explicit ?lang= override, zh_CN and en runtime packs, docs in 12 languages.</p>
+          <p>Accept-Language negotiation, explicit ?lang= override, zh_CN and en runtime packs, docs in Chinese and English.</p>
         </article>
 
         <article class="platform-card platform-card-install" data-reveal>
@@ -335,7 +335,7 @@
 
       <figure class="diagram diagram-wide" data-reveal>
         <img src="./assets/img/diagrams/architecture.svg" data-lightbox width="1240" height="940" alt="open-admin system architecture: clients, gateway, webman application and storage" loading="lazy" decoding="async">
-        <figcaption>System architecture: Flutter Web / HarmonyOS → Nginx → webman v2 → MySQL / Redis / Elasticsearch</figcaption>
+        <figcaption>System architecture: Flutter Web / HarmonyOS → Nginx → webman v2 → MySQL / Redis</figcaption>
       </figure>
 
       <div class="diagram-grid">
@@ -353,7 +353,7 @@
     <section class="section install" id="install">
       <div class="install-copy" data-reveal>
         <h2>From zero to sign-in, four steps</h2>
-        <p class="section-lead">Requires PHP 8.3+, Composer 2.x and MySQL 8.0+. Elasticsearch 7.x is optional for search.</p>
+        <p class="section-lead">Requires PHP 8.3+, Composer 2.x and MySQL 8.0+.</p>
 
         <ol class="install-steps">
           <li>
@@ -362,11 +362,11 @@
           </li>
           <li>
             <h3>Configure environment</h3>
-            <p>Copy the env template and replace JWT, Hashids and encryption keys in production.</p>
+            <p>Copy the env template locally; in production, deploy/generate-secrets.sh generates keys, TLS certificates and .env.</p>
           </li>
           <li>
             <h3>Start the service</h3>
-            <p>webman listens on 8787 by default and stays resident.</p>
+            <p>webman listens on 8791 by default and stays resident.</p>
           </li>
           <li>
             <h3>Finish the wizard</h3>
@@ -387,14 +387,17 @@ cp .env.example .env
 php start.php start
 
 # Open in browser
-# http://localhost:8787/install</code></pre>
+# http://localhost:8791/install</code></pre>
         <details class="code-details">
-          <summary>Docker Compose</summary>
-          <pre><code>cp .env.docker .env
-docker compose up -d
+          <summary>Production (single-machine Docker Compose)</summary>
+          <pre><code>cd deploy
+./generate-secrets.sh
+docker compose up -d --build
 
-# webman: http://localhost:8787
-# Nginx:  http://localhost:8080</code></pre>
+# Access
+# https://localhost  (accept the self-signed certificate)
+# Admin password: deploy/secrets/admin_password.txt
+# Replace deploy/secrets/tls/ for a real domain certificate</code></pre>
         </details>
       </div>
     </section>
@@ -441,6 +444,7 @@ docker compose up -d
           </thead>
           <tbody>
             <tr><td><code>POST</code></td><td><code>/api/v1/auth/login</code></td><td>Sign in and issue tokens</td></tr>
+            <tr><td><code>GET</code></td><td><code>/api/v1/auth/public-key</code></td><td>Get the login password encryption key</td></tr>
             <tr><td><code>POST</code></td><td><code>/api/v1/auth/refresh</code></td><td>Refresh access_token</td></tr>
             <tr><td><code>GET</code></td><td><code>/health</code></td><td>Health check</td></tr>
             <tr><td><code>GET</code></td><td><code>/metrics</code></td><td>Prometheus metrics</td></tr>
@@ -471,12 +475,16 @@ docker compose up -d
         </article>
         <article class="iteration-card" data-reveal>
           <p class="card-label">Docs</p>
-          <h3>12 languages in sync</h3>
-          <p>README, CLAUDE and architecture docs gained translations; CI publishes automatically.</p>
+          <h3>Chinese/English docs</h3>
+          <p>README, CLAUDE, API, architecture, design and security docs stay in Chinese and English, in sync with the code.</p>
         </article>
       </div>
 
       <ol class="timeline">
+        <li data-reveal>
+          <div class="timeline-meta"><span class="version-tag">v2.1.6</span><time datetime="2026-10-31">2026-10-31</time></div>
+          <div class="timeline-body"><h3>Single-machine production stack and secret generation</h3><p>Added the deploy/ single-machine stack (nginx/app/init/mysql/redis), generate-secrets.sh for keys and TLS, host data directories and log rotation; removed the full-text search service and trimmed docs to Chinese/English.</p></div>
+        </li>
         <li data-reveal>
           <div class="timeline-meta"><span class="version-tag">main</span><time datetime="2026-10-28">2026-10-28</time></div>
           <div class="timeline-body"><h3>Site and open-source license</h3><p>Added the responsive static site, switched code to MIT, kept visual assets under a separate license.</p></div>

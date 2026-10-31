@@ -40,7 +40,7 @@ class AdminPermission
         $requiredPermission = strtolower($method) . '.' . $routePath;
 
         if (!in_array($requiredPermission, $permissions)) {
-            return json(['code' => 403, 'message' => '无权限访问', 'data' => []]);
+            return json(['code' => 403, 'message' => '无权限访问', 'data' => []])->withStatus(403);
         }
 
         return $next($request);

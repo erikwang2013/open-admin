@@ -72,8 +72,8 @@ class ImportController extends BaseController
             $username = trim((string) ($row[$colMap['username']] ?? ''));
             $password = trim((string) ($row[$colMap['password']] ?? ''));
             $realName = trim((string) ($row[$colMap['real_name']] ?? ''));
-            $phone    = trim((string) ($row[$colMap['phone']] ?? ''));
-            $email    = trim((string) ($row[$colMap['email']] ?? ''));
+            $phone    = isset($colMap['phone']) ? trim((string) ($row[$colMap['phone']] ?? '')) : '';
+            $email    = isset($colMap['email']) ? trim((string) ($row[$colMap['email']] ?? '')) : '';
             $status   = isset($colMap['status']) ? (int) ($row[$colMap['status']] ?? 1) : 1;
 
             if (empty($username)) {
@@ -82,7 +82,13 @@ class ImportController extends BaseController
                 continue;
             }
 
-            if (AdminUser::where('username', $username)->exists()) {
+            if ($password === '' || mb_strlen($password) < 6) {
+                $failed++;
+                $errors[] = ['row' => $idx + 1, 'reason' => '密码不能为空且至少 6 个字符'];
+                continue;
+            }
+
+            if (AdminUser::withTrashed()->where('username', $username)->exists()) {
                 $failed++;
                 $errors[] = ['row' => $idx + 1, 'reason' => "用户名 {$username} 已存在"];
                 continue;

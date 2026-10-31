@@ -59,18 +59,17 @@ class AuthController
         if ($captchaKey === '') {
             return json(['code' => 422, 'message' => '验证码参数缺失', 'data' => []]);
         }
-        if ($captchaKey === '') {
-            return json(['code' => 422, 'message' => '验证码参数缺失', 'data' => []]);
-        }
 
-        // 检查验证码是否已通过 /api/v1/captcha/verify 校验
+        // 检查验证码是否已通过 /api/v1/captcha/verify 校验（Redis 故障时拒绝登录，不降级放行）
         try {
             $verified = Redis::get("captcha_verified:{$captchaKey}");
             if (!$verified) {
                 return json(['code' => 422, 'message' => '请先完成验证码校验', 'data' => []]);
             }
             Redis::del("captcha_verified:{$captchaKey}");
-        } catch (\Throwable) {}
+        } catch (Throwable) {
+            return json(['code' => 503, 'message' => '服务暂时不可用，请稍后再试', 'data' => []])->withStatus(503);
+        }
 
         // 校验用户凭证
         $user = AdminUser::where('username', $username)->first();
@@ -111,14 +110,14 @@ class AuthController
 
         // 签发 JWT
         $jwt = self::getJWT();
-        $tokenExpire = (int)(config('plugin.erikwang2013.jwt.jwt.default_expire') ?: 7200);
-        $token = $jwt->encode(['sub' => $user->id, 'username' => $user->username]);
-        $refreshToken = $jwt->encode(['sub' => $user->id, 'token_type' => 'refresh'],
-            (int)(config('plugin.erikwang2013.jwt.jwt.refresh_expire') ?: 1209600)
-        );
+        $tokenExpire   = (int)(config('plugin.erikwang2013.jwt.jwt.default_expire') ?: 7200);
+        $refreshExpire = (int)(config('plugin.erikwang2013.jwt.jwt.refresh_expire') ?: 1209600);
+        $token = $jwt->encode(['sub' => $user->id, 'username' => $user->username, 'token_type' => 'access']);
+        $refreshToken = $jwt->encode(['sub' => $user->id, 'token_type' => 'refresh'], $refreshExpire);
 
         // 并发会话限制
         $this->trackSession($user->id, $token, $tokenExpire);
+        $this->trackRefreshToken($user->id, $refreshToken, $refreshExpire);
 
         // 更新登录信息
         $user->last_login_at = date('Y-m-d H:i:s');
@@ -162,28 +161,52 @@ class AuthController
 
         try {
             $jwt = self::getJWT();
-            $payload = $jwt->decode($refreshToken);
+            // JWT 库默认拒绝 refresh 类型，显式允许后由下方 token_type 校验把关
+            $payload = $jwt->decode($refreshToken, true);
 
-            // 刷新时更新最后登录时间和IP
-            $userId = $payload['sub'] ?? 0;
-            if ($userId) {
-                $user = AdminUser::find($userId);
-                if ($user) {
-                    $user->last_login_at = date('Y-m-d H:i:s');
-                    $user->last_login_ip = $request->getRealIp();
-                    $user->save();
-                }
+            // 只接受 refresh 类型令牌，防止 access_token 无限续期
+            if (($payload['token_type'] ?? '') !== 'refresh') {
+                return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
             }
 
-            $tokenExpire = (int)(config('plugin.erikwang2013.jwt.jwt.default_expire') ?: 7200);
-            $token = $jwt->encode(['sub' => $payload['sub'], 'username' => $payload['username'] ?? '']);
-            $newRefresh = $jwt->encode(['sub' => $payload['sub'], 'token_type' => 'refresh'],
-                (int)(config('plugin.erikwang2013.jwt.jwt.refresh_expire') ?: 1209600)
-            );
+            // 已登出的 refresh token 不可再使用
+            try {
+                if (Redis::get('jwt_blacklist:' . md5($refreshToken))) {
+                    return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
+                }
+            } catch (Throwable) {
+                // Redis 故障时跳过黑名单检查
+            }
 
-            // 并发会话限制：注册新 token，移除旧 refresh token 的活跃状态
+            $userId = (int) ($payload['sub'] ?? 0);
+            $user   = AdminUser::find($userId);
+            if (!$user || $user->status === 0) {
+                return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
+            }
+
+            // 密码修改后签发的旧 refresh token 一律失效（覆盖未登记的旧令牌）
+            try {
+                $changedAt = Redis::get("user_pwd_changed:{$userId}");
+                if ($changedAt !== null && $changedAt !== false && (int) ($payload['iat'] ?? 0) < (int) $changedAt) {
+                    return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
+                }
+            } catch (Throwable) {
+                // Redis 故障时 fail-open
+            }
+
+            // 刷新时更新最后登录时间和IP
+            $user->last_login_at = date('Y-m-d H:i:s');
+            $user->last_login_ip = $request->getRealIp();
+            $user->save();
+
+            $tokenExpire   = (int)(config('plugin.erikwang2013.jwt.jwt.default_expire') ?: 7200);
+            $refreshExpire = (int)(config('plugin.erikwang2013.jwt.jwt.refresh_expire') ?: 1209600);
+            $token = $jwt->encode(['sub' => $user->id, 'username' => $user->username, 'token_type' => 'access']);
+            $newRefresh = $jwt->encode(['sub' => $user->id, 'token_type' => 'refresh'], $refreshExpire);
+
+            // 并发会话限制
             $this->trackSession($userId, $token, $tokenExpire);
-            try { Redis::zrem("user_tokens:{$userId}", md5($refreshToken)); } catch (\Throwable) {}
+            $this->trackRefreshToken($userId, $newRefresh, $refreshExpire);
 
             return json([
                 'code'    => 0,
@@ -191,11 +214,53 @@ class AuthController
                 'data'    => [
                     'access_token'  => $token,
                     'refresh_token' => $newRefresh,
-                    'expires_in'    => (int)(config('plugin.erikwang2013.jwt.jwt.default_expire') ?: 7200),
+                    'expires_in'    => $tokenExpire,
+                    'user'          => [
+                        'id'        => Container::get('hashids')->encode($user->id),
+                        'username'  => $user->username,
+                        'real_name' => $user->real_name,
+                    ],
                 ],
             ]);
         } catch (Throwable $e) {
             return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
+        }
+    }
+
+    /**
+     * @Apidoc\Title("获取传输加密公钥")
+     * @Apidoc\Group("认证")
+     * @Apidoc\Method("GET")
+     * @Apidoc\Url("/api/v1/auth/public-key")
+     * @Apidoc\Desc("由服务端 RSA 私钥导出公钥 PEM，供客户端在密钥轮换后动态获取；未配置私钥时返回 code 404")
+     * @Apidoc\Returned("public_key", type="string", desc="RSA 公钥 PEM")
+     */
+    public function publicKey(): Response
+    {
+        $privateKey = (string) config('encryption.rsa_private_key', '');
+        if ($privateKey === '') {
+            return json(['code' => 404, 'message' => '未配置 RSA 密钥', 'data' => []]);
+        }
+
+        try {
+            // 配置项为 Base64 编码的 PEM；只导出公钥，私钥不出进程
+            $pem = base64_decode($privateKey, true);
+            if ($pem === false) {
+                throw new \RuntimeException('invalid private key');
+            }
+            $key = openssl_pkey_get_private($pem);
+            if ($key === false) {
+                throw new \RuntimeException('invalid private key');
+            }
+            $details = openssl_pkey_get_details($key);
+            $publicKey = is_array($details) ? (string) ($details['key'] ?? '') : '';
+            if ($publicKey === '') {
+                throw new \RuntimeException('public key derivation failed');
+            }
+
+            return json(['code' => 0, 'message' => 'success', 'data' => ['public_key' => $publicKey]]);
+        } catch (Throwable) {
+            return json(['code' => 404, 'message' => '未配置 RSA 密钥', 'data' => []]);
         }
     }
 
@@ -213,7 +278,8 @@ class AuthController
             $member = md5($token);
 
             // 清理已过期的 token
-            Redis::zremrangebyscore($key, 0, time());
+            // phpredis 6 的 zRemRangeByScore 要求 start/stop 为 string
+            Redis::zremrangebyscore($key, '0', (string) time());
             // 添加新 token
             Redis::zadd($key, $exp, $member);
             // 超过 3 个 → 踢出最旧的
@@ -233,6 +299,25 @@ class AuthController
             Redis::expire($key, $expiresIn + 3600);
         } catch (\Throwable) {
             // Redis 故障不影响登录
+        }
+    }
+
+    /**
+     * 登记 refresh token，便于改密/登出时统一吊销（未登记的旧令牌仍可用）
+     * @param int $userId 用户 ID
+     * @param string $token JWT refresh_token
+     * @param int $expiresIn token 有效期（秒）
+     */
+    private function trackRefreshToken(int $userId, string $token, int $expiresIn): void
+    {
+        try {
+            $key = "user_refresh_tokens:{$userId}";
+            // phpredis 6 的 zRemRangeByScore 要求 start/stop 为 string
+            Redis::zremrangebyscore($key, '0', (string) time());
+            Redis::zadd($key, time() + $expiresIn, md5($token));
+            Redis::expire($key, $expiresIn + 3600);
+        } catch (\Throwable) {
+            // Redis 故障不影响令牌签发
         }
     }
 }

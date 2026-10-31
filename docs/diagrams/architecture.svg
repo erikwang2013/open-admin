@@ -40,7 +40,7 @@
 
   <!-- 标题 -->
   <text class="t1" x="40" y="56">open-admin · 系统架构设计</text>
-  <text class="t2" x="40" y="82">Flutter Web / HarmonyOS → Nginx → webman v2 中间件链 → 控制器 → MySQL / Redis / Elasticsearch</text>
+  <text class="t2" x="40" y="82">Flutter Web / HarmonyOS → Nginx → webman v2 中间件链 → 控制器 → MySQL / Redis</text>
 
   <g font-size="11.5" font-weight="600">
     <rect x="944" y="38" width="76" height="26" rx="13" fill="#EAF2FF" stroke="#BEDAFF"/>
@@ -155,7 +155,7 @@
   <rect class="band" x="40" y="772" width="880" height="128" rx="16"/>
   <rect x="40" y="798" width="4" height="20" rx="2" fill="#1890FF"/>
   <text class="bandName" x="56" y="814">存储层</text>
-  <text class="bandHint" x="120" y="814">三处存储各司其职 · 主键统一由 Snowflake 生成</text>
+  <text class="bandHint" x="120" y="814">两处存储各司其职 · 主键统一由 Snowflake 生成</text>
 
   <rect class="node" x="64" y="830" width="256" height="52" rx="12" fill="#E6F4FF" stroke="#91CAFF"/>
   <text class="chipT" x="84" y="851">MySQL 8.0 · 主存储</text>
@@ -164,8 +164,8 @@
   <text class="chipT" x="364" y="851">Redis 7 · 缓存与会话</text>
   <text class="chipS" x="364" y="869">限流 · 验证码 · 权限缓存 · 黑名单</text>
   <rect class="node" x="624" y="830" width="256" height="52" rx="12" fill="#E6F4FF" stroke="#91CAFF"/>
-  <text class="chipT" x="644" y="851">Elasticsearch 8 · 检索</text>
-  <text class="chipS" x="644" y="869">webman-scout 同步与全文查询</text>
+  <text class="chipT" x="644" y="851">单机部署 · 数据持久化</text>
+  <text class="chipS" x="644" y="869">deploy/data 宿主机绑定挂载</text>
 
   <!-- ========== 右栏 ========== -->
   <rect class="railCard" x="948" y="112" width="252" height="190" rx="16"/>

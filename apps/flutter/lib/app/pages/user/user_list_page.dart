@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'user_controller.dart';
 import 'user_form_page.dart';
-import '../../i18n/translations.dart';
 
 class UserListPage extends GetView<UserController> {
   const UserListPage({super.key});

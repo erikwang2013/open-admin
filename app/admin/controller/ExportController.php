@@ -38,13 +38,17 @@ class ExportController extends BaseController
      */
     public function excel(Request $request): Response
     {
+        $this->cleanupTempFiles();
+
         $table = $request->input('table', 'admin_user');
         $columns = $request->input('columns', []);
         $conditions = $request->input('conditions', []);
         $title = $request->input('title', '数据导出');
 
-        // 获取导出字段映射
+        // 获取导出字段映射，仅保留已知字段
         $exportColumns = $this->getExportColumns($table);
+        $columns = is_array($columns) ? $columns : [];
+        $columns = array_values(array_intersect($columns, array_keys($exportColumns)));
         if (empty($columns)) {
             $columns = array_keys($exportColumns);
         }
@@ -55,7 +59,8 @@ class ExportController extends BaseController
 
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle($title);
+        $sheetTitle = mb_substr(str_replace(['\\', '/', '?', '*', '[', ']', ':'], '', (string) $title), 0, 31);
+        $sheet->setTitle($sheetTitle !== '' ? $sheetTitle : '数据导出');
 
         // 表头样式
         $headerStyle = [
@@ -87,11 +92,11 @@ class ExportController extends BaseController
             foreach ($columns as $col) {
                 $value = $item[$col] ?? '';
                 if (in_array($col, $sensitiveFields) && !empty($value)) {
-                    $decrypted = EncryptionService::decrypt((string) $value);
+                    // Encryptable cast 已自动解密，直接对明文脱敏
                     if ($col === 'phone') {
-                        $value = EncryptionService::maskPhone($decrypted);
+                        $value = EncryptionService::maskPhone((string) $value);
                     } elseif ($col === 'email') {
-                        $value = EncryptionService::maskEmail($decrypted);
+                        $value = EncryptionService::maskEmail((string) $value);
                     } else {
                         $value = str_repeat('*', 8); // id_card等彻底隐藏
                     }
@@ -134,9 +139,12 @@ class ExportController extends BaseController
      */
     public function pdf(Request $request): Response
     {
+        $this->cleanupTempFiles();
+
         $type = $request->input('type', 'table');
         $title = $request->input('title', '数据导出');
         $data = $request->input('data', []);
+        $data = is_array($data) ? $data : [];
 
         $html = $this->buildPdfHtml($type, $title, $data);
 
@@ -190,12 +198,17 @@ class ExportController extends BaseController
 
         if ($type === 'dashboard') {
             $html .= '<div class="cards">';
-            foreach ($data['stats'] ?? [] as $card) {
-                $html .= '<div class="card"><div class="card-label">' . htmlspecialchars($card['label']) . '</div>';
-                $html .= '<div class="card-value">' . htmlspecialchars($card['value']) . '</div></div>';
+            foreach (is_array($data['stats'] ?? null) ? $data['stats'] : [] as $card) {
+                if (!is_array($card)) {
+                    continue;
+                }
+                $label = is_scalar($card['label'] ?? null) ? (string) $card['label'] : '';
+                $value = is_scalar($card['value'] ?? null) ? (string) $card['value'] : '';
+                $html .= '<div class="card"><div class="card-label">' . htmlspecialchars($label) . '</div>';
+                $html .= '<div class="card-value">' . htmlspecialchars($value) . '</div></div>';
             }
             $html .= '</div>';
-        } elseif (!empty($data['rows'])) {
+        } elseif (is_array($data['columns'] ?? null) && is_array($data['rows'] ?? null) && !empty($data['rows'])) {
             $html .= '<table><thead><tr>';
             foreach ($data['columns'] as $col) {
                 $html .= '<th>' . htmlspecialchars($col) . '</th>';
@@ -215,6 +228,18 @@ class ExportController extends BaseController
         $html .= '</body></html>';
 
         return $html;
+    }
+
+    /**
+     * 清理超过 1 小时的导出临时文件
+     */
+    private function cleanupTempFiles(): void
+    {
+        foreach (glob(runtime_path() . '/tmp/export_*') ?: [] as $file) {
+            if (is_file($file) && @filemtime($file) < time() - 3600) {
+                @unlink($file);
+            }
+        }
     }
 
     private function fetchExportData(string $table, array $columns, array $conditions): array

@@ -35,14 +35,15 @@ return [
 
     'connections' => [
 
+        // 部署时必须通过 HASHIDS_SALT / HASHIDS_ALT_SALT 环境变量设置随机盐值
         'main' => [
-            'salt' => '',
+            'salt' => getenv('HASHIDS_SALT') ?: '',
             'length' => 0,
             // 'alphabet' => 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890',
         ],
 
         'alternative' => [
-            'salt' => 'your-salt-string',
+            'salt' => getenv('HASHIDS_ALT_SALT') ?: '',
             'length' => 0,
             // 'alphabet' => 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890',
         ],

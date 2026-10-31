@@ -5,7 +5,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'role_controller.dart';
-import '../../i18n/translations.dart';
 
 class RoleListPage extends GetView<RoleController> {
   const RoleListPage({super.key});
@@ -91,7 +90,7 @@ class RoleListPage extends GetView<RoleController> {
     );
   }
 
-  void _showRoleDialog(BuildContext context, RoleController ctrl, {dynamic? role}) {
+  void _showRoleDialog(BuildContext context, RoleController ctrl, {dynamic role}) {
     final nameCtrl = TextEditingController(text: role?['name'] ?? '');
     final slugCtrl = TextEditingController(text: role?['slug'] ?? '');
     final descCtrl = TextEditingController(text: role?['description'] ?? '');
