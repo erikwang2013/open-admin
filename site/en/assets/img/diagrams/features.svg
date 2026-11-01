@@ -178,7 +178,7 @@
   <text class="fItem" x="350" y="549">· GET /health health check</text>
   <text class="fItem" x="350" y="568">· GET /metrics 5 Prometheus gauges</text>
   <text class="fItem" x="350" y="587">· GET /api/docs OpenAPI docs</text>
-  <text class="fItem" x="350" y="606">· Backup + Docker + CI</text>
+  <text class="fItem" x="350" y="606">· Backup/offsite + Docker + CI</text>
 
   <!-- 安装向导 -->
   <rect class="card" x="630" y="456" width="280" height="152" rx="14"/>

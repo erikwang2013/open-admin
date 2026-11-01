@@ -34,12 +34,13 @@
 | 403 | 无权限 / 安全拦截 | RBAC 权限不足 / SecurityFilter 命中 |
 | 404 | 资源不存在 | 查询/更新/删除的目标不存在 |
 | 405 | 请求方法不允许 | 仅允许 GET/POST/PUT/DELETE/OPTIONS/HEAD，非标准方法直接拒绝 |
+| 409 | 冲突 | 同一 refresh_token 的轮换正在进行，请稍后重试 |
 | 413 | 请求体过大 | Content-Length 超过 10MB |
 | 415 | 不支持的媒体类型 | POST/PUT 请求 Content-Type 非 JSON 且非文件上传 |
 | 422 | 参数验证失败 | 必填字段缺失、格式不符、业务校验不通过 |
 | 429 | 请求过于频繁 | RateLimit 触发 / 账号锁定（连续5次登录失败锁定15分钟） |
 | 500 | 服务器内部错误 | |
-| 503 | 服务暂时不可用 | Redis 不可用导致 `/api/`、`/admin/` 鉴权或限流失败关闭 |
+| 503 | 服务暂时不可用 | Redis 不可用导致 `/api/`、`/admin/` 鉴权或限流失败关闭；超管保护命名锁等待超时或数据库异常 |
 
 ## 3. 公开端点
 
@@ -373,11 +374,14 @@ POST /api/v1/auth/refresh
 
 刷新成功会同时返回新的 access_token 和 refresh_token，旧令牌自动失效。刷新时会更新用户最后登录时间和 IP。
 
-为容忍并发请求与客户端重试，旧 refresh_token 轮换后有 60 秒宽限期：服务端以旧令牌的 md5 为键缓存新令牌对 60 秒，宽限期内再次提交同一旧令牌会原样返回缓存的新令牌对，不会重复轮换；超过宽限期后旧令牌按黑名单处理并返回 401。客户端应串行刷新；HarmonyOS 客户端对并发 401 采用单飞（single-flight）刷新，多个请求共享同一次刷新结果。
+为容忍并发请求与客户端重试，旧 refresh_token 轮换后有 60 秒宽限期：服务端以旧令牌的 md5 为键缓存新令牌对 60 秒，宽限期内再次提交同一旧令牌会原样返回缓存的新令牌对，不会重复轮换；超过宽限期后旧令牌按黑名单处理并返回 401。缓存中的任一枚令牌若已被拉黑，服务端会删除缓存并返回 401。
+
+同一旧令牌的并发轮换由 `refresh_lock:<md5>`（`SET NX EX 5`，Lua 比较后删除释放）串行化：未抢到锁的请求短暂等待缓存，命中则复用同一对令牌，未命中返回 409，客户端应稍后重试。轮换键登记在 `user_refresh_rotations:<userId>`（TTL 120 秒），登出与改密时统一拉黑缓存令牌并清理。客户端应串行刷新；HarmonyOS 客户端对并发 401 采用单飞（single-flight）刷新，多个请求共享同一次刷新结果。
 
 **可能的错误**:
 - 422: 缺少刷新令牌
-- 401: 刷新令牌无效或已过期
+- 401: 刷新令牌无效、已过期、已拉黑，或缓存令牌已被吊销
+- 409: 同一 refresh_token 的轮换正在进行，请稍后重试
 
 ### 3.7 Prometheus 监控指标
 
@@ -672,11 +676,13 @@ PUT /admin/user/{id}
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| real_name | string | 否 | 真实姓名，不传保持原值 |
-| password | string | 否 | 新密码，为空字符串或不传则不修改 |
+| real_name | string | 否 | 真实姓名，最长 50 字符，不传保持原值 |
+| password | string | 否 | 新密码，6-32 位明文（客户端加密时先解密再校验）；为空字符串或不传则不修改 |
 | phone | string | 否 | 手机号 |
 | email | string | 否 | 邮箱 |
-| status | int | 否 | 0=禁用, 1=启用 |
+| status | int | 否 | 必须是 0（禁用）或 1（启用） |
+
+不能禁用当前登录账号（422）；禁用操作会与“最后一名启用的超级管理员”校验在同一把 MySQL 命名锁内串行化，锁等待超时或数据库异常返回 503，可稍后重试。
 
 **响应示例**:
 ```json
@@ -697,6 +703,9 @@ PUT /admin/user/{id}
 
 **可能的错误**:
 - 404: 用户不存在
+- 422: 密码长度 6-32 位 / 真实姓名超过 50 字符 / 状态不是 0 或 1
+- 422: 不能禁用当前登录账号；系统必须保留至少一名启用的超级管理员
+- 503: 最后一名超管校验的命名锁等待超时或数据库异常，请稍后重试
 
 ### 5.5 删除用户
 
@@ -1561,11 +1570,15 @@ POST /admin/import/users
 | email | 否 | 邮箱 |
 | status | 否 | 状态，默认 1 |
 
-第 1 行为列标题（大小写不敏感），第 2 行起为数据。单个文件不超过 5MB，数据行（不含表头）最多 2000 行。服务端在加载工作簿前先读取工作表元数据，任一工作表超过 2001 行立即返回 422，避免整本工作簿进入内存；加载后仍保留行数上限作为二次防御。
+第 1 行为列标题（大小写不敏感），第 2 行起为数据。单个文件不超过 5MB，数据行（不含表头）最多 2000 行（含表头 2001 行）。
+
+服务端在加载工作簿前先做 `.xlsx` ZIP 解压体积预检：`xl/**.xml` 条目解压后总大小超过 8MB，或所有工作表单元格总数超过 32,000 个，立即返回 422，防止压缩炸弹与 128M 工作进程 OOM；随后读取工作表元数据，任一工作表超过 2001 行立即返回 422，避免整本工作簿进入内存；加载后仍保留行数上限作为二次防御。文件损坏、无法读取或无法解析时返回 422 与可读提示，不暴露异常内部信息。
 
 **可能的错误**:
 - 422: 仅支持 .xlsx 或 .xls 文件
 - 422: 文件大小不能超过 5MB
+- 422: Excel 文件内容过大或单元格过多，无法导入（ZIP 解压后 `xl/**.xml` 超过 8MB，或单元格超过 32,000 个）
+- 422: Excel 文件无法读取/解析，请确认文件未损坏且格式正确
 - 422: 数据行数不能超过 2000 行（不含表头）
 
 **响应示例**:
@@ -1716,6 +1729,10 @@ Nginx 静态资源（`/assets/`、`/open-admin/assets/` 等）在 location 级�
    - 新令牌对写入 refresh_rotation:{md5(旧 refresh_token)}，TTL 60 秒
    - 旧 refresh_token 立即加入黑名单（TTL ≥ 60 秒）
    - 60 秒内重试同一旧令牌 → 返回缓存的同一对新令牌（幂等宽限）
+   - 缓存中的令牌若已拉黑 → 删除缓存并返回 401
+   - 轮换由 refresh_lock:{md5(旧 refresh_token)}（SET NX EX 5 + Lua 释放）串行化；
+     并发请求未命中缓存时返回 409，客户端应稍后重试
+   - 轮换键登记到 user_refresh_rotations:{userId}，TTL 120 秒，登出/改密时统一清理
    - HarmonyOS 客户端：并发 401 单飞刷新，多个请求等待同一次结果
     ↓
    客户端更新本地令牌
@@ -1745,8 +1762,9 @@ Nginx 静态资源（`/assets/`、`/open-admin/assets/` 等）在 location 级�
 - SecurityFilter 全局扫描 XSS、SQL 注入、路径遍历、命令注入，同 IP 5次/60秒临时黑名单 15 分钟
 - 敏感操作（删除用户、角色、权限、配置）需要当前登录用户密码二次确认
 - 并发会话限制：同一用户最多 3 个有效 Token，第 4 个设备登录时最旧 Token 被强制加入黑名单
-- 账号锁定：连续 5 次登录失败触发 15 分钟账号锁定，锁定期间返回 429
-- 超级管理员保护：不能删除当前登录账号或修改其状态；删除/禁用操作不能移除最后一名启用的超级管理员；内置 `super_admin` 角色禁止编辑/删除
+- 账号锁定：连续 5 次登录失败触发 15 分钟账号锁定，锁定期间返回 429；已存在用户按 `account_lock:u:<userId>` / `login_fail:u:<userId>` 计数，未知用户名按 `account_lock:n:<md5(小写去空白用户名)>` / `login_fail:n:<同>` 计数，键 TTL 均为 900 秒
+- 刷新轮换：旧 refresh_token 在 60 秒宽限内重放返回同一对令牌；轮换由 `refresh_lock:<md5>` 串行化，缓存任一枚令牌被拉黑即删除缓存并返回 401，并发未命中返回 409；登出与改密会拉黑缓存令牌并清理 `user_refresh_rotations:<userId>`
+- 超级管理员保护：不能删除当前登录账号或修改其状态；删除/禁用操作不能移除最后一名启用的超级管理员（校验与写入由 MySQL 命名锁 `open_admin:last_super_admin` 串行化，超时返回 503）；内置 `super_admin` 角色禁止编辑/删除
 
 ### 中间件架构
 
@@ -1815,8 +1833,10 @@ docker compose up -d --build
 - `generate-secrets.sh` 生成 RSA 密钥、自签名 TLS 证书与管理员密码 `deploy/secrets/admin_password.txt`，RSA 私钥写入 `app.env`；默认幂等，`--regenerate` 先归档旧 `.env`、`env/` 与 `secrets/` 到 `deploy/secrets/archive/<时间戳>/`，默认只轮换应用密钥并保留 `ENCRYPTABLE_KEY`、Hashids 盐值、现有 TLS 证书、数据库/管理员密码；Hashids 用 `--rotate-hashids` 显式轮换（旧链接中的 ID 将失效），字段加密密钥、TLS、数据库密码、管理员密码分别用 `--rotate-encryptable`（旧密钥自动加入 `ENCRYPTION_PREVIOUS_KEYS`，旧数据仍可读取；完成数据重加密后再移除旧密钥）、`--rotate-tls`、`--rotate-db`、`--reset-admin` 显式轮换。
 - 真实域名证书替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`；80 端口仅保留 ACME 校验路径，其余 301 到 HTTPS；HSTS 默认关闭，配置真实证书后再启用。
 - 日志：Nginx/MySQL 写 stdout/stderr，Docker 按 `10m × 3` 轮转；持久化目录：`deploy/data/{mysql,redis,runtime,upload,backups}`。
-- 资源上限：`deploy/docker-compose.yml` 为每个服务设置 `deploy.resources.limits.memory`（app 512M、init 256M、mysql 768M、redis 256M、nginx 128M、backup 256M），可按宿主机容量调整。
-- `backup` 服务使用最小权限用户 `backup_reader`（`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` + `erik_operation_log` 的 `DELETE`）每日 `mysqldump --single-transaction --no-tablespaces` 到 `deploy/data/backups`，同时把 `deploy/data/upload` 打包为 `upload_<时间>.tar.gz`；两类备份保留 30 天，并每日清理 180 天前的操作日志（每轮最多 10000 行）。备份与 MySQL 位于同一主机/磁盘，需用 `rsync` 或 `rclone` 复制到异地（见 `deploy/README.md`）。
+- 资源上限：`deploy/docker-compose.yml` 为每个服务同时设置 `deploy.resources.limits` 的 CPU、内存与 pids（app 1.0/512M/256、init 0.5/256M/128、mysql 1.5/768M/512、redis 0.5/384M/128、nginx 0.5/128M/128、backup 0.5/256M/128），可按宿主机容量调整。Redis 容器 384M 与 `redis-server --maxmemory 256mb` 配套，预留 128M 给 AOF 重写/fork、客户端缓冲与内存碎片，两者必须同步修改（如 `--maxmemory 512mb` 对应容器 640M）。
+- `backup` 服务使用最小权限用户 `backup_reader`（`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` + `erik_operation_log` 的 `DELETE`）每日 `mysqldump --single-transaction --no-tablespaces` 到 `deploy/data/backups`，同时把 `deploy/data/upload` 打包为 `upload_<时间>.tar.gz`；两类备份保留 30 天，并每日清理 180 天前的操作日志（每轮最多 10000 行）。
+- 日志清理：应用内另注册不监听端口的 `log-cleanup` webman 进程（`count=1`），启动时先尽力清理一次，之后每日删除 180 天前的 `operation_log`，每批 10000 行；失败只记日志，不与 backup 服务冲突。
+- 异地备份：备份默认留在数据库宿主机磁盘。`deploy/offsite-sync.sh` 读取 `deploy/.env` 的 `OFFSITE_TARGET`，支持 rsync（`user@host:/path/`）与 rclone（`rclone:remote:path`）；未配置目标、备份目录为空或目标无法识别时拒绝执行，并排除未写完的临时文件。脚本由宿主机 cron 调度，容器不会自动调用。
 
 ### CI/CD
 
@@ -1828,7 +1848,7 @@ docker compose up -d --build
 
 ### 数据库备份
 
-生产编排的 `backup` 服务每日自动备份数据库与上传文件到 `deploy/data/backups`（保留 30 天），并清理 180 天前的操作日志；异地副本需自行用 `rsync`/`rclone` 同步。`database/backup/` 目录的脚本适用于宿主机直连数据库的场景：
+生产编排的 `backup` 服务每日自动备份数据库与上传文件到 `deploy/data/backups`（保留 30 天），并清理 180 天前的操作日志；应用内 `log-cleanup` 进程同样每日清理。异地副本用 `deploy/offsite-sync.sh`（读取 `OFFSITE_TARGET`，支持 rsync/rclone，由宿主机 cron 调度）。`database/backup/` 目录的脚本适用于宿主机直连数据库的场景：
 - `backup.sh` — mysqldump + gzip 压缩备份，自动清理 30 天前的旧备份文件
 - `restore.sh` — 交互式恢复，列出现有备份供用户选择
 

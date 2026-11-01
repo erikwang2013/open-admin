@@ -42,7 +42,7 @@ or the initial admin password:
 
 | File | Contents | Visible to | Mode |
 |------|----------|------------|------|
-| `deploy/.env` | domain, ports, host UID/GID (compose interpolation only) | compose | 600 |
+| `deploy/.env` | domain, ports, host UID/GID (compose interpolation) and `OFFSITE_TARGET` (host sync script) | compose, cron | 600 |
 | `deploy/env/app.env` | `APP_*`, `JWT_*`, `HASHIDS_*`, `SNOWFLAKE_*`, `ENCRYPTION_*` (incl. RSA private key), `ENCRYPTABLE_*`, `DB_*` (app user only), `REDIS_*`, `POSTER_*` | app | 600 |
 | `deploy/env/init.env` | `DB_*` (app user only), `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `SNOWFLAKE_*` | init | 600 |
 | `deploy/env/mysql.env` | `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE`, `DB_*`, `DB_BACKUP_USERNAME`, `DB_BACKUP_PASSWORD` | mysql | 600 |
@@ -63,8 +63,9 @@ rewritten from a fixed list.
 
 | Path | Contents | Mode |
 |------|----------|------|
-| `deploy/.env` | compose interpolation config (domain/ports/UID) | 600 |
+| `deploy/.env` | compose interpolation config (domain/ports/UID) and the offsite target `OFFSITE_TARGET` | 600 |
 | `deploy/env/*.env` | per-service environment (see table above) | 600 |
+| `deploy/offsite-sync.sh` | Backup sync script (run from host cron, see "Offsite copies") | 755 |
 | `deploy/secrets/rsa_public_key.pem` | RSA public key (pairs with the private key in `app.env`) | 600 |
 | `deploy/secrets/admin_password.txt` | Initial admin password | 600 |
 | `deploy/secrets/tls/fullchain.pem`, `privkey.pem` | TLS certificate (self-signed by default) | 600 |
@@ -233,23 +234,31 @@ password, the login page calls `GET /api/v1/auth/public-key` to fetch the server
 
 ## Resource limits
 
-Compose sets `deploy.resources.limits.memory` for every service; a container exceeding its limit is
-OOM-killed:
+Compose sets `deploy.resources.limits.memory`, `deploy.resources.limits.cpus` and `pids_limit` for
+every service: exceeding memory OOM-kills the container, exceeding CPU or the PID limit throttles it
+(at the PID limit it can no longer fork). These limits also bound how much damage a compromised or
+runaway container can do to the host:
 
-| Service | Memory limit | Notes |
-|---------|--------------|-------|
-| `app` | 512M | PHP/webman processes |
-| `init` | 256M | one-shot initialization |
-| `mysql` | 768M | `innodb-buffer-pool-size=256M` |
-| `redis` | 256M | `maxmemory 256mb` (plus process overhead) |
-| `nginx` | 128M | reverse proxy and static files |
-| `backup` | 256M | `mysqldump`, `gzip` and `tar` |
+| Service | Memory limit | CPU limit | PID limit | Notes |
+|---------|--------------|-----------|-----------|-------|
+| `app` | 512M | 1.0 | 256 | PHP/webman processes |
+| `init` | 256M | 0.5 | 128 | one-shot initialization |
+| `mysql` | 768M | 1.5 | 512 | `innodb-buffer-pool-size=256M` |
+| `redis` | 384M | 0.5 | 128 | `maxmemory 256mb` + 128M headroom |
+| `nginx` | 128M | 0.5 | 128 | reverse proxy and static files |
+| `backup` | 256M | 0.5 | 128 | `mysqldump`, `gzip` and `tar` |
+
+Redis `maxmemory` only accounts for data; AOF rewrite/fork, client buffers and fragmentation are
+extra. The container limit is therefore `maxmemory` + 128M headroom. When changing the data limit,
+update both `--maxmemory` and the service's `memory` in `deploy/docker-compose.yml`, keeping at
+least 128M headroom (e.g. `--maxmemory 512mb` with `memory: 640M`).
 
 The values assume a small single-machine deployment and vary with user count, imports/exports and
 upload sizes. If a container is OOM-killed (`docker inspect <container> --format
 '{{.State.OOMKilled}}'` reports `true`), raise that service's `memory` and run
 `docker compose up -d`. For MySQL and Redis the limit must stay above their
-`innodb-buffer-pool-size` / `maxmemory` settings plus process overhead.
+`innodb-buffer-pool-size` / `maxmemory` settings plus process overhead. Scale CPU limits with the
+host core count, but keep their sum within the available cores.
 
 ## Backup and restore
 
@@ -288,19 +297,45 @@ to the host user and need no root to read; its logs rotate at `10m × 3`.
 ### Offsite copies
 
 `deploy/data/backups` sits on the **same machine and the same disk** as the database, so a host or
-disk failure loses the backups together with the data. Copy them offsite on a schedule, e.g. from
-host cron:
+disk failure loses the backups together with the data. `deploy/offsite-sync.sh` mirrors the backup
+directory to a remote host or object store (no extra dependencies beyond rsync or rclone):
 
-```bash
-# rsync to another host (prefer SSH keys)
-rsync -a --delete deploy/data/backups/ backup@backup.example.com:/srv/open-admin/backups/
+1. Set the target in `deploy/.env` (a same-named environment variable overrides it):
 
-# or rclone to an S3-compatible bucket
-rclone sync deploy/data/backups/ remote:open-admin-backups/
-```
+   ```bash
+   # rsync to another host (use SSH keys for non-interactive access; the remote dir must be dedicated)
+   OFFSITE_TARGET=backup@backup.example.com:/srv/open-admin/backups/
 
-Keep more than 30 days of history at the destination too (object-storage versioning or remote
-rotation); otherwise accidental deletion or ransomware hits both copies.
+   # or rclone to object storage (configure the remote with rclone config first)
+   OFFSITE_TARGET=rclone:s3:open-admin-backups
+   ```
+
+2. Run it daily from host cron as the user that owns `deploy/` (that user also needs
+   non-interactive access to the remote):
+
+   ```cron
+   17 4 * * * cd /path/to/open-admin/deploy && ./offsite-sync.sh >> /var/log/open-admin-offsite.log 2>&1
+   ```
+
+3. Run it once manually to verify, and do periodic restore drills:
+
+   ```bash
+   cd deploy && ./offsite-sync.sh
+   ```
+
+Checklist:
+
+- With no `OFFSITE_TARGET`, an unrecognised target format, or no real backup yet, the script exits
+  with a clear error and **does not touch** the remote. Nothing calls it automatically.
+- rsync uses `-a --delete` and rclone uses `sync`, so extra files at the destination are removed:
+  the remote directory must hold **only** this project's backups (never share it between deployments).
+- The script excludes `.backup_*` / `.upload_*` temporary files, and the backup service now writes
+  to a temporary file and renames it, so partial backups are never copied.
+- Cron runs with a short `PATH`; if rsync/rclone is not in `/usr/bin` or `/usr/local/bin`, set
+  `PATH` explicitly in the crontab. The script exits non-zero on failure; configure `MAILTO` or log
+  alerting as well.
+- Keep more than 30 days of history at the destination too (object-storage versioning or remote
+  rotation); otherwise accidental deletion or ransomware hits both copies.
 
 Manual backup:
 

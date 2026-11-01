@@ -3,9 +3,13 @@
 # Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 #
 # 使用前先执行 ./generate-secrets.sh 生成 .env、env/*.env、密钥、证书与数据目录。
-#   .env            仅提供 compose 插值（域名/端口/宿主机 UID），不含密钥
+#   .env            compose 插值（域名/端口/宿主机 UID）与 OFFSITE_TARGET（宿主机同步脚本），不含密钥
 #   env/*.env       各服务独立的运行环境（600），仅对应容器可见
 # 所有持久化数据均以宿主机目录挂载在 ./data 下，不使用命名卷。
+#
+# 资源限制：compose v2 会把 pids_limit 归并进 deploy.resources.limits.pids；
+# 存在 limits 块时只写 pids_limit 会报 “can't set distinct values”，因此两处
+# 数值必须保持一致（修改 PID 上限时同时改这两个键）。
 # ============================================================
 
 name: open-admin
@@ -44,6 +48,9 @@ services:
       resources:
         limits:
           memory: 768M
+          cpus: "1.5"
+          pids: 512
+    pids_limit: 512
     logging: *default-logging
 
   # ============================================================
@@ -69,7 +76,13 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          # 容器上限 384M = maxmemory 256M + 约 128M 余量：
+          # AOF 重写/fork、客户端缓冲与内存碎片不计入 maxmemory，上限必须高于它。
+          # 修改时同步调整 command 中的 --maxmemory，并保留至少 128M 余量。
+          memory: 384M
+          cpus: "0.5"
+          pids: 128
+    pids_limit: 128
     logging: *default-logging
 
   # ============================================================
@@ -93,6 +106,9 @@ services:
       resources:
         limits:
           memory: 256M
+          cpus: "0.5"
+          pids: 128
+    pids_limit: 128
     logging: *default-logging
 
   # ============================================================
@@ -127,6 +143,9 @@ services:
       resources:
         limits:
           memory: 512M
+          cpus: "1.0"
+          pids: 256
+    pids_limit: 256
     logging: *default-logging
 
   # ============================================================
@@ -145,20 +164,23 @@ services:
         set -eu
         mkdir -p /backups
         # 清理异常退出遗留的临时文件（仅本服务写入 /backups）
-        rm -f /backups/.backup_*.sql /backups/.upload_*.tar.gz
+        rm -f /backups/.backup_*.sql /backups/.backup_*.sql.gz /backups/.upload_*.tar.gz
         while true; do
           ts="$$(date +%Y%m%d_%H%M%S)"
 
           # 数据库：最小权限用户 + 一致性快照，不导出 routines
+          # 先写临时文件再改名，异地同步不会读到写了一半的 .gz
           tmp="/backups/.backup_$${ts}.sql"
+          tmp_gz="/backups/.backup_$${ts}.sql.gz"
           out="/backups/backup_$${ts}.sql.gz"
           if MYSQL_PWD="$$DB_BACKUP_PASSWORD" mysqldump -h mysql -u"$$DB_BACKUP_USERNAME" \
               --single-transaction --no-tablespaces --default-character-set=utf8mb4 \
               "$$MYSQL_DATABASE" > "$$tmp"; then
-            if gzip -c "$$tmp" > "$$out"; then
+            if gzip -c "$$tmp" > "$$tmp_gz"; then
+              mv "$$tmp_gz" "$$out"
               echo "[backup] $$out"
             else
-              rm -f "$$tmp" "$$out"
+              rm -f "$$tmp" "$$tmp_gz"
               echo "[backup] gzip 失败" >&2
             fi
           else
@@ -202,6 +224,9 @@ services:
       resources:
         limits:
           memory: 256M
+          cpus: "0.5"
+          pids: 128
+    pids_limit: 128
     logging: *default-logging
 
   # ============================================================
@@ -236,4 +261,7 @@ services:
       resources:
         limits:
           memory: 128M
+          cpus: "0.5"
+          pids: 128
+    pids_limit: 128
     logging: *default-logging

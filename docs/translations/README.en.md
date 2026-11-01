@@ -15,17 +15,17 @@ A full-stack admin dashboard built on **webman v2 + Flutter**: authentication an
 
 | Domain | Feature | Notes |
 |--------|---------|-------|
-| 🔐 Auth | Login/Refresh/Logout | Click captcha + JWT + blacklist; 60s refresh-rotation grace + HarmonyOS single-flight |
-| | Account lockout | 5 failures → 15 min lock |
+| 🔐 Auth | Login/Refresh/Logout | Click captcha + JWT + blacklist; 60s refresh-rotation grace + rotation lock (409) + HarmonyOS single-flight |
+| | Account lockout | 5 failures → 15 min lock (existing users by userId, unknown usernames by normalized name) |
 | | Concurrent session limit | Max 3 active tokens per user |
 | 📊 Dashboard | Real-time stats/trends/distribution/logs | Redis cached 5 min |
 | 👥 Users | CRUD + batch delete/toggle status | Soft delete + password confirmation; cannot delete yourself or the last enabled super admin |
-| | Excel batch import | Row-level validation + error report; 5MB / 2,000-row cap |
+| | Excel batch import | Row-level validation + error report; 5MB / 2,000-row cap with a ZIP-expansion guard |
 | 🔒 Roles & Perms | Role CRUD + permission tree | RBAC method.path granularity; built-in `super_admin` cannot be edited/deleted |
 | ⚙ Config | Key-value CRUD | Grouped management |
 | 📋 Audit | Log query + source detection | 8 platforms auto-detected |
 | 📁 Files | Upload/Excel export/PDF export | Sensitive data auto-masked; exports over 5,000 rows return 422 |
-| 🛡 Security | 18-layer defense-in-depth | XSS/SQLi/path traversal/cmd injection/CSRF/rate limit/CSP; API/admin fail closed with 503 when Redis is down |
+| 🛡 Security | 18-layer defense-in-depth | XSS/SQLi/path traversal/cmd injection/CSRF/rate limit/CSP (including per-location CSP for the static site); API/admin fail closed with 503 when Redis is down |
 | 🏥 Ops | Health check/metrics/API docs/security.txt | Prometheus + OpenAPI 3.0 + lightweight `/apidoc/` debug UI + Docker CI |
 | 🌐 i18n | Chinese/English | Accept-Language header / ?lang= param |
 
@@ -114,6 +114,7 @@ open-admin/
 │   │   ├── AdminPermission.php # RBAC authorization
 │   │   └── OperationLog.php    # Auto operation logging (with source detection)
 │   ├── model/                  # Eloquent models
+│   ├── process/                # Processes (Http, Monitor, LogCleanup)
 │   └── view/index/view.html    # Site home page template (GET /, with the project pet and entry navigation)
 ├── apps/
 │   ├── flutter/                # Flutter Web admin panel
@@ -321,7 +322,7 @@ The production stack lives in `deploy/` and runs `nginx`, `app`, `init` (one-sho
 | `app` | webman PHP 8.3 application, listens on 8791 inside the container network only |
 | `init` | One-shot bootstrap: schema and admin user, then exits |
 | `mysql` | MySQL 8.0 with data on a host bind mount; error/slow logs to stderr |
-| `redis` | Redis 7 with AOF persistence on a host bind mount |
+| `redis` | Redis 7 with AOF persistence on a host bind mount; 384M container / `--maxmemory 256mb` |
 | `backup` | Least-privilege daily database + upload backup into `deploy/data/backups`, 30-day retention; deletes operation logs older than 180 days |
 
 ```bash
@@ -335,9 +336,10 @@ docker compose up -d --build
 - `--regenerate` archives the current `deploy/.env`, `deploy/env/` and `deploy/secrets/` to `deploy/secrets/archive/<timestamp>/`, then rotates application secrets (JWT/ENCRYPTION/RSA/Redis) by default while preserving `HASHIDS_SALT`, `ENCRYPTABLE_KEY`, the existing TLS certificate (real-domain certificates are never overwritten), `DB_PASSWORD`, `MYSQL_ROOT_PASSWORD` and the admin password, so an existing database keeps working. Rotate Hashids explicitly with `--rotate-hashids` (IDs in old links stop resolving); use `--rotate-encryptable` to rotate the field-encryption key (the old key is appended to `ENCRYPTION_PREVIOUS_KEYS`, so existing data remains readable; remove the old key only after re-encrypting the data), `--rotate-tls` to rotate TLS, `--rotate-db` for database passwords (the script prints the manual `ALTER USER` commands), and `--reset-admin` to reset the admin password.
 - **Host ownership**: `app`/`init` run as `${APP_UID:-1000}:${APP_GID:-1000}`; the script writes `id -u`/`id -g` into the master `.env`, so `deploy/data/{runtime,upload}` stays writable for the host user.
 - **Logs**: Nginx and MySQL log to stdout/stderr and Docker rotates them at `10m × 3`; inspect with `docker compose logs -f app`. Host persistent directories are `deploy/data/{mysql,redis,runtime,upload,backups}`.
-- **Memory limits**: compose sets per-service memory limits (app 512M, init 256M, mysql 768M, redis 256M, nginx 128M, backup 256M).
+- **Resource limits**: compose sets per-service CPU/memory/pids limits (app 1.0/512M/256, init 0.5/256M/128, mysql 1.5/768M/512, redis 0.5/384M/128, nginx 0.5/128M/128, backup 0.5/256M/128). The Redis container's 384M pairs with `--maxmemory 256mb`, leaving 128M of headroom for AOF rewrite/fork, client buffers and fragmentation; change both values together (e.g. `--maxmemory 512mb` with a 640M container).
 - TLS defaults to a self-signed certificate for `DOMAIN` (`localhost` by default). Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; existing certificates are not overwritten (`--rotate-tls` excepted). Port 80 only serves `/.well-known/acme-challenge/` and redirects everything else to HTTPS. HSTS is commented out by default; enable it after a real domain certificate is configured.
-- Automatic backup: the `backup` service uses the least-privilege `backup_reader` user to run `mysqldump --single-transaction --no-tablespaces` daily and archives `deploy/data/upload` as tar.gz into `deploy/data/backups`, keeping both for 30 days. It also deletes operation logs older than 180 days (at most 10,000 rows per run). Backups share the MySQL host/disk, so copy them offsite with `rsync`/`rclone`.
+- Automatic backup: the `backup` service uses the least-privilege `backup_reader` user to run `mysqldump --single-transaction --no-tablespaces` daily and archives `deploy/data/upload` as tar.gz into `deploy/data/backups`, keeping both for 30 days. It also deletes operation logs older than 180 days (at most 10,000 rows per run). The in-app `log-cleanup` process (no listening port, `count=1`) cleans the same table on startup and then daily in 10,000-row batches as a fallback.
+- Offsite backup: backups stay on the DB host disk by default. Host cron calls `deploy/offsite-sync.sh`, which reads `OFFSITE_TARGET` from `deploy/.env` and supports rsync (`user@host:/path/`) and rclone (`rclone:remote:path`); it refuses an unset target or empty backup directory and excludes in-progress temp files. See "Offsite copies" in `deploy/README.md` for the cron example and pre-run checklist.
 - RSA public key: `GET /api/v1/auth/public-key` returns the current public key. Flutter fetches it before login and falls back to the embedded key on failure; after `--regenerate` rotates the keypair, verify the endpoint is reachable and rebuild clients that rely on the embedded fallback.
 
 The PHP image is built from `Dockerfile`, based on `php:8.3-cli` with OPcache enabled and the redis/zip/gd extensions installed (GD with FreeType and JPEG).
@@ -347,13 +349,13 @@ The PHP image is built from `Dockerfile`, based on `php:8.3-cli` with OPcache en
 GitHub Actions CI pipeline: `.github/workflows/ci.yml`
 
 - PHP syntax check (`php -l`)
-- PHPUnit tests
+- PHPUnit tests (including `tests/LockKeyTest.php`, `tests/RefreshRotationCacheTest.php` and `tests/ProcessConfigTest.php`)
 - Flutter static analysis (`flutter analyze`)
 - Docker image build + PHP extension checks (redis/zip/gd, GD FreeType/JPEG) + root and `deploy/` Compose config validation + `nginx -t` for both Nginx configs
 
 ### Database Backup
 
-The production stack's `backup` service writes daily database and upload backups to `deploy/data/backups` (30-day retention) and deletes operation logs older than 180 days; sync offsite copies with `rsync`/`rclone`. The two scripts below are for a host with direct database access.
+The production stack's `backup` service writes daily database and upload backups to `deploy/data/backups` (30-day retention) and deletes operation logs older than 180 days; the in-app `log-cleanup` process performs the same daily purge. Offsite copies are synced by host cron via `deploy/offsite-sync.sh` (reads `OFFSITE_TARGET`). The two scripts below are for a host with direct database access.
 
 `database/backup/` directory:
 
@@ -362,7 +364,7 @@ The production stack's `backup` service writes daily database and upload backups
 
 ### Nginx Security
 
-See `docs/nginx-security.conf` for production reverse-proxy security hardening. Static asset locations repeat `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` and `Cache-Control` (an `add_header` in a location replaces inherited headers); CI runs `nginx -t` on both this config and `deploy/nginx/default.conf`.
+See `docs/nginx-security.conf` for production reverse-proxy security hardening. Static asset locations repeat `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` and `Cache-Control` (an `add_header` in a location replaces inherited headers); `/open-admin/`, `/open-admin/en/` and `/apidoc/` each get a dedicated CSP (same-origin default, inline scripts allowed, busuanzi allowed on the site, frames denied, form-action self). CI runs `nginx -t` on both this config and `deploy/nginx/default.conf`.
 
 ## Open Source Needs Your Support
 

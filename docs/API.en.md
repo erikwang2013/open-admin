@@ -36,12 +36,13 @@ open-admin is built on webman v2 and provides a RESTful JSON API. All admin endp
 | 403 | No permission / security block | Insufficient RBAC permission / SecurityFilter hit |
 | 404 | Resource not found | Target of query/update/delete does not exist |
 | 405 | Method not allowed | Only GET/POST/PUT/DELETE/OPTIONS/HEAD allowed; non-standard methods rejected outright |
+| 409 | Conflict | A rotation for the same refresh_token is in progress; retry later |
 | 413 | Payload too large | Content-Length exceeds 10MB |
 | 415 | Unsupported media type | POST/PUT Content-Type is not JSON and not a file upload |
 | 422 | Validation failed | Required fields missing, invalid format, business validation failed |
 | 429 | Too many requests | RateLimit triggered / account locked (5 failed logins lock for 15 min) |
 | 500 | Internal server error | |
-| 503 | Service unavailable | Redis unavailable, so auth/rate limiting for `/api/` and `/admin/` fails closed |
+| 503 | Service unavailable | Redis unavailable, so auth/rate limiting for `/api/` and `/admin/` fails closed; super-admin named-lock wait timeout or database error |
 
 ## 3. Public Endpoints
 
@@ -374,11 +375,14 @@ POST /api/v1/auth/refresh
 
 A successful refresh returns new access_token and refresh_token, and the old tokens automatically become invalid. The refresh also updates the user's last login time and IP.
 
-To tolerate concurrent requests and client retries, a rotated refresh_token keeps a 60-second grace period: the server caches the new token pair for 60 seconds under the md5 of the old token, and resubmitting the same old token within that window returns the cached pair unchanged instead of rotating again. After the grace period the old token is treated as blacklisted and returns 401. Clients should refresh serially; the HarmonyOS client uses single-flight refresh for concurrent 401s so all requests share one refresh result.
+To tolerate concurrent requests and client retries, a rotated refresh_token keeps a 60-second grace period: the server caches the new token pair for 60 seconds under the md5 of the old token, and resubmitting the same old token within that window returns the cached pair unchanged instead of rotating again. After the grace period the old token is treated as blacklisted and returns 401. If either token in the cached pair has been blacklisted, the server deletes the cache and returns 401.
+
+Concurrent rotation of the same old token is serialized by `refresh_lock:<md5>` (`SET NX EX 5`, released by a Lua compare-and-delete): a request that fails to acquire the lock briefly waits for the cache, reuses the cached pair on a hit, and returns 409 on a miss so the client can retry later. Rotated keys are tracked in `user_refresh_rotations:<userId>` (TTL 120 seconds); logout and password change blacklist the cached pair and clear them. Clients should refresh serially; the HarmonyOS client uses single-flight refresh for concurrent 401s so all requests share one refresh result.
 
 **Possible errors**:
 - 422: Refresh token missing
-- 401: Refresh token invalid or expired
+- 401: Refresh token invalid, expired, blacklisted, or the cached token pair was revoked
+- 409: A rotation for the same refresh_token is in progress; retry later
 
 ### 3.7 Prometheus Metrics
 
@@ -673,11 +677,13 @@ PUT /admin/user/{id}
 
 | Field | Type | Required | Description |
 |------|------|------|------|
-| real_name | string | No | Real name; keeps the original value when omitted |
-| password | string | No | New password; empty string or omitted means unchanged |
+| real_name | string | No | Real name, max 50 characters; keeps the original value when omitted |
+| password | string | No | New password, 6-32 plaintext characters (decrypted first when the client encrypts it); empty string or omitted means unchanged |
 | phone | string | No | Phone number |
 | email | string | No | Email |
-| status | int | No | 0=disabled, 1=enabled |
+| status | int | No | Must be exactly 0 (disabled) or 1 (enabled) |
+
+The current logged-in account cannot be disabled (422). Disable operations are serialized with the "last enabled super admin" check under a MySQL named lock; a lock timeout or database error returns 503 so the caller can retry.
 
 **Example response**:
 ```json
@@ -698,6 +704,9 @@ PUT /admin/user/{id}
 
 **Possible errors**:
 - 404: User does not exist
+- 422: Password must be 6-32 characters / real name exceeds 50 characters / status is not 0 or 1
+- 422: Cannot disable the current account; at least one enabled super admin must remain
+- 503: Named-lock wait timeout or database error during the last-super-admin check; retry later
 
 ### 5.5 Delete User
 
@@ -1562,11 +1571,15 @@ POST /admin/import/users
 | email | No | Email |
 | status | No | Status, default 1 |
 
-Row 1 contains column headers (case-insensitive); data starts at row 2. Files are limited to 5MB and 2,000 data rows (excluding the header). Before loading the workbook the server reads worksheet metadata and rejects any workbook with a sheet over 2,001 rows with a 422, keeping the whole workbook out of memory; the row limit is checked again after loading as a second defense.
+Row 1 contains column headers (case-insensitive); data starts at row 2. Files are limited to 5MB and 2,000 data rows (2,001 including the header).
+
+Before loading the workbook the server checks `.xlsx` ZIP expansion: if the uncompressed total of `xl/**.xml` entries exceeds 8MB, or the total worksheet cell count exceeds 32,000, it returns 422, blocking zip bombs and OOM in the 128M worker. It then reads worksheet metadata and rejects any workbook with a sheet over 2,001 rows with a 422, keeping the whole workbook out of memory; the row limit is checked again after loading as a second defense. Corrupt, unreadable or unparseable files return 422 with a readable message and never expose exception internals.
 
 **Possible errors**:
 - 422: Only .xlsx or .xls files are supported
 - 422: File size must not exceed 5MB
+- 422: Excel content is too large or has too many cells to import (ZIP-expanded `xl/**.xml` exceeds 8MB or cells exceed 32,000)
+- 422: Excel file cannot be read/parsed; confirm it is not corrupt and has the right format
 - 422: Data rows must not exceed 2,000 (excluding the header)
 
 **Example response**:
@@ -1717,6 +1730,10 @@ The complete authentication sequence:
    - Writes the new pair to refresh_rotation:{md5(old refresh_token)} with a 60-second TTL
    - Blacklists the old refresh_token immediately (TTL ≥ 60 seconds)
    - Retrying the same old token within 60 seconds → returns the cached pair unchanged (idempotent grace)
+   - If either cached token is blacklisted → delete the cache and return 401
+   - Rotation is serialized by refresh_lock:{md5(old refresh_token)} (SET NX EX 5 + Lua release);
+     a concurrent request that misses the cache returns 409 and should retry later
+   - Rotation keys are tracked in user_refresh_rotations:{userId} (TTL 120s) and cleared on logout/password change
    - HarmonyOS client: single-flight refresh for concurrent 401s; all requests await the same result
     ↓
    Client updates local tokens
@@ -1746,8 +1763,9 @@ The complete authentication sequence:
 - SecurityFilter globally scans for XSS, SQL injection, path traversal, and command injection; 5 hits per IP in 60 seconds trigger a 15-minute temporary blacklist
 - Sensitive operations (deleting users, roles, permissions, configs) require password confirmation from the currently logged-in user
 - Concurrent session limit: at most 3 valid tokens per user; when a 4th device logs in, the oldest token is forcibly blacklisted
-- Account lockout: 5 consecutive login failures trigger a 15-minute lock; 429 is returned while locked
-- Super-admin protection: you cannot delete or change the status of the currently logged-in account; delete/disable operations cannot remove the last enabled super administrator; the built-in `super_admin` role cannot be edited or deleted
+- Account lockout: 5 consecutive login failures trigger a 15-minute lock; 429 is returned while locked. Existing users are counted under `account_lock:u:<userId>` / `login_fail:u:<userId>`; unknown usernames under `account_lock:n:<md5(lower(trim(username)))>` / `login_fail:n:<same>`; every key has a 900-second TTL
+- Refresh rotation: replaying the old refresh_token within the 60-second grace returns the same pair; rotation is serialized by `refresh_lock:<md5>`, a blacklisted cached token deletes the cache and returns 401, and a concurrent cache miss returns 409; logout and password changes blacklist cached pairs and clear `user_refresh_rotations:<userId>`
+- Super-admin protection: you cannot delete or change the status of the currently logged-in account; delete/disable operations cannot remove the last enabled super administrator (the check and write are serialized by the MySQL named lock `open_admin:last_super_admin`, with a 503 on timeout); the built-in `super_admin` role cannot be edited or deleted
 
 ### Middleware Architecture
 
@@ -1768,8 +1786,9 @@ Cors（跨域预处理 + 响应头）
 Security enhancements:
 - **Account lockout**: 5 consecutive login failures lock the account for 15 minutes; logins return 429 during the lock
 - **Concurrent session limit**: at most 3 valid tokens per user; when exceeded, the oldest token is automatically blacklisted
+- **Refresh rotation lock**: `refresh_lock:<md5>` serializes rotation, a blacklisted cached token is rejected, and a concurrent cache miss returns 409
 - **security.txt**: `GET /.well-known/security.txt` serves RFC 9116 standard security contact information
-- **Nginx security config**: see `docs/nginx-security.conf` for a complete reverse-proxy security hardening example
+- **Nginx security config**: see `docs/nginx-security.conf` for a complete reverse-proxy security hardening example, including per-location CSP for `/open-admin/`, `/open-admin/en/` and `/apidoc/`
 
 ### Operation Source Detection
 
@@ -1816,8 +1835,10 @@ docker compose up -d --build
 - `generate-secrets.sh` creates the RSA keypair, a self-signed TLS certificate and the admin password file `deploy/secrets/admin_password.txt`; the RSA private key goes into `app.env`. It is idempotent by default; `--regenerate` archives the old `.env`, `env/` and `secrets/` to `deploy/secrets/archive/<timestamp>/` and rotates application secrets only, preserving `ENCRYPTABLE_KEY`, the Hashids salt, the existing TLS certificate, database and admin passwords. Rotate the Hashids salt explicitly with `--rotate-hashids` (IDs in old links stop resolving); rotate the field-encryption key, TLS, database passwords and admin password explicitly with `--rotate-encryptable` (the old key is appended to `ENCRYPTION_PREVIOUS_KEYS`, so existing data remains readable; remove the old key only after re-encrypting the data), `--rotate-tls`, `--rotate-db` and `--reset-admin`.
 - Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; port 80 only serves the ACME challenge path and redirects everything else to HTTPS; HSTS is commented out by default and should be enabled after a real certificate is configured.
 - Logs: Nginx/MySQL write to stdout/stderr and Docker rotates at `10m × 3`; persistent directories: `deploy/data/{mysql,redis,runtime,upload,backups}`.
-- Resource limits: `deploy/docker-compose.yml` sets `deploy.resources.limits.memory` per service (app 512M, init 256M, mysql 768M, redis 256M, nginx 128M, backup 256M); adjust for the host capacity.
-- The `backup` service uses the least-privilege `backup_reader` user (`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` plus `DELETE` on `erik_operation_log`) to run `mysqldump --single-transaction --no-tablespaces` daily into `deploy/data/backups`, and archives `deploy/data/upload` as `upload_<timestamp>.tar.gz`; both are kept for 30 days, and operation logs older than 180 days are deleted daily (at most 10,000 rows per run). Backups live on the same host/disk as MySQL; copy them offsite with `rsync` or `rclone` (see `deploy/README.md`).
+- Resource limits: `deploy/docker-compose.yml` sets `deploy.resources.limits` CPU, memory and pids per service (app 1.0/512M/256, init 0.5/256M/128, mysql 1.5/768M/512, redis 0.5/384M/128, nginx 0.5/128M/128, backup 0.5/256M/128); adjust for the host capacity. The Redis container's 384M pairs with `redis-server --maxmemory 256mb`, leaving 128M of headroom for AOF rewrite/fork, client buffers and fragmentation; change both values together (e.g. `--maxmemory 512mb` with a 640M container).
+- The `backup` service uses the least-privilege `backup_reader` user (`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` plus `DELETE` on `erik_operation_log`) to run `mysqldump --single-transaction --no-tablespaces` daily into `deploy/data/backups`, and archives `deploy/data/upload` as `upload_<timestamp>.tar.gz`; both are kept for 30 days, and operation logs older than 180 days are deleted daily (at most 10,000 rows per run).
+- Log cleanup: the app also registers a non-listening `log-cleanup` webman process (`count=1`) that performs a best-effort cleanup at startup and then daily deletes `operation_log` rows older than 180 days in batches of 10,000; failures are logged and do not conflict with the backup service.
+- Offsite backup: backups stay on the DB host disk by default. `deploy/offsite-sync.sh` reads `OFFSITE_TARGET` from `deploy/.env` and supports rsync (`user@host:/path/`) and rclone (`rclone:remote:path`); it refuses an unset target, an empty backup directory or an unrecognized target, and excludes in-progress temp files. Host cron schedules it; no container calls it automatically.
 
 ### CI/CD
 
@@ -1829,7 +1850,7 @@ docker compose up -d --build
 
 ### Database Backup
 
-The production stack's `backup` service writes daily database and upload backups to `deploy/data/backups` (30-day retention) and deletes operation logs older than 180 days; sync offsite copies with `rsync`/`rclone` yourself. The scripts in `database/backup/` are for a host with direct database access:
+The production stack's `backup` service writes daily database and upload backups to `deploy/data/backups` (30-day retention) and deletes operation logs older than 180 days; the in-app `log-cleanup` process performs the same daily purge. Use `deploy/offsite-sync.sh` (reads `OFFSITE_TARGET`, supports rsync/rclone, scheduled by host cron) for offsite copies. The scripts in `database/backup/` are for a host with direct database access:
 - `backup.sh` — mysqldump + gzip compressed backup, auto-clears backups older than 30 days
 - `restore.sh` — interactive restore, lists existing backups for selection
 

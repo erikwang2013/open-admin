@@ -159,18 +159,27 @@ try {
 
 登录接口在速率限制的基础上，额外增加了**账号锁定**机制，防止针对特定用户的定向暴力破解。
 
+**锁定键**（`AuthController::lockKeys()` 是唯一来源）：
+
+| 场景 | 锁定键 | 失败计数键 |
+|------|--------|-----------|
+| 用户名已存在 | `account_lock:u:<userId>` | `login_fail:u:<userId>` |
+| 用户名不存在 | `account_lock:n:<md5(lower(trim(username)))>` | `login_fail:n:<md5(lower(trim(username)))>` |
+
+未知用户按归一化用户名的 md5 计数，避免为不存在的账号建库表记录；大小写与首尾空白变体落到同一组键。两把键 TTL 均为 900 秒（15 分钟），过期自动解除，无需额外清理任务。
+
 **锁定流程**：
 
 ```
-登录失败 → Redis INCR account_lockout:{userId} TTL=900s
-连续 5 次失败 → Redis SETEX account_locked:{userId} 900 1
+登录失败 → Redis INCR login_fail:{u|n}:{...}，首次失败设置 TTL=900s
+连续 5 次失败 → Redis SETEX account_lock:{u|n}:{...} 900 1
             → 返回 429 "账号已被锁定，请15分钟后再试"
-            → 清除计数器 DEL account_lockout:{userId}
+            → 清除计数器 DEL login_fail:{u|n}:{...}
 ```
 
 **锁定期间行为**：
 
-锁定期间所有登录请求直接返回 429，不进行密码校验，完全阻止暴力破解尝试。
+锁定期间所有登录请求直接返回 429，不进行密码校验，完全阻止暴力破解尝试。登录成功后清除失败计数与锁定键。
 
 **配置常量**：
 
@@ -212,7 +221,9 @@ AdminAuth 中间件实现，挂载在需要认证的路由组上。
 
 **黑名单机制**：用户登出时，将 `md5(token)` 写入 Redis，TTL 设为 JWT 剩余有效期。Redis 故障时黑名单读取失败，`AdminAuth` 返回 503（fail-closed），不会放行可能已登出的 Token。
 
-**刷新令牌轮换**：`/api/v1/auth/refresh` 每次成功刷新都会签发新的 access/refresh 令牌对，旧 refresh_token 立即加入黑名单。为容忍并发请求与客户端重试，服务端以旧令牌的 md5 为键缓存新令牌对 60 秒（`refresh_rotation:{md5}`）：宽限期内再次提交同一旧令牌返回同一对新令牌，不会重复轮换；超过 60 秒后按黑名单拒绝。密码修改会写入密码变更水位并清除轮换缓存，登出会拉黑缓存中的令牌并删除缓存键。客户端应串行刷新；HarmonyOS 客户端对并发 401 使用单飞（single-flight）刷新，多个请求共享同一次刷新结果。
+**刷新令牌轮换**：`/api/v1/auth/refresh` 每次成功刷新都会签发新的 access/refresh 令牌对，旧 refresh_token 立即加入黑名单。为容忍并发请求与客户端重试，服务端以旧令牌的 md5 为键缓存新令牌对 60 秒（`refresh_rotation:<md5>`）：宽限期内再次提交同一旧令牌返回同一对新令牌，不会重复轮换；超过 60 秒后按黑名单拒绝。
+
+并发轮换由 `refresh_lock:<md5>`（`SET NX EX 5` + Lua 比较后删除释放）串行化：未抢到锁的请求短暂等待缓存出现，命中则复用同一对令牌，未命中返回 409；持锁请求写缓存后再拉黑旧令牌。读取缓存时若缓存中的任一枚令牌已被拉黑，立即删除缓存并返回 401，防止登出或改密后经缓存换回有效令牌。每个用户用 `user_refresh_rotations:<userId>`（TTL 120 秒）记录自己的轮换键；登出与改密会拉黑缓存令牌并清空轮换缓存/集合。客户端应串行刷新；HarmonyOS 客户端对并发 401 使用单飞（single-flight）刷新，多个请求共享同一次刷新结果。
 
 ### 6.2 并发会话限制
 
@@ -222,14 +233,18 @@ AdminAuth 中间件实现，挂载在需要认证的路由组上。
 
 ```
 登录成功 → 签发新 Token
-         → 查询当前用户有效 Token 数量: Redis SCARD user_tokens:{userId}
-         → 若数量 >= 3（MAX_CONCURRENT_SESSIONS）:
-            → 按创建时间升序排列，移除最旧的 Token:
-              Redis SREM user_tokens:{userId} <oldest_token_id>
-              Redis SETEX jwt_blacklist:{md5(oldest_token)} TTL remaining
-         → 将新 Token 加入集合: Redis SADD user_tokens:{userId} <new_token_id>
-            Redis SET user_token:{token_id} {userId} EX {TTL}
+         → 查询当前用户有效 Token: Redis ZCARD user_tokens:{userId}
+           （ZSET 成员为 md5(token)，score 为过期时间戳）
+         → 先 ZREMRANGEBYSCORE 清理已过期成员
+         → ZADD user_tokens:{userId} <exp> <md5(new_token)>
+         → 若 ZCARD > 3（MAX_CONCURRENT_SESSIONS）:
+            → ZRANGE 取 score 最小（最早过期）的成员
+            → ZREM user_tokens:{userId} <md5(oldest_token)>
+            → SETEX jwt_blacklist:{md5(oldest_token)} <remaining_ttl> 1
+         → EXPIRE user_tokens:{userId} <access TTL + 3600>
 ```
+
+refresh_token 同样登记到 `user_refresh_tokens:{userId}` ZSET（score 为过期时间戳），供登出与改密统一吊销。
 
 **配置常量**：
 
@@ -277,7 +292,9 @@ API 权限标识格式：`{method}.{path}`
 
 **二次确认**：BaseController 提供 `confirmPassword()` 方法，敏感操作（删除用户、数据导出等）在 Controller 层额外要求输入当前密码，防止会话劫持后被未授权操作。
 
-**超级管理员保护**：删除/批量删除/批量禁用会拒绝当前登录账号（422），并在写入前统计启用状态、`slug = super_admin` 的用户数，若操作后剩余为 0 则返回 422 `系统必须保留至少一名启用的超级管理员`。内置 `super_admin` 角色本身禁止编辑/删除（403）。该检查为“检查后写入”，并发删除多名的极端场景需数据库行锁；当前实现按业务规则在写入前复核，残留并发窗口见 12.2。
+**超级管理员保护**：删除/批量删除/批量禁用会拒绝当前登录账号（422），并在写入前统计启用状态、`slug = super_admin` 的用户数，若操作后剩余为 0 则返回 422 `系统必须保留至少一名启用的超级管理员`。内置 `super_admin` 角色本身禁止编辑/删除（403）。
+
+“最后一名启用超管”校验与写操作在同一把 MySQL 命名锁内串行化：`GET_LOCK('open_admin:last_super_admin', 3)`，`finally` 中 `RELEASE_LOCK`。覆盖 `destroy`、`batchDestroy`、`batchStatus(disable)` 与 `update(disable)`；等待超时或数据库异常返回 HTTP 503，调用方可重试，避免并发禁用/删除同时通过检查。命名锁按连接持有，连接断开时由 MySQL 自动释放。
 
 ---
 
@@ -381,7 +398,7 @@ OperationLog 中间件对 POST / PUT / DELETE 请求自动记录操作日志。G
 - 邮箱：`a***@example.com`
 - 身份证：完全遮盖为 `********`
 
-**导入导出资源上限**：Excel 导出单次最多 5000 行（查询 `LIMIT 5001` 探测，超出返回 HTTP 422），避免大批量导出占用内存并扩大数据外泄面；用户导入限制 5MB、2000 行，服务端在加载工作簿前读取工作表元数据，任一工作表超过 2001 行立即返回 422，加载后再次校验行数。
+**导入导出资源上限**：Excel 导出单次最多 5000 行（查询 `LIMIT 5001` 探测，超出返回 HTTP 422），避免大批量导出占用内存并扩大数据外泄面；用户导入限制 5MB 文件、2000 行数据（含表头 2001 行）。服务端在加载工作簿前先做 `.xlsx` ZIP 解压体积预检：`xl/**.xml` 条目解压后总大小超过 8MB，或所有工作表单元格总数超过 32,000 个，即返回 422，防止压缩炸弹与 128M 工作进程 OOM；随后读取工作表元数据，任一工作表超过 2001 行立即返回 422，加载后再次校验行数。文件损坏、无法读取或无法解析的工作簿统一返回 422 与可读提示，不泄漏异常内部信息。
 
 ---
 
@@ -418,7 +435,11 @@ OperationLog 中间件对 POST / PUT / DELETE 请求自动记录操作日志。G
 
 ### 备份与日志保留
 
-生产 `backup` 服务使用独立的最小权限 MySQL 用户 `backup_reader`（`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES`，外加 `erik_operation_log` 的 `DELETE`），不持有 root 密码。每日用 `mysqldump --single-transaction --no-tablespaces` 备份数据库，并把 `deploy/data/upload` 打包为 `upload_<时间>.tar.gz`，两类备份保留 30 天；同时每日清理 180 天前的操作日志（每轮最多 10000 行，失败不影响备份）。备份与数据库位于同一主机/磁盘，必须用 `rsync` 或 `rclone` 复制到异地，避免单机故障同时丢失数据与备份。
+生产 `backup` 服务使用独立的最小权限 MySQL 用户 `backup_reader`（`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES`，外加 `erik_operation_log` 的 `DELETE`），不持有 root 密码。每日用 `mysqldump --single-transaction --no-tablespaces` 备份数据库，并把 `deploy/data/upload` 打包为 `upload_<时间>.tar.gz`，两类备份保留 30 天；同时每日清理 180 天前的操作日志（每轮最多 10000 行，失败不影响备份）。
+
+应用内另有不监听端口的 `log-cleanup` webman 进程（`count=1`）：启动时先尽力清理一次，之后每日清理 180 天前的 `operation_log`，每批 10000 行，失败只记日志不影响服务；它与 backup 服务的清理互为兜底。
+
+备份与数据库位于同一主机/磁盘，必须复制到异地，避免单机故障同时丢失数据与备份。`deploy/offsite-sync.sh` 读取 `deploy/.env` 的 `OFFSITE_TARGET`，支持 rsync（`user@host:/path/`）与 rclone（`rclone:remote:path`），未配置目标或备份目录为空时拒绝执行，并排除未写完的临时文件；脚本由宿主机 cron 调度，容器不会自动调用。
 
 ---
 
@@ -470,6 +491,7 @@ Policy: https://erik.xyz/security-policy
 | `limit_conn_zone` | 并发连接数限制 |
 | `add_header` 安全头 | 在 Nginx 层面追加 X-XSS-Protection 等安全头 |
 | 静态资源安全头 | 在 assets location 内重复 `X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy` 与 `Cache-Control`（location 级 `add_header` 会覆盖继承值） |
+| 静态页面 CSP | `/open-admin/`、`/open-admin/en/`、`/apidoc/` 各自的 location 注入独立 CSP：`default-src 'self'`、允许内联脚本（页面主题引导与 JSON-LD），官网额外放行 `https://busuanzi.ibruce.info`，`frame-ancestors 'none'`、`form-action 'self'`；这些 location 同样重复安全响应头 |
 | `if ($request_method)` | Nginx 层面拒绝非标准 HTTP 方法 |
 | SSL/TLS 配置 | 现代 TLS 1.2/1.3 配置，禁用弱加密套件 |
 | 隐藏后端头 | `proxy_hide_header` 移除 webman 版本等敏感头 |
@@ -508,7 +530,6 @@ Policy: https://erik.xyz/security-policy
 | CSRF 保护仅对浏览器有效 | 非浏览器客户端（curl, Postman, 移动 App）可跳过 Origin/Referer 检查 | 非浏览器客户端天然不受 CSRF 攻击；依赖 JWT 认证替代 Cookie |
 | Redis 不可用时 `/api/`、`/admin/` 失败关闭（503） | Redis 故障期间管理端与 API 不可用 | `/health`、`/metrics` 等非 API 路径放行；监控 Redis 并告警，尽快恢复 |
 | 刷新令牌 60 秒宽限期 | 旧 refresh_token 在轮换后 60 秒内重放可拿到缓存的新令牌对 | 旧令牌已拉黑且缓存仅 60 秒；客户端串行刷新，HarmonyOS 单飞 |
-| 最后一名超级管理员检查未加行锁 | 两个并发删除/禁用最后两名超管时可能都通过检查 | 写入前复核；极端并发需改事务 + `SELECT ... FOR UPDATE` |
 | 无独立 WAF 引擎 | 基于正则匹配的检测，非专用 WAF 规则引擎 | 生产环境建议前置 Nginx ModSecurity 或 Cloudflare WAF |
 | JWT 无状态无法主动失效 | Token 未过期前无法从服务端主动吊销（除黑名单外） | 黑名单 + 短期 2h TTL 降低风险窗口 |
 | 管理员端点无特殊限流 | 管理员接口与普通接口共用 60/min 默认限制 | 管理员操作频率天然低，暂无需区分 |

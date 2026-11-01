@@ -279,7 +279,7 @@ curl http://localhost:8791/api/v2/auth/login
   │◄── 200 {dashboard data}           │
 ```
 
-刷新：`POST /api/v1/auth/refresh` 轮换令牌对，旧 refresh_token 立即拉黑，并以 `refresh_rotation:<md5>` 缓存新令牌对 60 秒；宽限期内重复提交旧令牌返回同一对令牌。密码修改清除轮换缓存，登出拉黑缓存令牌；HarmonyOS 客户端并发 401 单飞刷新。
+刷新：`POST /api/v1/auth/refresh` 轮换令牌对，旧 refresh_token 立即拉黑，并以 `refresh_rotation:<md5>` 缓存新令牌对 60 秒；宽限期内重复提交旧令牌返回同一对令牌。并发轮换由 `refresh_lock:<md5>`（`SET NX EX 5` + Lua 释放）串行化，并发未命中返回 409；缓存令牌被拉黑时删除缓存并返回 401。密码修改清除轮换缓存，登出拉黑缓存令牌并按 `user_refresh_rotations:<userId>` 清理；HarmonyOS 客户端并发 401 单飞刷新。
 
 ### 4.6 权限模型 (RBAC)
 
@@ -296,7 +296,7 @@ curl http://localhost:8791/api/v2/auth/login
   超级管理员标识: * (跳过所有权限检查)
 ```
 
-超级管理员保护：不能删除当前登录账号或修改其状态；删除/禁用后必须至少保留一名启用的超管（否则 422）；内置 `super_admin` 角色禁止编辑/删除（403）。
+超级管理员保护：不能删除当前登录账号或修改其状态；删除/禁用后必须至少保留一名启用的超管（否则 422）。校验与写操作由 MySQL 命名锁 `open_admin:last_super_admin`（`GET_LOCK` 3 秒 / `finally` 释放）串行化，覆盖删除、批量删除、批量禁用与更新禁用，超时或数据库异常返回 503；内置 `super_admin` 角色禁止编辑/删除（403）。
 
 ### 4.7 敏感操作二次确认
 
@@ -458,9 +458,10 @@ docker compose up -d --build
 - `app`/`init` 以 `${APP_UID:-1000}:${APP_GID:-1000}` 运行，脚本用 `id -u`/`id -g` 写入 master `.env`，保证 `deploy/data/{runtime,upload}` 可写。
 - 真实域名证书替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`；管理员密码见 `deploy/secrets/admin_password.txt`；HSTS 默认关闭，配置真实证书后再启用。
 - 持久化目录：`deploy/data/{mysql,redis,runtime,upload,backups}`；日志由 Docker 按 `10m × 3` 轮转。
-- 各服务设置内存上限：app 512M、init 256M、mysql 768M、redis 256M、nginx 128M、backup 256M。
+- 各服务设置 CPU/内存/pids 上限：app 1.0/512M/256、init 0.5/256M/128、mysql 1.5/768M/512、redis 0.5/384M/128、nginx 0.5/128M/128、backup 0.5/256M/128；Redis 容器 384M 与 `--maxmemory 256mb` 配套，预留 128M 给 AOF 重写/fork 与内存碎片。
+- 应用内 `log-cleanup` 进程（不监听端口，`count=1`）启动时先尽力清理一次，之后每日删除 180 天前的 `operation_log`，每批 10000 行；与 backup 服务的清理互为兜底。
 - Nginx 在静态资源 location 内重复注入 `X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy` 与 `Cache-Control`；`deploy/nginx/default.conf` 与 `docs/nginx-security.conf` 均由 CI 执行 `nginx -t`。
-- `backup` 使用最小权限用户 `backup_reader`（数据表 `SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` + `erik_operation_log` 的 `DELETE`），备份与 MySQL 同机同盘，需用 `rsync`/`rclone` 复制到异地。
+- `backup` 使用最小权限用户 `backup_reader`（数据表 `SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` + `erik_operation_log` 的 `DELETE`）；备份默认与 MySQL 同机同盘，异地副本由宿主机 cron 调用 `deploy/offsite-sync.sh`（读取 `deploy/.env` 的 `OFFSITE_TARGET`，支持 rsync 与 rclone）。
 
 项目根目录的 `docker-compose.yml` 仅保留 4 个服务（nginx/app/mysql/redis）的本地快速开始编排；其 `.env.docker` 默认值为公开且故意无效的占位值，使用前先替换，禁止公网暴露，生产请使用 `deploy/`。
 
@@ -474,7 +475,7 @@ GitHub Actions 持续集成定义在 `.github/workflows/ci.yml`：
 
 ### 8.4 数据库备份
 
-生产编排的 `backup` 服务每日自动备份数据库与上传文件到 `deploy/data/backups`（保留 30 天），并清理 180 天前的操作日志；异地副本需用 `rsync`/`rclone` 同步。
+生产编排的 `backup` 服务每日自动备份数据库与上传文件到 `deploy/data/backups`（保留 30 天），并清理 180 天前的操作日志；应用内 `log-cleanup` 进程同样每日清理。异地副本由宿主机 cron 调用 `deploy/offsite-sync.sh`（读取 `OFFSITE_TARGET`）同步。
 `database/backup/backup.sh` — mysqldump + gzip 备份，自动清理 30 天前旧备份（宿主机直连数据库）。
 `database/backup/restore.sh` — 交互式选择并恢复备份。
 

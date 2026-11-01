@@ -281,7 +281,7 @@ Exceeding the limit returns 429; response headers include X-RateLimit-Limit / Re
   │◄── 200 {dashboard data}           │
 ```
 
-Refresh: `POST /api/v1/auth/refresh` rotates the token pair and immediately blacklists the old refresh_token, caching the new pair for 60 seconds under `refresh_rotation:<md5>`; resubmitting the old token within the grace period returns the same pair. A password change clears the rotation cache and logout blacklists the cached tokens; the HarmonyOS client uses single-flight refresh for concurrent 401s.
+Refresh: `POST /api/v1/auth/refresh` rotates the token pair and immediately blacklists the old refresh_token, caching the new pair for 60 seconds under `refresh_rotation:<md5>`; resubmitting the old token within the grace period returns the same pair. Concurrent rotation is serialized by `refresh_lock:<md5>` (`SET NX EX 5` + Lua release); a concurrent cache miss returns 409, and a blacklisted cached token deletes the cache and returns 401. A password change clears the rotation cache and logout blacklists the cached tokens, cleaning up via `user_refresh_rotations:<userId>`; the HarmonyOS client uses single-flight refresh for concurrent 401s.
 
 ### 4.6 Permission Model (RBAC)
 
@@ -298,7 +298,7 @@ Refresh: `POST /api/v1/auth/refresh` rotates the token pair and immediately blac
   超级管理员标识: * (跳过所有权限检查)
 ```
 
-Super-admin protection: the currently logged-in account cannot be deleted or have its status changed; delete/disable must leave at least one enabled super administrator (otherwise 422); the built-in `super_admin` role cannot be edited or deleted (403).
+Super-admin protection: the currently logged-in account cannot be deleted or have its status changed; delete/disable must leave at least one enabled super administrator (otherwise 422). The check and write are serialized by the MySQL named lock `open_admin:last_super_admin` (`GET_LOCK` 3s / released in `finally`), covering delete, batch delete, batch disable and update-disable; a timeout or database error returns 503. The built-in `super_admin` role cannot be edited or deleted (403).
 
 ### 4.7 Password Re-Confirmation for Sensitive Operations
 
@@ -461,9 +461,10 @@ docker compose up -d --build
 - `app`/`init` run as `${APP_UID:-1000}:${APP_GID:-1000}`; the script writes `id -u`/`id -g` into the master `.env`, keeping `deploy/data/{runtime,upload}` writable.
 - Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; the admin password is in `deploy/secrets/admin_password.txt`; HSTS is off by default and should be enabled after a real certificate is configured.
 - Persistent directories: `deploy/data/{mysql,redis,runtime,upload,backups}`; Docker rotates logs at `10m × 3`.
-- Per-service memory limits: app 512M, init 256M, mysql 768M, redis 256M, nginx 128M, backup 256M.
+- Per-service CPU/memory/pids limits: app 1.0/512M/256, init 0.5/256M/128, mysql 1.5/768M/512, redis 0.5/384M/128, nginx 0.5/128M/128, backup 0.5/256M/128; the Redis container's 384M pairs with `--maxmemory 256mb`, leaving 128M for AOF rewrite/fork and fragmentation.
+- An in-app `log-cleanup` process (no listening port, `count=1`) performs a best-effort cleanup at startup and then daily deletes `operation_log` rows older than 180 days in batches of 10,000; it and the backup-service cleanup are fallbacks for each other.
 - Nginx repeats `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` and `Cache-Control` inside the static asset locations; CI runs `nginx -t` on both `deploy/nginx/default.conf` and `docs/nginx-security.conf`.
-- `backup` uses the least-privilege `backup_reader` user (`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` on the database plus `DELETE` on `erik_operation_log`). Backups share the MySQL host/disk, so copy them offsite with `rsync`/`rclone`.
+- `backup` uses the least-privilege `backup_reader` user (`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` on the database plus `DELETE` on `erik_operation_log`). Backups default to the MySQL host/disk; offsite copies are run by host cron via `deploy/offsite-sync.sh` (reads `OFFSITE_TARGET` in `deploy/.env`, supports rsync and rclone).
 
 The root `docker-compose.yml` is only the 4-service (nginx/app/mysql/redis) local quick-start stack; its `.env.docker` defaults are public, deliberately invalid placeholders, so replace them before use and never expose it publicly — use `deploy/` for production.
 
@@ -477,7 +478,7 @@ GitHub Actions CI is defined in `.github/workflows/ci.yml`:
 
 ### 8.4 Database Backup
 
-The production stack's `backup` service writes daily database and upload backups to `deploy/data/backups` (30-day retention) and deletes operation logs older than 180 days; sync offsite copies with `rsync`/`rclone`.
+The production stack's `backup` service writes daily database and upload backups to `deploy/data/backups` (30-day retention) and deletes operation logs older than 180 days; the in-app `log-cleanup` process performs the same daily purge. Offsite copies are synced by host cron via `deploy/offsite-sync.sh` (reads `OFFSITE_TARGET`).
 `database/backup/backup.sh` — mysqldump + gzip backup, auto-clears backups older than 30 days (host with direct database access).
 `database/backup/restore.sh` — interactive selection and restore of backups.
 

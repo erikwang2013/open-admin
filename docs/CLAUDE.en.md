@@ -18,9 +18,9 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
 | Domain | Feature |
 |----|------|
-| Authentication | Login/Refresh/Logout + click CAPTCHA + account lockout + session limit + refresh rotation with 60s grace |
+| Authentication | Login/Refresh/Logout + click CAPTCHA + account lockout + session limit + refresh rotation with 60s grace and rotation lock |
 | Dashboard | Real-time stats/trends/distribution/logs (Redis 5m cache) |
-| Users | CRUD + batch delete/enable-disable + Excel import (5MB/2000-row cap) |
+| Users | CRUD + batch delete/enable-disable + Excel import (5MB/2000-row cap, ZIP-expansion guard) |
 | Roles & Permissions | CRUD + permission tree + RBAC method.path authorization |
 | System Config | Key-value CRUD |
 | Operation Audit | Log query + automatic detection of 8 platform client sources |
@@ -96,7 +96,7 @@ open-admin/
 │   ├── model/                  # Data models
 │   ├── view/index/view.html    # Site home page template (GET /, project pet + entry navigation)
 │   ├── queue/                  # Queue tasks
-│   └── process/                # Processes (Http, Monitor)
+│   └── process/                # Processes (Http, Monitor, LogCleanup)
 ├── apps/
 │   ├── flutter/                # Flutter Web admin
 │   │   └── lib/app/
@@ -138,7 +138,7 @@ open-admin/
 │   ├── apidoc/index.html       # Lightweight API explorer (same-origin /api/docs)
 │   └── img/pet.svg             # Project pet "Xiao An" (SVG, also the site icon)
 ├── site/                       # Responsive static site (Chinese/English, search, install/architecture/changelog)
-├── deploy/                     # Single-machine production stack (compose + secret generation + Nginx/TLS)
+├── deploy/                     # Single-machine production stack (compose + secret generation + Nginx/TLS + offsite-sync.sh)
 ├── runtime/                    # Runtime files
 ├── tests/                      # Tests
 ├── vendor/                     # Composer dependencies
@@ -172,11 +172,11 @@ open-admin/
 ## Security Enhancements
 
 - **Attack detection**: erikwang2013/security-php package (31 detectors: XSS/SQL injection/command injection/path traversal/SSRF/XXE/JNDI/deserialization/JWT attacks/CSRF/sensitive data leakage, etc. + HTTP method validation/request body size limit/Content-Type validation + IP attack escalation blacklist)
-- **CSP header**: Content-Security-Policy + X-Permitted-Cross-Domain-Policies injected into all responses
-- **Account lockout**: after 5 consecutive failed logins, the account is locked for 15 minutes
-- **Concurrent session limit**: at most 3 valid tokens per user; the oldest token is blacklisted when exceeded
-- **Refresh rotation**: after a refresh token is exchanged, the old token is blacklisted; replaying the old token within a 60-second grace window returns the same token pair; HarmonyOS issues only one refresh for concurrent 401s
-- **Super admin protection**: cannot delete the current account or change its status; at least one enabled super admin must remain; the `super_admin` role cannot be edited/deleted
+- **CSP header**: Content-Security-Policy + X-Permitted-Cross-Domain-Policies injected into all responses; `/open-admin/`, `/open-admin/en/` and `/apidoc/` also get dedicated CSPs in Nginx (same-origin default, inline scripts allowed, busuanzi allowed on the site, frames and cross-origin forms denied)
+- **Account lockout**: after 5 consecutive failed logins the account is locked for 15 minutes; existing users use `account_lock:u:<userId>` / `login_fail:u:<userId>`, unknown usernames use `account_lock:n:<md5(lower(trim(username)))>` / `login_fail:n:<same>`, all keys have a 900-second TTL, and case/whitespace variants share the counter; `AuthController::lockKeys()` is the single source
+- **Concurrent session limit**: at most 3 valid tokens per user (`user_tokens:<userId>` ZSET, member md5(token), score expiry time); the oldest token is blacklisted when exceeded
+- **Refresh rotation**: after a refresh token is exchanged, the old token is blacklisted; replaying the old token within a 60-second grace window returns the same token pair. Rotation is serialized by `refresh_lock:<md5>` (`SET NX EX 5` + Lua release); a blacklisted cached token deletes the cache and returns 401, and a concurrent cache miss returns 409. Logout and password changes blacklist cached pairs and clear `user_refresh_rotations:<userId>`; HarmonyOS issues only one refresh for concurrent 401s
+- **Super admin protection**: cannot delete the current account or change its status; at least one enabled super admin must remain; the `super_admin` role cannot be edited/deleted. The last-super-admin check and write are serialized by the MySQL named lock `open_admin:last_super_admin` (`GET_LOCK` 3s / released in `finally`), covering delete, batch delete, batch disable and update-disable; a timeout or database error returns 503
 - **Redis fail-closed**: authentication and rate limiting for `/api/` and `/admin/` return 503 when Redis is unavailable (health checks, metrics and other non-API routes pass through)
 - **security.txt**: `/.well-known/security.txt` RFC 9116 endpoint
 - **Nginx security config**: `docs/nginx-security.conf` reverse-proxy hardening reference; static assets repeat security headers in their own location, and CI validates with `nginx -t`
@@ -210,7 +210,9 @@ Redis sliding window (Lua atomic), default 60 req/min/IP/route:
 - **Redis is accessed via the `support\Redis` utility class** (singleton connection pool, automatically reads the `REDIS_HOST/PORT/PASSWORD/DB` environment variables); all keys are automatically prefixed (default `open-admin:`, configurable via the `REDIS_PREFIX` environment variable)
 - **Route permissions**: routes in the `/admin` group require `method.path`-style permissions (e.g. `get.admin/dashboard`); routes needing no permission check are placed outside the group with only the `AdminAuth` middleware
 - **CORS**: when adding request headers, update the `Cors.php` middleware and the `Access-Control-Allow-Headers` fallback in `route.php` accordingly
-- **Super admin protection**: the `update`/`destroy` methods of `RoleController` are forbidden from operating on roles with `slug == 'super_admin'`; `UserController` forbids deleting the current account or changing its status, and at least one enabled super admin must remain
+- **Super admin protection**: the `update`/`destroy` methods of `RoleController` are forbidden from operating on roles with `slug == 'super_admin'`; `UserController` forbids deleting the current account or changing its status, and at least one enabled super admin must remain; the last-super-admin check must run through `withSuperAdminLock()` so it shares the MySQL named lock with the write
+- **User update validation**: `UserController::update` decrypts the transport password before validating; when a password is provided it must be 6-32 plaintext characters, `real_name` is at most 50 characters, and `status` must be exactly 0 or 1
+- **Import protection**: `ImportController` caps files at 5MB and data at 2,000 rows; before loading the workbook it checks that `.xlsx` entries under `xl/**.xml` expand to no more than 8MB and that the total worksheet cell count is at most 32,000, and corrupt/unparseable workbooks return 422 without leaking exception internals
 - webman converts PHP warnings into exceptions; undefined properties/variables cause 500 errors
 
 ### Database
@@ -264,9 +266,10 @@ docker compose up -d --build
 - TLS defaults to a self-signed certificate for `DOMAIN` (`localhost` by default). Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; existing certificates are not overwritten unless `--rotate-tls` is used. HSTS is commented out by default; enable it after a real domain certificate is configured.
 - Ports: Nginx `80/443` (port 80 only keeps `/.well-known/acme-challenge/`, everything else 301 to HTTPS); webman listens on `8791` inside the container only.
 - Logs: Nginx and MySQL write to stdout/stderr and Docker rotates at `10m × 3`; use `docker compose logs -f app`. Host persistent directories: `deploy/data/{mysql,redis,runtime,upload,backups}`.
-- Resource limits: MySQL 768M, Redis 256M, app 512M, backup/init 256M, Nginx 128M (`deploy.resources.limits` in `deploy/docker-compose.yml`).
+- Resource limits: `deploy/docker-compose.yml` sets CPU/memory/pids limits per service (app 1.0/512M/256, init 0.5/256M/128, mysql 1.5/768M/512, redis 0.5/384M/128, nginx 0.5/128M/128, backup 0.5/256M/128). The Redis container's 384M pairs with `redis-server --maxmemory 256mb`, leaving 128M for AOF rewrite/fork, client buffers and fragmentation; change both values together.
 - Automatic backup: the `backup` service runs `mysqldump` daily as the least-privilege `backup_reader` user (read-only on the application database plus `DELETE` on `erik_operation_log`) into `deploy/data/backups`, and archives `deploy/data/upload` as tar; backups are retained for 30 days and operation logs older than 180 days are purged daily.
-- Offsite backup: sync the backup directory with rsync or rclone (examples in `deploy/README.md`).
+- Log cleanup: `config/process.php` registers a non-listening `log-cleanup` process (`count=1`) that performs a best-effort cleanup on startup and then daily deletes `operation_log` rows older than 180 days in 10,000-row batches; it and the backup-service cleanup are fallbacks for each other.
+- Offsite backup: backups stay on the DB host disk by default; host cron calls `deploy/offsite-sync.sh`, which reads `OFFSITE_TARGET` from `deploy/.env` and supports rsync (`user@host:/path/`) and rclone (`rclone:remote:path`), refusing an unset target or empty backup directory.
 - RSA public key: `GET /api/v1/auth/public-key` returns the current public key. Flutter fetches it before login and falls back to the embedded key on failure; after `--regenerate` rotates the keypair, verify the endpoint is reachable and rebuild clients that rely on the embedded fallback.
 
 ### CI/CD
@@ -274,7 +277,7 @@ docker compose up -d --build
 `.github/workflows/ci.yml` defines the GitHub Actions pipeline:
 
 - PHP syntax check (`php -l`)
-- PHPUnit unit tests
+- PHPUnit unit tests (including `tests/LockKeyTest.php`, `tests/RefreshRotationCacheTest.php` and `tests/ProcessConfigTest.php`)
 - Flutter static analysis (`flutter analyze`)
 - Docker image build and runtime dependency checks (`php -m` for redis/zip/gd, `gd_info` for FreeType/JPEG)
 - Compose/Nginx config validation: root compose, a temporary `deploy/` compose, and `nginx -t` for both Nginx configs
@@ -282,7 +285,7 @@ docker compose up -d --build
 
 ### Database Backup
 
-The production stack's `backup` service writes daily database and upload backups as the least-privilege user to `deploy/data/backups` (30-day retention) and purges operation logs older than 180 days; see `deploy/README.md` for offsite sync examples.
+The production stack's `backup` service writes daily database and upload backups as the least-privilege user to `deploy/data/backups` (30-day retention) and purges operation logs older than 180 days; the in-app `log-cleanup` process performs the same daily purge. Offsite sync is run by host cron via `deploy/offsite-sync.sh` (reads `OFFSITE_TARGET`).
 `database/backup/backup.sh` — mysqldump + gzip, auto-cleans backups older than 30 days (host with direct database access).
 `database/backup/restore.sh` — interactive restore, lists available backups for selection.
 

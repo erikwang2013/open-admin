@@ -178,7 +178,7 @@
   <text class="fItem" x="350" y="549">· GET /health 健康检查</text>
   <text class="fItem" x="350" y="568">· GET /metrics 5 项 Prometheus 指标</text>
   <text class="fItem" x="350" y="587">· GET /api/docs OpenAPI 文档</text>
-  <text class="fItem" x="350" y="606">· 备份脚本 + Docker + CI</text>
+  <text class="fItem" x="350" y="606">· 备份/异地同步 + Docker + CI</text>
 
   <!-- 安装向导 -->
   <rect class="card" x="630" y="456" width="280" height="152" rx="14"/>

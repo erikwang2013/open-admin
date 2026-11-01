@@ -263,7 +263,7 @@ sequenceDiagram
     SV-->>CL: 200 { dashboard data }
 ```
 
-刷新令牌：`POST /api/v1/auth/refresh` 每次成功刷新都轮换 access/refresh 令牌；旧 refresh_token 立即加入黑名单，同时以 `refresh_rotation:<md5(旧令牌)>` 缓存新令牌对 60 秒，宽限期内再次提交同一旧令牌返回同一对令牌。密码修改会清除轮换缓存，登出会拉黑缓存中的令牌；HarmonyOS 客户端对并发 401 使用单飞刷新。
+刷新令牌：`POST /api/v1/auth/refresh` 每次成功刷新都轮换 access/refresh 令牌；旧 refresh_token 立即加入黑名单，同时以 `refresh_rotation:<md5(旧令牌)>` 缓存新令牌对 60 秒，宽限期内再次提交同一旧令牌返回同一对令牌。并发轮换由 `refresh_lock:<md5>`（`SET NX EX 5` + Lua 释放）串行化，未命中缓存的并发请求返回 409；缓存令牌被拉黑时删除缓存并返回 401。密码修改会清除轮换缓存，登出会拉黑缓存中的令牌，并按 `user_refresh_rotations:<userId>` 清理；HarmonyOS 客户端对并发 401 使用单飞刷新。
 
 ---
 
@@ -681,7 +681,7 @@ flowchart TB
     style DATA fill:#F6F8FC,color:#1677FF
 ```
 
-> 环境变量按服务隔离在 `deploy/env/{app,init,mysql,redis,backup}.env`（`600`，目录 `700`），master `deploy/.env` 只保存 compose 插值；应用与 init 以宿主机 `APP_UID`/`APP_GID` 运行。`backup` 使用最小权限用户 `backup_reader`，备份数据库、上传文件并清理 180 天前的操作日志；各服务设置内存上限（app 512M、init 256M、mysql 768M、redis 256M、nginx 128M、backup 256M）。Nginx/MySQL 日志写 stdout/stderr，由 Docker 按 `10m × 3` 轮转；HSTS 默认关闭，配置真实域名证书后再启用。
+> 环境变量按服务隔离在 `deploy/env/{app,init,mysql,redis,backup}.env`（`600`，目录 `700`），master `deploy/.env` 只保存 compose 插值；应用与 init 以宿主机 `APP_UID`/`APP_GID` 运行。`backup` 使用最小权限用户 `backup_reader`，备份数据库、上传文件并清理 180 天前的操作日志；应用内 `log-cleanup` 进程每日清理同一张表作为兜底。各服务设置 CPU/内存/pids 上限（app 1.0/512M/256、init 0.5/256M/128、mysql 1.5/768M/512、redis 0.5/384M/128、nginx 0.5/128M/128、backup 0.5/256M/128）；Redis 容器 384M 与 `--maxmemory 256mb` 配套，预留 128M 给 AOF 重写/fork 与内存碎片。异地备份由宿主机 cron 调用 `deploy/offsite-sync.sh`（读取 `OFFSITE_TARGET`）。Nginx/MySQL 日志写 stdout/stderr，由 Docker 按 `10m × 3` 轮转；HSTS 默认关闭，配置真实域名证书后再启用。
 
 ---
 

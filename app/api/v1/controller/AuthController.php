@@ -35,6 +35,21 @@ class AuthController
     }
 
     /**
+     * 账号锁定键 — 已知用户按 ID 记键（与用户名大小写无关），未知用户按规范化用户名记键
+     *
+     * @return array{0: string, 1: string} [锁定键, 失败计数键]
+     */
+    public static function lockKeys(string $username, ?int $userId = null): array
+    {
+        if ($userId !== null && $userId > 0) {
+            return ["account_lock:u:{$userId}", "login_fail:u:{$userId}"];
+        }
+
+        $normalized = md5(mb_strtolower(trim($username), 'UTF-8'));
+        return ["account_lock:n:{$normalized}", "login_fail:n:{$normalized}"];
+    }
+
+    /**
      * @Apidoc\Title("登录")
      * @Apidoc\Group("认证")
      * @Apidoc\Method("POST")
@@ -74,8 +89,8 @@ class AuthController
         // 校验用户凭证
         $user = AdminUser::where('username', $username)->first();
 
-        // 账号锁定检查（5次失败/15分钟）
-        $lockKey = "account_lock:{$username}";
+        // 账号锁定检查（5次失败/15分钟）— 已存在用户按 ID 记键，大小写变体无法绕开锁定
+        [$lockKey, $failKey] = self::lockKeys($username, $user ? (int) $user->id : null);
         try {
             if (Redis::get($lockKey)) {
                 return json(['code' => 429, 'message' => trans('messages.account_locked'), 'data' => []]);
@@ -89,7 +104,6 @@ class AuthController
         if ($password === '' || strlen($password) < 6 || strlen($password) > 32 || !$user || !password_verify($password, $user->password)) {
             // 登录失败：计数 + 锁定
             try {
-                $failKey = "login_fail:{$username}";
                 $fails = Redis::incr($failKey);
                 if ($fails === 1) Redis::expire($failKey, 900);
                 if ($fails >= 5) {
@@ -102,7 +116,7 @@ class AuthController
         }
 
         // 登录成功：清除失败计数
-        try { Redis::del("login_fail:{$username}"); Redis::del($lockKey); } catch (\Throwable) {}
+        try { Redis::del($failKey); Redis::del($lockKey); } catch (\Throwable) {}
 
         if ($user->status === 0) {
             return json(['code' => 403, 'message' => trans('messages.account_disabled'), 'data' => []]);
@@ -155,7 +169,7 @@ class AuthController
     {
         $refreshToken = $request->input('refresh_token', '');
 
-        if (empty($refreshToken)) {
+        if (empty($refreshToken) || !is_string($refreshToken)) {
             return json(['code' => 422, 'message' => trans('messages.refresh_missing'), 'data' => []]);
         }
 
@@ -184,33 +198,70 @@ class AuthController
             } catch (Throwable) {
                 // Redis 故障时 fail-open
             }
+        } catch (Throwable $e) {
+            return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
+        }
 
-            // 轮换重放宽限：60 秒内同一旧 refresh token 的重试/并发刷新返回同一对新令牌，
-            // 必须放在黑名单拒绝之前，否则旧令牌轮换后立即重试会被判为已登出
-            $rotationKey = 'refresh_rotation:' . md5($refreshToken);
-            try {
-                $cachedPair = Redis::get($rotationKey);
-                if ($cachedPair) {
-                    $pair = json_decode($cachedPair, true);
-                    if (is_array($pair) && !empty($pair['access_token']) && !empty($pair['refresh_token'])) {
-                        return json([
-                            'code'    => 0,
-                            'message' => 'success',
-                            'data'    => $pair + ['user' => [
-                                'id'        => Container::get('hashids')->encode($user->id),
-                                'username'  => $user->username,
-                                'real_name' => $user->real_name,
-                            ]],
-                        ]);
-                    }
+        $tokenHash   = md5($refreshToken);
+        $rotationKey = 'refresh_rotation:' . $tokenHash;
+        $lockKey     = 'refresh_lock:' . $tokenHash;
+
+        // 登记集合是登出/改密的吊销标记：先记下源令牌是否仍在册，轮换后复查以关闭并发竞态
+        try {
+            $sourceTracked = Redis::zscore("user_refresh_tokens:{$userId}", $tokenHash) !== false;
+        } catch (Throwable) {
+            $sourceTracked = false;
+        }
+        $trackedUser = $sourceTracked ? $userId : null;
+
+        // 轮换重放宽限：60 秒内同一旧 refresh token 的重试/并发刷新返回同一对新令牌，
+        // 必须放在黑名单拒绝之前，否则旧令牌轮换后立即重试会被判为已登出；
+        // 缓存令牌任何一枚已吊销时删除缓存并拒绝，防止登出/改密后经缓存换回有效令牌
+        $cached = self::cachedRotationPair($rotationKey, $trackedUser, $tokenHash);
+        if ($cached === false) {
+            return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
+        }
+        if ($cached !== null) {
+            return $this->tokenResponse($cached, $user);
+        }
+
+        // SET NX 锁串行化轮换，避免同一旧令牌并发换出多对令牌
+        $lockValue = bin2hex(random_bytes(8));
+        try {
+            $locked = (bool) Redis::set($lockKey, $lockValue, ['nx', 'ex' => 5]);
+        } catch (Throwable) {
+            // Redis 故障时降级为无锁轮换，黑名单检查同现有逻辑 fail-open
+            $locked = true;
+        }
+
+        if (!$locked) {
+            // 短暂等待持锁请求写入轮换结果，命中则复用同一对令牌
+            for ($i = 0; $i < 5; $i++) {
+                usleep(100000);
+                $cached = self::cachedRotationPair($rotationKey, $trackedUser, $tokenHash);
+                if ($cached === false) {
+                    return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
                 }
-            } catch (Throwable) {
-                // Redis 故障时退回正常轮换流程（下方黑名单检查同样 fail-open）
+                if ($cached !== null) {
+                    return $this->tokenResponse($cached, $user);
+                }
+            }
+            return json(['code' => 409, 'message' => '刷新请求处理中，请稍后重试', 'data' => []])->withStatus(409);
+        }
+
+        try {
+            // 持锁后复查：并发请求可能已完成轮换
+            $cached = self::cachedRotationPair($rotationKey, $trackedUser, $tokenHash);
+            if ($cached === false) {
+                return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
+            }
+            if ($cached !== null) {
+                return $this->tokenResponse($cached, $user);
             }
 
             // 已登出的 refresh token 不可再使用
             try {
-                if (Redis::get('jwt_blacklist:' . md5($refreshToken))) {
+                if (Redis::get('jwt_blacklist:' . $tokenHash)) {
                     return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
                 }
             } catch (Throwable) {
@@ -231,24 +282,45 @@ class AuthController
             $this->trackSession($userId, $token, $tokenExpire);
             $this->trackRefreshToken($userId, $newRefresh, $refreshExpire);
 
-            // 先写轮换缓存，保证并发重试命中宽限；再吊销旧 refresh token
+            // 先写轮换缓存并登记到用户集合（登出/改密时统一吊销）；再吊销旧 refresh token
             try {
                 Redis::setex($rotationKey, 60, json_encode([
                     'access_token'  => $token,
                     'refresh_token' => $newRefresh,
                     'expires_in'    => $tokenExpire,
                 ]));
+                Redis::sadd("user_refresh_rotations:{$userId}", $rotationKey);
+                Redis::expire("user_refresh_rotations:{$userId}", 120);
             } catch (Throwable) {
                 // Redis 故障不影响本次刷新
             }
             try {
                 Redis::setex(
-                    'jwt_blacklist:' . md5($refreshToken),
+                    'jwt_blacklist:' . $tokenHash,
                     max((int) ($payload['exp'] ?? 0) - time(), 60),
                     '1'
                 );
             } catch (Throwable) {
                 // Redis 故障不影响本次刷新
+            }
+
+            // 登出/改密的清理可能发生在本次轮换检查之后：源令牌已被移除则撤销刚签发的令牌对
+            if ($sourceTracked) {
+                try {
+                    if (Redis::zscore("user_refresh_tokens:{$userId}", $tokenHash) === false) {
+                        foreach ([[$token, $tokenExpire], [$newRefresh, $refreshExpire]] as [$issued, $ttl]) {
+                            $issuedHash = md5($issued);
+                            Redis::setex('jwt_blacklist:' . $issuedHash, $ttl, '1');
+                            Redis::zrem("user_tokens:{$userId}", $issuedHash);
+                            Redis::zrem("user_refresh_tokens:{$userId}", $issuedHash);
+                        }
+                        Redis::del($rotationKey);
+                        Redis::srem("user_refresh_rotations:{$userId}", $rotationKey);
+                        return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
+                    }
+                } catch (Throwable) {
+                    // Redis 故障时保留本次刷新结果
+                }
             }
 
             return json([
@@ -267,7 +339,70 @@ class AuthController
             ]);
         } catch (Throwable $e) {
             return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
+        } finally {
+            // 只删除自己持有的锁，避免锁过期后误删新持有者的锁
+            try {
+                Redis::eval(
+                    "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+                    [$lockKey, $lockValue],
+                    1
+                );
+            } catch (Throwable) {
+                // 释放失败由 5 秒 TTL 兜底
+            }
         }
+    }
+
+    /**
+     * 读取轮换缓存 — 命中且两枚令牌均未吊销时返回令牌对；缓存令牌已吊销时清缓存并返回 false；无缓存返回 null
+     *
+     * @param int|null $userId 源 refresh token 所属用户，与 $tokenHash 同时提供时校验令牌仍在登记集合中
+     * @return array|false|null
+     */
+    private static function cachedRotationPair(string $rotationKey, ?int $userId = null, ?string $tokenHash = null): array|false|null
+    {
+        try {
+            $cachedPair = Redis::get($rotationKey);
+            if (!$cachedPair) {
+                return null;
+            }
+            // 登出/改密已把源令牌移出登记集合：缓存对应作废，防止宽限期换回已吊销的令牌对
+            if ($userId !== null && $tokenHash !== null
+                && Redis::zscore("user_refresh_tokens:{$userId}", $tokenHash) === false) {
+                Redis::del($rotationKey);
+                return false;
+            }
+            $pair = json_decode((string) $cachedPair, true);
+            if (!is_array($pair) || empty($pair['access_token']) || empty($pair['refresh_token'])) {
+                return null;
+            }
+            foreach (['access_token', 'refresh_token'] as $field) {
+                if (Redis::get('jwt_blacklist:' . md5((string) $pair[$field]))) {
+                    Redis::del($rotationKey);
+                    return false;
+                }
+            }
+            return $pair;
+        } catch (Throwable) {
+            // Redis 故障时退回正常轮换流程
+            return null;
+        }
+    }
+
+    /**
+     * 轮换缓存命中时的统一响应
+     */
+    private function tokenResponse(array $pair, AdminUser $user): Response
+    {
+        return json([
+            'code'    => 0,
+            'message' => 'success',
+            'data'    => $pair + ['user' => [
+                'id'        => Container::get('hashids')->encode($user->id),
+                'username'  => $user->username,
+                'real_name' => $user->real_name,
+            ]],
+        ]);
     }
 
     /**

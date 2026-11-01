@@ -62,5 +62,10 @@ return [
                 'enable_memory_monitor' => DIRECTORY_SEPARATOR === '/',
             ]
         ]
+    ],
+    // 操作日志清理：保留 180 天，每轮最多删除 10000 行（单进程）
+    'log-cleanup' => [
+        'handler' => app\process\LogCleanup::class,
+        'count' => 1,
     ]
 ];

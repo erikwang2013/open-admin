@@ -39,7 +39,7 @@ docker compose down
 
 | 文件 | 内容 | 可见服务 | 权限 |
 |------|------|----------|------|
-| `deploy/.env` | 域名、端口、宿主机 UID/GID（仅 compose 插值） | compose | 600 |
+| `deploy/.env` | 域名、端口、宿主机 UID/GID（compose 插值）与 `OFFSITE_TARGET`（宿主机同步脚本） | compose、cron | 600 |
 | `deploy/env/app.env` | `APP_*`、`JWT_*`、`HASHIDS_*`、`SNOWFLAKE_*`、`ENCRYPTION_*`（含 RSA 私钥）、`ENCRYPTABLE_*`、`DB_*`（仅应用用户）、`REDIS_*`、`POSTER_*` | app | 600 |
 | `deploy/env/init.env` | `DB_*`（仅应用用户）、`ADMIN_USERNAME`、`ADMIN_PASSWORD`、`SNOWFLAKE_*` | init | 600 |
 | `deploy/env/mysql.env` | `MYSQL_ROOT_PASSWORD`、`MYSQL_DATABASE`、`DB_*`、`DB_BACKUP_USERNAME`、`DB_BACKUP_PASSWORD` | mysql | 600 |
@@ -58,8 +58,9 @@ docker compose down
 
 | 路径 | 内容 | 权限 |
 |------|------|------|
-| `deploy/.env` | compose 插值配置（域名/端口/UID） | 600 |
+| `deploy/.env` | compose 插值配置（域名/端口/UID）与异地备份目标 `OFFSITE_TARGET` | 600 |
 | `deploy/env/*.env` | 各服务环境变量（见上表） | 600 |
+| `deploy/offsite-sync.sh` | 备份异地同步脚本（宿主机 cron 调用，见「异地备份」） | 755 |
 | `deploy/secrets/rsa_public_key.pem` | RSA 公钥（与 `app.env` 中私钥配对） | 600 |
 | `deploy/secrets/admin_password.txt` | 初始管理员密码 | 600 |
 | `deploy/secrets/tls/fullchain.pem`、`privkey.pem` | TLS 证书（默认自签） | 600 |
@@ -210,21 +211,29 @@ Hashids ID 将无法解析（数据库主键不变）。只有确认没有依赖
 
 ## 资源限制
 
-compose 为每个服务设置了 `deploy.resources.limits.memory`，超过上限的容器会被 OOM 杀掉：
+compose 为每个服务设置了 `deploy.resources.limits.memory`、`deploy.resources.limits.cpus`
+与 `pids_limit`：内存超限的容器会被 OOM 杀掉，CPU 与 PID 数量超限则被限流（PID 到顶时
+无法再 fork）。这些上限同时限制单个容器被攻陷或失控时对宿主机的资源挤占：
 
-| 服务 | 内存上限 | 说明 |
-|------|----------|------|
-| `app` | 512M | PHP/webman 进程 |
-| `init` | 256M | 一次性初始化 |
-| `mysql` | 768M | `innodb-buffer-pool-size=256M` |
-| `redis` | 256M | `maxmemory 256mb`（另需少量进程开销） |
-| `nginx` | 128M | 反向代理与静态文件 |
-| `backup` | 256M | `mysqldump`、`gzip` 与 `tar` |
+| 服务 | 内存上限 | CPU 上限 | PID 上限 | 说明 |
+|------|----------|----------|----------|------|
+| `app` | 512M | 1.0 | 256 | PHP/webman 进程 |
+| `init` | 256M | 0.5 | 128 | 一次性初始化 |
+| `mysql` | 768M | 1.5 | 512 | `innodb-buffer-pool-size=256M` |
+| `redis` | 384M | 0.5 | 128 | `maxmemory 256mb` + 128M 余量 |
+| `nginx` | 128M | 0.5 | 128 | 反向代理与静态文件 |
+| `backup` | 256M | 0.5 | 128 | `mysqldump`、`gzip` 与 `tar` |
+
+Redis 的 `maxmemory` 只统计数据内存，AOF 重写/fork、客户端缓冲与内存碎片不计入其中。
+因此容器内存上限固定为 `maxmemory` + 128M 余量；调整数据上限时同时修改
+`deploy/docker-compose.yml` 中 Redis 的 `--maxmemory` 与该服务的 `memory`，并保留至少
+128M 余量（例如 `--maxmemory 512mb` 对应 `memory: 640M`）。
 
 数值按单机小规模部署估算，会随用户量、导入导出和上传文件大小变化。若容器出现 OOM
 （`docker inspect <容器> --format '{{.State.OOMKilled}}'` 为 `true`），调高对应服务的
 `memory` 后执行 `docker compose up -d` 生效。MySQL 与 Redis 的上限需同时高于各自的
-`innodb-buffer-pool-size` / `maxmemory` 配置加进程开销。
+`innodb-buffer-pool-size` / `maxmemory` 配置加进程开销。CPU 上限可按宿主机核数等比放大，
+但所有服务之和不宜超过可用核数。
 
 ## 备份与恢复
 
@@ -260,18 +269,43 @@ compose 为每个服务设置了 `deploy.resources.limits.memory`，超过上限
 ### 异地备份
 
 `deploy/data/backups` 与数据库位于**同一台机器、同一块磁盘**，主机或磁盘故障时备份会一起丢失。
-请把备份定期复制到异地，例如宿主机 cron：
+`deploy/offsite-sync.sh` 把备份目录同步到远端（自身无额外依赖，只需宿主机装有 rsync 或 rclone）：
 
-```bash
-# rsync 到另一台主机（建议使用 SSH 密钥）
-rsync -a --delete deploy/data/backups/ backup@backup.example.com:/srv/open-admin/backups/
+1. 在 `deploy/.env` 中设置目标（也可用同名环境变量覆盖）：
 
-# 或使用 rclone 同步到 S3 兼容对象存储
-rclone sync deploy/data/backups/ remote:open-admin-backups/
-```
+   ```bash
+   # rsync 到另一台主机（建议配置 SSH 密钥免密；远端目录必须专用于本备份）
+   OFFSITE_TARGET=backup@backup.example.com:/srv/open-admin/backups/
 
-远端同样要保留 30 天以上的历史（对象存储版本控制或远端轮转），否则误删或勒索软件会同时
-影响近端与远端备份。
+   # 或 rclone 同步到对象存储（先 rclone config 配好 remote）
+   OFFSITE_TARGET=rclone:s3:open-admin-backups
+   ```
+
+2. 在宿主机 cron 中每天执行一次（以拥有 `deploy/` 的用户身份，且该用户需要能从
+   cron 免交互访问远端）：
+
+   ```cron
+   17 4 * * * cd /path/to/open-admin/deploy && ./offsite-sync.sh >> /var/log/open-admin-offsite.log 2>&1
+   ```
+
+3. 立即手动执行一次验证，并定期做恢复演练：
+
+   ```bash
+   cd deploy && ./offsite-sync.sh
+   ```
+
+必查清单：
+
+- 未设置 `OFFSITE_TARGET`、目标格式无法识别、或 `data/backups` 中还没有正式备份时，脚本
+  报错退出且**不会**触碰远端，不会被任何容器自动调用；
+- rsync 使用 `-a --delete`、rclone 使用 `sync`，会删除远端多余的旧文件，因此远端目录必须
+  **只存放**本项目的备份（两份备份不要共用一个目录）；
+- 脚本排除 `.backup_*` / `.upload_*` 临时文件；backup 服务也改为写完临时文件再改名，
+  不会同步到写了一半的备份；
+- cron 的 `PATH` 很短，如 rsync/rclone 不在 `/usr/bin`、`/usr/local/bin`，请在 crontab
+  里显式设置 `PATH`；脚本失败以非零码退出，建议同时配置 `MAILTO` 或日志告警；
+- 远端同样要保留 30 天以上的历史（对象存储版本控制或远端轮转），否则误删或勒索软件会同时
+  影响近端与远端备份。
 
 手动备份：
 

@@ -161,18 +161,27 @@ When rate limiting or authentication fails, availability is traded for safety: A
 
 On top of rate limiting, the login endpoint adds an **account lockout** mechanism to prevent targeted brute-force attacks against specific users.
 
+**Lockout keys** (`AuthController::lockKeys()` is the single source):
+
+| Case | Lock key | Failure counter key |
+|------|----------|---------------------|
+| Username exists | `account_lock:u:<userId>` | `login_fail:u:<userId>` |
+| Username unknown | `account_lock:n:<md5(lower(trim(username)))>` | `login_fail:n:<md5(lower(trim(username)))>` |
+
+Unknown usernames are counted by the md5 of the normalized username, so no database row is needed for nonexistent accounts; case and leading/trailing whitespace variants collapse into the same key. Both keys carry a 900-second (15-minute) TTL and expire on their own.
+
 **Lockout flow**:
 
 ```
-登录失败 → Redis INCR account_lockout:{userId} TTL=900s
-连续 5 次失败 → Redis SETEX account_locked:{userId} 900 1
-            → 返回 429 "账号已被锁定，请15分钟后再试"
-            → 清除计数器 DEL account_lockout:{userId}
+Login failure → Redis INCR login_fail:{u|n}:{...}, TTL=900s on the first failure
+5 consecutive failures → Redis SETEX account_lock:{u|n}:{...} 900 1
+            → return 429 "account locked, try again in 15 minutes"
+            → clear the counter DEL login_fail:{u|n}:{...}
 ```
 
 **Behavior during lockout**:
 
-During the lockout, all login requests return 429 directly without password verification, fully blocking brute-force attempts.
+During the lockout, all login requests return 429 directly without password verification, fully blocking brute-force attempts. A successful login clears the failure counter and lock key.
 
 **Config constants**:
 
@@ -181,7 +190,7 @@ During the lockout, all login requests return 429 directly without password veri
 | MAX_LOGIN_ATTEMPTS | 5 | Max consecutive failures |
 | LOCKOUT_DURATION | 900 | Lockout duration (seconds), i.e. 15 minutes |
 
-Note: account lockout is based on `userId`, not IP, so attackers cannot bypass it by changing IPs. Combined with IP rate limiting (10/min) it forms two layers of protection:
+Note: for existing users account lockout is keyed by `userId`, and for unknown usernames by the normalized name, never by IP, so attackers cannot bypass it by changing IPs. Combined with IP rate limiting (10/min) it forms two layers of protection:
 - IP layer: the 10/min rate limit blocks distributed brute force
 - Account layer: the 5-failure lockout blocks targeted brute force
 
@@ -214,7 +223,9 @@ Implemented by the AdminAuth middleware, mounted on route groups that require au
 
 **Blacklist mechanism**: on logout, `md5(token)` is written to Redis with the TTL set to the JWT's remaining validity. When Redis fails, `AdminAuth` cannot read the blacklist and returns 503 (fail closed) instead of allowing tokens that may have been logged out.
 
-**Refresh token rotation**: every successful `/api/v1/auth/refresh` issues a new access/refresh pair and immediately blacklists the old refresh_token. To tolerate concurrent requests and client retries, the server caches the new pair for 60 seconds under the md5 of the old token (`refresh_rotation:{md5}`): resubmitting the same old token within the grace period returns the same pair instead of rotating again, and after 60 seconds it is rejected as blacklisted. A password change bumps the password-change watermark and clears the rotation cache; logout blacklists the cached tokens and deletes the cache key. Clients should refresh serially; the HarmonyOS client uses single-flight refresh for concurrent 401s so all requests share one result.
+**Refresh token rotation**: every successful `/api/v1/auth/refresh` issues a new access/refresh pair and immediately blacklists the old refresh_token. To tolerate concurrent requests and client retries, the server caches the new pair for 60 seconds under the md5 of the old token (`refresh_rotation:<md5>`): resubmitting the same old token within the grace period returns the same pair instead of rotating again, and after 60 seconds it is rejected as blacklisted.
+
+Concurrent rotation is serialized by `refresh_lock:<md5>` (`SET NX EX 5`, released with a Lua compare-and-delete). A request that fails to take the lock waits briefly for the cache; if it appears it reuses the same pair, otherwise it returns 409. The lock holder writes the cache before blacklisting the old token. When reading the cache, if either cached token is blacklisted the server deletes the cache and returns 401, so logout or a password change cannot be undone through the cache. Each user tracks their own rotation keys in `user_refresh_rotations:<userId>` (TTL 120 seconds); logout and password changes blacklist cached pairs and clear the rotation caches/set. Clients should refresh serially; the HarmonyOS client uses single-flight refresh for concurrent 401s so all requests share one result.
 
 ### 6.2 Concurrent Session Limit
 
@@ -223,15 +234,19 @@ To prevent leaked tokens from being abused across multiple devices, the system l
 **Limiting logic**:
 
 ```
-登录成功 → 签发新 Token
-         → 查询当前用户有效 Token 数量: Redis SCARD user_tokens:{userId}
-         → 若数量 >= 3（MAX_CONCURRENT_SESSIONS）:
-            → 按创建时间升序排列，移除最旧的 Token:
-              Redis SREM user_tokens:{userId} <oldest_token_id>
-              Redis SETEX jwt_blacklist:{md5(oldest_token)} TTL remaining
-         → 将新 Token 加入集合: Redis SADD user_tokens:{userId} <new_token_id>
-            Redis SET user_token:{token_id} {userId} EX {TTL}
+Login success → issue new token
+         → count the user's valid tokens: Redis ZCARD user_tokens:{userId}
+           (ZSET members are md5(token), scores are expiry timestamps)
+         → ZREMRANGEBYSCORE to drop expired members
+         → ZADD user_tokens:{userId} <exp> <md5(new_token)>
+         → if ZCARD > 3 (MAX_CONCURRENT_SESSIONS):
+            → ZRANGE the member with the smallest score (earliest expiry)
+            → ZREM user_tokens:{userId} <md5(oldest_token)>
+            → SETEX jwt_blacklist:{md5(oldest_token)} <remaining_ttl> 1
+         → EXPIRE user_tokens:{userId} <access TTL + 3600>
 ```
+
+refresh_tokens are also tracked in the `user_refresh_tokens:{userId}` ZSET (score = expiry timestamp) so logout and password changes can revoke them together.
 
 **Config constants**:
 
@@ -241,7 +256,7 @@ To prevent leaked tokens from being abused across multiple devices, the system l
 
 **Forced logout scenario**: when a user logs in on a 4th device, the token from the 1st device is forcibly blacklisted, and subsequent requests return 401 "Token已失效，请重新登录".
 
-On logout, the current token is removed from the set. When a token expires naturally, the Redis key expires automatically and the set membership shrinks accordingly.
+On logout, the current token is removed from the sorted set. When a token expires naturally, the Redis key expires automatically and expired members are pruned on the next login.
 
 ### 6.3 RBAC Permission Model
 
@@ -279,7 +294,9 @@ For example:
 
 **Password re-confirmation**: BaseController provides `confirmPassword()`. Sensitive operations (deleting users, data export, etc.) additionally require the current password at the controller layer, preventing unauthorized actions after session hijacking.
 
-**Super-admin protection**: delete, batch delete and batch disable reject the currently logged-in account (422) and count enabled users with `slug = super_admin` before writing; if the operation would leave zero, the request returns 422 `系统必须保留至少一名启用的超级管理员`. The built-in `super_admin` role itself cannot be edited or deleted (403). The check is check-then-write; the extreme case of concurrent deletion of multiple super admins needs database row locks, and the residual race window is listed in 12.2.
+**Super-admin protection**: delete, batch delete and batch disable reject the currently logged-in account (422) and count enabled users with `slug = super_admin` before writing; if the operation would leave zero, the request returns 422 `系统必须保留至少一名启用的超级管理员`. The built-in `super_admin` role itself cannot be edited or deleted (403).
+
+The "last enabled super admin" check and the write are serialized under a MySQL named lock: `GET_LOCK('open_admin:last_super_admin', 3)` with `RELEASE_LOCK` in `finally`. This covers `destroy`, `batchDestroy`, `batchStatus(disable)` and `update(disable)`; a lock timeout or database error returns HTTP 503 so the caller can retry, preventing concurrent disable/delete calls from both passing the check. Named locks belong to the connection and are released by MySQL if it drops.
 
 ---
 
@@ -383,7 +400,7 @@ Key rotation: the `ENCRYPTION_PREVIOUS_KEYS` environment variable supports a com
 - Email: `a***@example.com`
 - ID card: fully masked as `********`
 
-**Import/export resource limits**: a single Excel export is capped at 5,000 rows (the query uses `LIMIT 5001` as a probe; over the cap returns HTTP 422), limiting memory use and the data-exfiltration surface of bulk exports. User imports are limited to 5MB and 2,000 rows; before loading the workbook the server reads worksheet metadata and rejects any sheet over 2,001 rows with a 422, then validates the row count again after loading.
+**Import/export resource limits**: a single Excel export is capped at 5,000 rows (the query uses `LIMIT 5001` as a probe; over the cap returns HTTP 422), limiting memory use and the data-exfiltration surface of bulk exports. User imports are limited to a 5MB file and 2,000 data rows (2,001 including the header). Before loading the workbook the server checks `.xlsx` ZIP expansion: if the uncompressed total of `xl/**.xml` entries exceeds 8MB, or the total worksheet cell count exceeds 32,000, it returns 422, blocking zip bombs and OOM in the 128M worker; it then reads worksheet metadata and rejects any sheet over 2,001 rows with a 422, validating the row count again after loading. Corrupt, unreadable or unparseable workbooks return 422 with a readable message and never leak exception internals.
 
 ---
 
@@ -420,7 +437,11 @@ All keys are injected via `.env` environment variables; config files read them w
 
 ### Backup and Log Retention
 
-The production `backup` service uses a dedicated least-privilege MySQL user, `backup_reader` (`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` plus `DELETE` on `erik_operation_log`), and never holds the root password. It runs `mysqldump --single-transaction --no-tablespaces` daily and archives `deploy/data/upload` as `upload_<timestamp>.tar.gz`; both are kept for 30 days. It also deletes operation logs older than 180 days daily (at most 10,000 rows per run, failures never block backups). Backups live on the same host/disk as the database, so they must be copied offsite with `rsync` or `rclone` to avoid losing data and backups together in a single-machine failure.
+The production `backup` service uses a dedicated least-privilege MySQL user, `backup_reader` (`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` plus `DELETE` on `erik_operation_log`), and never holds the root password. It runs `mysqldump --single-transaction --no-tablespaces` daily and archives `deploy/data/upload` as `upload_<timestamp>.tar.gz`; both are kept for 30 days. It also deletes operation logs older than 180 days daily (at most 10,000 rows per run, failures never block backups).
+
+The application also runs a non-listening `log-cleanup` webman process (`count=1`): it performs a best-effort cleanup on startup and then daily deletes `operation_log` rows older than 180 days in batches of 10,000, logging failures without affecting service. It and the backup-service cleanup are fallbacks for each other.
+
+Backups live on the same host/disk as the database, so they must be copied offsite to avoid losing data and backups together in a single-machine failure. `deploy/offsite-sync.sh` reads `OFFSITE_TARGET` from `deploy/.env` and supports rsync (`user@host:/path/`) and rclone (`rclone:remote:path`); it refuses to run when the target is unset or the backup directory is empty, excludes in-progress temp files, and is scheduled by host cron — no container calls it automatically.
 
 ---
 
@@ -472,6 +493,7 @@ The project provides `docs/nginx-security.conf` as a security hardening referenc
 | `limit_conn_zone` | Concurrent connection limit |
 | `add_header` security headers | Appends security headers such as X-XSS-Protection at the Nginx layer |
 | Static asset headers | Repeats `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` and `Cache-Control` inside the assets locations (an `add_header` in a location replaces inherited headers) |
+| Static page CSP | Each of `/open-admin/`, `/open-admin/en/` and `/apidoc/` gets its own CSP in its location: `default-src 'self'`, inline scripts allowed (theme bootstrap and JSON-LD), the site additionally allows `https://busuanzi.ibruce.info`, `frame-ancestors 'none'`, `form-action 'self'`; those locations also repeat the security headers |
 | `if ($request_method)` | Rejects non-standard HTTP methods at the Nginx layer |
 | SSL/TLS configuration | Modern TLS 1.2/1.3 configuration, weak cipher suites disabled |
 | Hiding backend headers | `proxy_hide_header` removes sensitive headers such as the webman version |
@@ -510,7 +532,6 @@ The single-machine production stack uses `deploy/nginx/default.conf`: port 80 re
 | CSRF protection works only for browsers | Non-browser clients (curl, Postman, mobile apps) can skip Origin/Referer checks | Non-browser clients are naturally immune to CSRF; rely on JWT authentication instead of cookies |
 | `/api/` and `/admin/` fail closed (503) when Redis is unavailable | The admin UI and API are unavailable while Redis is down | Non-API paths such as `/health` and `/metrics` pass through; monitor and alert on Redis and restore it quickly |
 | 60-second refresh token grace period | An old refresh_token replayed within 60 seconds of rotation returns the cached new pair | The old token is blacklisted and the cache lives only 60 seconds; clients refresh serially and HarmonyOS uses single-flight |
-| Last-super-admin check has no row lock | Two concurrent deletes/disables of the last two super admins may both pass the check | Re-check immediately before writing; strict serialization needs a transaction with `SELECT ... FOR UPDATE` |
 | No standalone WAF engine | Regex-based detection, not a dedicated WAF rule engine | Recommended: Nginx ModSecurity or Cloudflare WAF in front in production |
 | Stateless JWT cannot be actively invalidated | Tokens cannot be revoked server-side before expiry (except via blacklist) | Blacklist + short 2h TTL narrows the risk window |
 | No special rate limit for admin endpoints | Admin endpoints share the 60/min default limit with normal endpoints | Admin operation frequency is naturally low; no distinction needed for now |

@@ -14,9 +14,9 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
 | 域 | 功能 |
 |----|------|
-| 认证 | 登录/刷新/登出 + 点击验证码 + 账号锁定 + 会话限制 + 刷新轮换 60s 宽限 |
+| 认证 | 登录/刷新/登出 + 点击验证码 + 账号锁定 + 会话限制 + 刷新轮换 60s 宽限 + 并发锁 |
 | 仪表盘 | 实时统计/趋势/分布/日志（Redis 5m 缓存）|
-| 用户 | CRUD + 批量删除/启禁用 + Excel 导入（5MB/2000 行上限）|
+| 用户 | CRUD + 批量删除/启禁用 + Excel 导入（5MB/2000 行上限，ZIP 解压体积预检）|
 | 角色权限 | CRUD + 权限树 + RBAC method.path 鉴权 |
 | 系统配置 | 键值对 CRUD |
 | 操作审计 | 日志查询 + 8 平台来源端自动检测 |
@@ -93,7 +93,7 @@ open-admin/
 │   ├── model/                  # 数据模型
 │   ├── view/index/view.html    # 站点首页模板（GET /，项目宠物 + 入口导航）
 │   ├── queue/                  # 队列任务
-│   └── process/                # 进程 (Http, Monitor)
+│   └── process/                # 进程 (Http, Monitor, LogCleanup)
 ├── apps/
 │   ├── flutter/                # Flutter Web 管理后台
 │   │   └── lib/app/
@@ -135,7 +135,7 @@ open-admin/
 │   ├── apidoc/index.html       # 轻量 API 调试页（同源 /api/docs）
 │   └── img/pet.svg             # 项目宠物「小安」（SVG，兼作站点图标）
 ├── site/                       # 响应式静态官网（中英文、搜索、安装/架构/版本日志）
-├── deploy/                     # 单机生产编排（compose + 密钥生成 + Nginx/TLS）
+├── deploy/                     # 单机生产编排（compose + 密钥生成 + Nginx/TLS + offsite-sync.sh）
 ├── runtime/                    # 运行时文件
 ├── tests/                      # 测试
 ├── vendor/                     # Composer 依赖
@@ -169,11 +169,11 @@ open-admin/
 ## 安全增强
 
 - **攻击检测**：erikwang2013/security-php 包（31 种检测器：XSS/SQL注入/命令注入/路径遍历/SSRF/XXE/JNDI/反序列化/JWT攻击/CSRF/敏感数据泄漏等 + HTTP方法校验/请求体大小限制/Content-Type校验 + IP攻击升级黑名单）
-- **CSP 头**：Content-Security-Policy + X-Permitted-Cross-Domain-Policies 注入所有响应
-- **账号锁定**：连续 5 次登录失败，账号锁定 15 分钟
-- **并发会话限制**：同一用户最多 3 个有效 Token，超出时最旧 Token 加入黑名单
-- **刷新轮换**：refresh token 换取新对后旧 token 加入黑名单，旧 token 在 60 秒宽限期内重放返回同一对 token；HarmonyOS 端并发 401 只发起一次刷新
-- **超级管理员保护**：禁止删除当前登录账号或修改其状态；系统必须保留至少一名启用的超级管理员；`super_admin` 角色不可编辑/删除
+- **CSP 头**：Content-Security-Policy + X-Permitted-Cross-Domain-Policies 注入所有响应；`/open-admin/`、`/open-admin/en/`、`/apidoc/` 在 Nginx 中另有独立 CSP（默认同源、允许内联脚本、官网放行 busuanzi、禁止 iframe 与跨源表单）
+- **账号锁定**：连续 5 次登录失败锁定 15 分钟；已存在用户用 `account_lock:u:<userId>` / `login_fail:u:<userId>`，未知用户名用 `account_lock:n:<md5(lower(trim(username)))>` / `login_fail:n:<同>`，键 TTL 均为 900 秒，大小写与空白变体共享计数；`AuthController::lockKeys()` 是唯一来源
+- **并发会话限制**：同一用户最多 3 个有效 Token（`user_tokens:<userId>` ZSET，member 为 md5(token)、score 为过期时间），超出时最旧 Token 加入黑名单
+- **刷新轮换**：refresh token 换取新对后旧 token 加入黑名单，旧 token 在 60 秒宽限期内重放返回同一对 token；轮换由 `refresh_lock:<md5>`（`SET NX EX 5` + Lua 释放）串行化，缓存令牌被拉黑时删除缓存并返回 401，并发未命中返回 409；登出与改密拉黑缓存令牌并清理 `user_refresh_rotations:<userId>`；HarmonyOS 端并发 401 只发起一次刷新
+- **超级管理员保护**：禁止删除当前登录账号或修改其状态；系统必须保留至少一名启用的超级管理员；`super_admin` 角色不可编辑/删除。最后一名超管校验与写操作由 MySQL 命名锁 `open_admin:last_super_admin`（`GET_LOCK` 3 秒 / `finally` 释放）串行化，覆盖删除、批量删除、批量禁用与更新禁用，超时或数据库异常返回 503
 - **Redis 故障关闭**：`/api/`、`/admin/` 的鉴权与限流在 Redis 不可用时返回 503（健康检查、指标等非 API 路由放行）
 - **security.txt**：`/.well-known/security.txt` RFC 9116 端点
 - **Nginx 安全配置**：`docs/nginx-security.conf` 反向代理安全加固参考；静态资源在独立 location 重复安全响应头，CI 用 `nginx -t` 校验
@@ -207,7 +207,9 @@ Redis 滑动窗口（Lua 原子化），默认 60 次/分钟/IP/路由：
 - **Redis 通过 `support\Redis` 工具类访问**（单例连接池，自动读取 `REDIS_HOST/PORT/PASSWORD/DB` 环境变量），所有 key 自动添加前缀（默认 `open-admin:`，通过 `REDIS_PREFIX` 环境变量可配置）
 - **路由权限**: `/admin` 组内路由需 `method.path` 格式的权限（如 `get.admin/dashboard`），无需权限校验的路由放到组外仅加 `AdminAuth` 中间件
 - **CORS**: 新增请求头时需同步更新 `Cors.php` 中间件和 `route.php` fallback 的 `Access-Control-Allow-Headers`
-- **超级管理员保护**: `RoleController` 的 `update`/`destroy` 禁止操作 `slug == 'super_admin'` 的角色；`UserController` 禁止删除当前登录账号或修改其状态，且系统必须保留至少一名启用的超级管理员
+- **超级管理员保护**: `RoleController` 的 `update`/`destroy` 禁止操作 `slug == 'super_admin'` 的角色；`UserController` 禁止删除当前登录账号或修改其状态，且系统必须保留至少一名启用的超级管理员；最后一名超管校验必须通过 `withSuperAdminLock()` 与写操作放在同一 MySQL 命名锁内
+- **用户更新校验**: `UserController::update` 先解密传输层密码再校验；提供密码时必须为 6-32 位明文，`real_name` 最长 50，`status` 只能为 0 或 1
+- **导入防护**: `ImportController` 限制 5MB 文件、2000 行数据；加载工作簿前检查 `.xlsx` ZIP 中 `xl/**.xml` 解压总量不超过 8MB 且所有工作表单元格总数不超过 32,000，损坏/无法解析的工作簿统一返回 422，不泄漏异常信息
 - webman 将 PHP Warning 转为异常，未定义的属性/变量会导致 500 错误
 
 ### 数据库
@@ -261,9 +263,10 @@ docker compose up -d --build
 - TLS 默认按 `DOMAIN`（默认 `localhost`）生成自签名证书；真实域名证书直接替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`，脚本默认不会覆盖已有证书（`--rotate-tls` 除外）。HSTS 默认关闭，配置真实域名证书后再启用。
 - 端口：Nginx `80/443`（80 仅保留 `/.well-known/acme-challenge/`，其余 301 到 HTTPS）；webman 仅在容器内监听 `8791`。
 - 日志：Nginx/MySQL 写 stdout/stderr，Docker 按 `10m × 3` 轮转；用 `docker compose logs -f app` 查看。宿主机持久化目录：`deploy/data/{mysql,redis,runtime,upload,backups}`。
-- 资源限制：MySQL 768M、Redis 256M、app 512M、backup/init 256M、Nginx 128M（`deploy/docker-compose.yml` 的 `deploy.resources.limits`）。
+- 资源限制：`deploy/docker-compose.yml` 为各服务设置 CPU/内存/pids 上限（app 1.0/512M/256、init 0.5/256M/128、mysql 1.5/768M/512、redis 0.5/384M/128、nginx 0.5/128M/128、backup 0.5/256M/128）。Redis 容器 384M 与 `redis-server --maxmemory 256mb` 配套，预留 128M 给 AOF 重写/fork、客户端缓冲与内存碎片，两者必须同步修改。
 - 自动备份：`backup` 服务每天使用最小权限用户 `backup_reader`（应用库只读 + `erik_operation_log` 的 `DELETE`）执行 `mysqldump` 到 `deploy/data/backups`，同时把 `deploy/data/upload` 打包为 tar；备份保留 30 天，并每天清理 180 天前的操作日志。
-- 异地备份：备份目录可用 rsync 或 rclone 同步到远端（示例见 `deploy/README.md`）。
+- 日志清理：`config/process.php` 注册不监听端口的 `log-cleanup` 进程（`count=1`），启动时先尽力清理一次，之后每日删除 180 天前的 `operation_log`，每批 10000 行；与 backup 服务的清理互为兜底。
+- 异地备份：备份默认留在数据库宿主机磁盘，由宿主机 cron 调用 `deploy/offsite-sync.sh`；脚本读取 `deploy/.env` 的 `OFFSITE_TARGET`，支持 rsync（`user@host:/path/`）与 rclone（`rclone:remote:path`），未配置目标或备份目录为空时拒绝执行。
 - RSA 公钥：`GET /api/v1/auth/public-key` 返回当前公钥，Flutter 登录前动态获取并在失败时回退内置公钥；`--regenerate` 换钥后需确认该端点可达，依赖内置回退的旧客户端需重新构建。
 
 ### CI/CD
@@ -271,7 +274,7 @@ docker compose up -d --build
 `.github/workflows/ci.yml` 定义 GitHub Actions 流水线：
 
 - PHP 语法检查 (`php -l`)
-- PHPUnit 单元测试
+- PHPUnit 单元测试（含 `tests/LockKeyTest.php`、`tests/RefreshRotationCacheTest.php`、`tests/ProcessConfigTest.php`）
 - Flutter 静态分析 (`flutter analyze`)
 - Docker 镜像构建与运行依赖检查（`php -m` 的 redis/zip/gd，`gd_info` 的 FreeType/JPEG）
 - Compose/Nginx 配置校验：根目录 compose、临时生成的 `deploy/` compose，以及两套 Nginx 配置 `nginx -t`
@@ -279,7 +282,7 @@ docker compose up -d --build
 
 ### 数据库备份
 
-生产编排的 `backup` 服务每日使用最小权限用户备份数据库与上传文件到 `deploy/data/backups`（保留 30 天），并清理 180 天前的操作日志；异地同步示例见 `deploy/README.md`。
+生产编排的 `backup` 服务每日使用最小权限用户备份数据库与上传文件到 `deploy/data/backups`（保留 30 天），并清理 180 天前的操作日志；应用内 `log-cleanup` 进程同样每日清理。异地同步由宿主机 cron 调用 `deploy/offsite-sync.sh`（读取 `OFFSITE_TARGET`）。
 `database/backup/backup.sh` — mysqldump + gzip，自动清理 30 天前旧备份（宿主机直连数据库）。
 `database/backup/restore.sh` — 交互式恢复，列出可用备份供选择。
 

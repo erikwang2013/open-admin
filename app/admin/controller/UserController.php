@@ -10,6 +10,7 @@ namespace app\admin\controller;
 use app\model\AdminUser;
 use app\common\EncryptionService;
 use Illuminate\Database\QueryException;
+use support\Db;
 use support\Request;
 use support\Response;
 use Webman\Validation\Validator;
@@ -180,6 +181,28 @@ class UserController extends BaseController
             return $this->fail(trans('messages.user_not_found'), 404);
         }
 
+        // 密码只解密一次，校验通过后才哈希；未提供或空密码视为不修改
+        $data = $request->all();
+        $passwordInput = $request->input('password');
+        $plainPassword = null;
+        if ($passwordInput !== null && $passwordInput !== '') {
+            if (is_string($passwordInput)) {
+                $plainPassword = EncryptionService::decryptTransmission($passwordInput);
+                $data['password'] = $plainPassword;
+            }
+        } else {
+            unset($data['password']);
+        }
+
+        $validator = Validator::make($data, [
+            'password'  => 'string|min:6|max:32',
+            'real_name' => 'string|max:50',
+            'status'    => 'in:0,1',
+        ]);
+        if ($validator->fails()) {
+            return $this->fail($validator->errors()->first(), 422);
+        }
+
         $status = (int) $request->input('status', $user->status);
         if (!in_array($status, [0, 1], true)) {
             return $this->fail(trans('messages.invalid_status'), 422);
@@ -187,28 +210,37 @@ class UserController extends BaseController
         if ($status !== 1 && $id === (int) ($request->adminId ?? 0)) {
             return $this->fail('不能禁用当前登录账号', 422);
         }
-        if ($status !== 1 && $this->leavesNoSuperAdmin([$id])) {
-            return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
-        }
 
-        $user->real_name = $request->input('real_name', $user->real_name);
-        $user->status = $status;
+        $apply = function () use ($request, $user, $id, $status, $plainPassword): Response {
+            // 最后一名超级管理员校验与写操作在同一把锁内，避免并发禁用绕过
+            if ($status !== 1 && $this->leavesNoSuperAdmin([$id])) {
+                return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
+            }
 
-        if ($request->input('password') !== null && $request->input('password') !== '') {
-            $user->password = password_hash(EncryptionService::decryptTransmission($request->input('password')), PASSWORD_BCRYPT);
-        }
-        if ($request->input('phone') !== null) {
-            $user->phone = EncryptionService::decryptTransmission($request->input('phone', ''));
-        }
-        if ($request->input('email') !== null) {
-            $user->email = EncryptionService::decryptTransmission($request->input('email', ''));
-        }
+            $user->real_name = $request->input('real_name', $user->real_name);
+            $user->status = $status;
+            if ($plainPassword !== null) {
+                $user->password = password_hash($plainPassword, PASSWORD_BCRYPT);
+            }
+            if ($request->input('phone') !== null) {
+                $user->phone = EncryptionService::decryptTransmission($request->input('phone', ''));
+            }
+            if ($request->input('email') !== null) {
+                $user->email = EncryptionService::decryptTransmission($request->input('email', ''));
+            }
 
-        $user->save();
+            $user->save();
 
-        $data = $user->toArray();
-        unset($data['password'], $data['id_card']);
-        return $this->success($this->encodeIds($data), trans('messages.update_success'));
+            $data = $user->toArray();
+            unset($data['password'], $data['id_card']);
+            return $this->success($this->encodeIds($data), trans('messages.update_success'));
+        };
+
+        // 仅禁用路径需要与超级管理员守卫串行化
+        if ($status !== 1) {
+            return $this->withSuperAdminLock($apply) ?? $this->serviceBusyResponse();
+        }
+        return $apply();
     }
 
     /**
@@ -236,16 +268,19 @@ class UserController extends BaseController
         if ($error !== null) {
             return $this->fail($error, 422);
         }
-        if ($this->leavesNoSuperAdmin([$id])) {
-            return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
-        }
 
-        // 软删除前腾出用户名，释放唯一索引；截断以适配 username varchar(50)
-        $suffix = '#deleted' . $user->id;
-        $user->username = mb_substr($user->username, 0, max(0, 50 - mb_strlen($suffix))) . $suffix;
-        $user->save();
-        $user->delete();
-        return $this->success([], trans('messages.delete_success'));
+        return $this->withSuperAdminLock(function () use ($id, $user): Response {
+            if ($this->leavesNoSuperAdmin([$id])) {
+                return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
+            }
+
+            // 软删除前腾出用户名，释放唯一索引；截断以适配 username varchar(50)
+            $suffix = '#deleted' . $user->id;
+            $user->username = mb_substr($user->username, 0, max(0, 50 - mb_strlen($suffix))) . $suffix;
+            $user->save();
+            $user->delete();
+            return $this->success([], trans('messages.delete_success'));
+        }) ?? $this->serviceBusyResponse();
     }
 
     /**
@@ -288,18 +323,21 @@ class UserController extends BaseController
         if (in_array((int) $adminId, $decodedIds, true)) {
             return $this->fail('不能删除当前登录账号', 422);
         }
-        if ($this->leavesNoSuperAdmin($decodedIds)) {
-            return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
-        }
 
-        foreach (AdminUser::whereIn('id', $decodedIds)->get() as $user) {
-            $suffix = '#deleted' . $user->id;
-            $user->username = mb_substr($user->username, 0, max(0, 50 - mb_strlen($suffix))) . $suffix;
-            $user->save();
-            $user->delete();
-        }
+        return $this->withSuperAdminLock(function () use ($decodedIds): Response {
+            if ($this->leavesNoSuperAdmin($decodedIds)) {
+                return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
+            }
 
-        return $this->success(['count' => count($decodedIds)], '删除成功');
+            foreach (AdminUser::whereIn('id', $decodedIds)->get() as $user) {
+                $suffix = '#deleted' . $user->id;
+                $user->username = mb_substr($user->username, 0, max(0, 50 - mb_strlen($suffix))) . $suffix;
+                $user->save();
+                $user->delete();
+            }
+
+            return $this->success(['count' => count($decodedIds)], '删除成功');
+        }) ?? $this->serviceBusyResponse();
     }
 
     /**
@@ -341,14 +379,57 @@ class UserController extends BaseController
         if (in_array($adminId, $decodedIds, true)) {
             return $this->fail('不能修改当前登录账号的状态', 422);
         }
-        if ($status === 0 && $this->leavesNoSuperAdmin($decodedIds)) {
-            return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
+
+        $message = $status === 1 ? trans('messages.batch_enable_success') : trans('messages.batch_disable_success');
+
+        // 仅禁用路径需要与超级管理员守卫串行化
+        if ($status === 0) {
+            return $this->withSuperAdminLock(function () use ($decodedIds, $message): Response {
+                if ($this->leavesNoSuperAdmin($decodedIds)) {
+                    return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
+                }
+                AdminUser::whereIn('id', $decodedIds)->update(['status' => 0]);
+                return $this->success(['count' => count($decodedIds)], $message);
+            }) ?? $this->serviceBusyResponse();
         }
 
         AdminUser::whereIn('id', $decodedIds)->update(['status' => $status]);
-
-        $message = $status === 1 ? trans('messages.batch_enable_success') : trans('messages.batch_disable_success');
         return $this->success(['count' => count($decodedIds)], $message);
+    }
+
+    /**
+     * 在 MySQL 命名锁内执行「最后一名启用超级管理员」校验与写操作，跨进程串行化
+     * 未获取到锁时返回 null，由调用方返回 503
+     */
+    private function withSuperAdminLock(callable $callback): ?Response
+    {
+        $name = 'open_admin:last_super_admin';
+        try {
+            $acquired = (int) (Db::selectOne('SELECT GET_LOCK(?, 3) AS acquired', [$name])->acquired ?? 0);
+        } catch (\Throwable) {
+            return null;
+        }
+        if ($acquired !== 1) {
+            return null;
+        }
+
+        try {
+            return $callback();
+        } finally {
+            try {
+                Db::selectOne('SELECT RELEASE_LOCK(?) AS released', [$name]);
+            } catch (\Throwable) {
+                // 连接断开时 MySQL 会自动释放命名锁
+            }
+        }
+    }
+
+    /**
+     * 命名锁等待超时时的响应
+     */
+    private function serviceBusyResponse(): Response
+    {
+        return $this->fail('系统繁忙，请稍后重试', 503)->withStatus(503);
     }
 
     /**

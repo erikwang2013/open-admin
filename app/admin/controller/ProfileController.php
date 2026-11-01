@@ -134,13 +134,12 @@ class ProfileController extends BaseController
                 $key = "{$set}:{$adminId}";
                 foreach (Redis::zrange($key, 0, -1, true) as $member => $exp) {
                     Redis::setex('jwt_blacklist:' . $member, max((int) $exp - time(), 1), '1');
-                    if ($set === 'user_refresh_tokens') {
-                        // 同时清除轮换缓存，防止旧 refresh token 重放换回已吊销的新令牌
-                        Redis::del('refresh_rotation:' . $member);
-                    }
                 }
                 Redis::del($key);
             }
+
+            // 轮换缓存中的令牌一并吊销，防止旧 refresh token 经 60 秒宽限换回已吊销的新令牌
+            $this->revokeRotationCaches($adminId);
         } catch (\Throwable $e) {
             // Redis 故障不影响密码修改
         }
@@ -171,6 +170,11 @@ class ProfileController extends BaseController
             $payload = $jwt->decode($token);
             $ttl     = max((int)($payload['exp'] ?? 0) - time(), 1);
             Redis::setex('jwt_blacklist:' . md5($token), $ttl, '1');
+            // 已登出的 access token 不再占用会话名额
+            $adminId = (int) ($request->adminId ?? 0);
+            if ($adminId > 0) {
+                Redis::zrem("user_tokens:{$adminId}", md5($token));
+            }
         } catch (\Throwable $e) {
             // token 无效也视为登出成功
         }
@@ -188,34 +192,58 @@ class ProfileController extends BaseController
             } catch (\Throwable $e) {
                 // refresh token 无效时忽略
             }
+        }
 
-            // 轮换缓存中的新令牌对一并吊销，防止旧 refresh token 重放换回有效令牌
-            try {
-                $rotationKey = 'refresh_rotation:' . md5($refreshToken);
-                $cached      = Redis::get($rotationKey);
-                if ($cached) {
-                    $pair = json_decode($cached, true);
-                    if (is_array($pair)) {
-                        foreach (['access_token' => false, 'refresh_token' => true] as $field => $allowRefresh) {
-                            if (empty($pair[$field])) {
-                                continue;
-                            }
-                            try {
-                                $pairPayload = $jwt->decode($pair[$field], $allowRefresh);
-                                $pairTtl     = max((int) ($pairPayload['exp'] ?? 0) - time(), 1);
-                            } catch (\Throwable $e) {
-                                $pairTtl = 60; // 无法解析时按最短窗口吊销，避免漏网
-                            }
-                            Redis::setex('jwt_blacklist:' . md5($pair[$field]), $pairTtl, '1');
-                        }
-                    }
-                    Redis::del($rotationKey);
-                }
-            } catch (\Throwable $e) {
-                // Redis 故障时忽略
-            }
+        // 吊销该用户所有轮换缓存中的新令牌对，防止旧 refresh token 重放换回有效令牌
+        try {
+            $rotationKey = $refreshToken !== '' ? 'refresh_rotation:' . md5($refreshToken) : null;
+            $this->revokeRotationCaches((int) ($request->adminId ?? 0), $rotationKey);
+        } catch (\Throwable $e) {
+            // Redis 故障时忽略
         }
 
         return $this->success([], trans('messages.logout_success'));
+    }
+
+    /**
+     * 吊销用户所有轮换缓存中的令牌并删除缓存（登出/改密时调用）
+     *
+     * @param int $userId 用户 ID；0 表示仅处理 $extraKey
+     * @param string|null $extraKey 额外的轮换缓存键（本次登出的 refresh token）
+     */
+    private function revokeRotationCaches(int $userId, ?string $extraKey = null): void
+    {
+        $jwt    = self::getJWT();
+        $setKey = "user_refresh_rotations:{$userId}";
+        $keys   = $userId > 0 ? (Redis::smembers($setKey) ?: []) : [];
+        if ($extraKey !== null) {
+            $keys[] = $extraKey;
+        }
+
+        foreach (array_unique($keys) as $rotationKey) {
+            $cached = Redis::get($rotationKey);
+            if ($cached) {
+                $pair = json_decode((string) $cached, true);
+                if (is_array($pair)) {
+                    foreach (['access_token' => false, 'refresh_token' => true] as $field => $allowRefresh) {
+                        if (empty($pair[$field]) || !is_string($pair[$field])) {
+                            continue;
+                        }
+                        try {
+                            $pairPayload = $jwt->decode($pair[$field], $allowRefresh);
+                            $pairTtl     = max((int) ($pairPayload['exp'] ?? 0) - time(), 1);
+                        } catch (\Throwable $e) {
+                            $pairTtl = 60; // 无法解析时按最短窗口吊销，避免漏网
+                        }
+                        Redis::setex('jwt_blacklist:' . md5($pair[$field]), $pairTtl, '1');
+                    }
+                }
+            }
+            Redis::del($rotationKey);
+        }
+
+        if ($userId > 0) {
+            Redis::del($setKey);
+        }
     }
 }

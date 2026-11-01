@@ -165,7 +165,7 @@
   <text class="chipS" x="364" y="869">rate limits · captcha · permissions · blacklist</text>
   <rect class="node" x="624" y="830" width="256" height="52" rx="12" fill="#E6F4FF" stroke="#91CAFF"/>
   <text class="chipT" x="644" y="851">Single-machine deploy · persistence</text>
-  <text class="chipS" x="644" y="869">backup: daily DB + upload · 30d</text>
+  <text class="chipS" x="644" y="869">backup + offsite sync · 30d</text>
 
   <!-- ========== 右栏 ========== -->
   <rect class="railCard" x="948" y="112" width="252" height="190" rx="16"/>
@@ -187,7 +187,7 @@
     <text x="968" y="420">· GET /api/docs OpenAPI docs</text>
     <text x="968" y="442">· Docker Compose: 6 services</text>
     <text x="968" y="464">· CI: PHPUnit / Flutter / Docker</text>
-    <text x="968" y="486">· backup: mysqldump + upload (30d)</text>
+    <text x="968" y="486">· backup + offsite sync · logs 180d</text>
   </g>
 
   <!-- 项目宠物 -->

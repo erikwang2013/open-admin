@@ -165,7 +165,7 @@
   <text class="chipS" x="364" y="869">限流 · 验证码 · 权限缓存 · 黑名单</text>
   <rect class="node" x="624" y="830" width="256" height="52" rx="12" fill="#E6F4FF" stroke="#91CAFF"/>
   <text class="chipT" x="644" y="851">单机部署 · 数据持久化</text>
-  <text class="chipS" x="644" y="869">backup 每日备份 DB + upload · 30 天</text>
+  <text class="chipS" x="644" y="869">backup 每日备份 + offsite 同步 · 30 天</text>
 
   <!-- ========== 右栏 ========== -->
   <rect class="railCard" x="948" y="112" width="252" height="190" rx="16"/>
@@ -187,7 +187,7 @@
     <text x="968" y="420">· GET /api/docs OpenAPI 文档</text>
     <text x="968" y="442">· Docker Compose：6 个服务</text>
     <text x="968" y="464">· CI：PHPUnit / Flutter / Docker 校验</text>
-    <text x="968" y="486">· 备份：mysqldump + upload tar（30 天）</text>
+    <text x="968" y="486">· 备份 + 异地同步 · 日志清理 180 天</text>
   </g>
 
   <!-- 项目宠物 -->

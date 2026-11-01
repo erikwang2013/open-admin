@@ -11,6 +11,8 @@ use app\model\AdminUser;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use support\Request;
 use support\Response;
+use XMLReader;
+use ZipArchive;
 
 /**
  * @Apidoc\Title("数据导入")
@@ -47,17 +49,65 @@ class ImportController extends BaseController
 
         $tmpPath = $file->getRealPath();
 
-        $reader = IOFactory::createReaderForFile($tmpPath);
-        $reader->setReadDataOnly(true);
+        try {
+            // xlsx 本质是 ZIP：限制 xl/**.xml 解压后总量与单元格数，防止压缩炸弹或宽表在解析时撑爆 128M 内存
+            if ($ext === 'xlsx' && class_exists(ZipArchive::class)) {
+                $zip = new ZipArchive();
+                if ($zip->open($tmpPath) !== true) {
+                    return $this->fail('Excel 文件无法读取，请确认文件未损坏', 422);
+                }
+                try {
+                    $xmlBytes = 0;
+                    $cells = 0;
+                    for ($i = 0, $total = $zip->numFiles; $i < $total; $i++) {
+                        $name = $zip->getNameIndex($i);
+                        if (!is_string($name) || !preg_match('#^xl/.*\.xml$#i', $name)) {
+                            continue;
+                        }
+                        $xmlBytes += (int) ($zip->statIndex($i)['size'] ?? 0);
+                        if ($xmlBytes > 8 * 1024 * 1024) {
+                            return $this->fail('Excel 文件内容过大，无法导入', 422);
+                        }
+                        // 流式统计单元格，行数上限管不住列数/稀疏宽表
+                        if (preg_match('#^xl/worksheets/[^/]+\.xml$#i', $name)) {
+                            $xmlReader = new XMLReader();
+                            try {
+                                if (!$xmlReader->open("zip://{$tmpPath}#{$name}")) {
+                                    throw new \RuntimeException('worksheet xml open failed');
+                                }
+                                while ($xmlReader->read()) {
+                                    if ($xmlReader->nodeType === XMLReader::ELEMENT && $xmlReader->localName === 'c') {
+                                        if (++$cells > 32000) {
+                                            return $this->fail('Excel 文件单元格过多，无法导入', 422);
+                                        }
+                                    }
+                                }
+                            } finally {
+                                $xmlReader->close();
+                            }
+                        }
+                    }
+                } finally {
+                    $zip->close();
+                }
+            }
 
-        // 加载前先读工作表元数据拒绝超大表，避免整本工作簿进内存
-        $sheetRows = array_column($reader->listWorksheetInfo($tmpPath), 'totalRows');
-        if ($sheetRows && max($sheetRows) > 2001) {
-            return $this->fail('数据行数不能超过 2000 行（不含表头）', 422);
+            $reader = IOFactory::createReaderForFile($tmpPath);
+            $reader->setReadDataOnly(true);
+            $reader->setReadEmptyCells(false);
+
+            // 加载前先读工作表元数据拒绝超大表，避免整本工作簿进内存
+            $sheetRows = array_column($reader->listWorksheetInfo($tmpPath), 'totalRows');
+            if ($sheetRows && max($sheetRows) > 2001) {
+                return $this->fail('数据行数不能超过 2000 行（不含表头）', 422);
+            }
+
+            $spreadsheet = $reader->load($tmpPath);
+        } catch (\Throwable $e) {
+            return $this->fail('Excel 文件无法解析，请确认文件未损坏且格式正确', 422);
         }
 
-        $spreadsheet = $reader->load($tmpPath);
-        $sheet       = $spreadsheet->getActiveSheet();
+        $sheet = $spreadsheet->getActiveSheet();
 
         // 再加一道实际数据边界校验，防止元数据与实际行数不一致
         if ($sheet->getHighestDataRow() > 2001) {
