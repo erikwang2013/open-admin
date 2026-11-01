@@ -11,7 +11,7 @@ flowchart TB
     end
 
     subgraph host["Single-machine Docker Compose (deploy/)"]
-        nginx["Nginx :80/:443<br/>TLS termination · static site<br/>reverse proxy"]
+        nginx["Nginx :80/:443<br/>TLS termination · static site<br/>reverse proxy · waits for app healthy"]
         bootstrap["init (one-shot)<br/>schema + admin user"]
         wm["webman app :8791<br/>container network"]
         mysql[("MySQL 8.0<br/>deploy/data/mysql")]

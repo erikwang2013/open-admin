@@ -266,22 +266,24 @@ Exceeding the limit returns 429; response headers include X-RateLimit-Limit / Re
   │                                    │
   │  ② 用户点击图中文字位置              │
   │                                    │
-  │  ③ POST /api/v1/auth/login           │
-  │     {username, password,          │
-  │      captcha_key, clicks}         │
-  │────────────────────────────────►  │
-  │                                    │ ① captcha_verify()
-  │                                    │ ② password_verify()
-  │                                    │ ③ jwt()->create()
+  │  ③ POST /api/v1/captcha/verify       │ captcha_verify()
+  │     {key, type, clicks}           │ 成功 → SET captcha_verified:{key}
+  │◄── {valid: true}                  │        TTL 300s
+  │                                    │
+  │  ④ POST /api/v1/auth/login           │ 原子 DEL captcha_verified:{key}
+  │     {username, password,          │ 返回 1 才继续（并发仅一次成功）
+  │      captcha_key}                 │ 长度合法后 password_verify()（未知用户
+  │────────────────────────────────►  │ 用固定 cost-10 占位哈希抹平时间差）
+  │                                    │ jwt()->create()
   │◄── {access_token, refresh_token}  │
   │                                    │
-  │  ④ GET /admin/dashboard           │
+  │  ⑤ GET /admin/dashboard           │
   │     Authorization: Bearer xxx     │
   │────────────────────────────────►  │ AdminAuth → AdminPermission
   │◄── 200 {dashboard data}           │
 ```
 
-Refresh: `POST /api/v1/auth/refresh` rotates the token pair and immediately blacklists the old refresh_token, caching the new pair for 60 seconds under `refresh_rotation:<md5>`; resubmitting the old token within the grace period returns the same pair. Concurrent rotation is serialized by `refresh_lock:<md5>` (`SET NX EX 5` + Lua release); a concurrent cache miss returns 409, and a blacklisted cached token deletes the cache and returns 401. A password change clears the rotation cache and logout blacklists the cached tokens, cleaning up via `user_refresh_rotations:<userId>`; the HarmonyOS client uses single-flight refresh for concurrent 401s.
+Refresh: `POST /api/v1/auth/refresh` rotates the token pair, immediately blacklists the old refresh_token, and caches the new pair for 60 seconds under `refresh_rotation:<md5>`; resubmitting the old token within the grace period returns the same pair. Concurrent rotation is serialized by `refresh_lock:<md5>` (`SET NX EX 5` + Lua release); a concurrent cache miss returns 409, and a blacklisted cached token deletes the cache and returns 401. Before refreshing, the password-change watermark `user_pwd_changed:<userId>` is checked. Password change, disable, delete and batch disable/delete call `SessionService::revokeUser()` to write the watermark, blacklist access/refresh tokens and clear rotation and permission caches; role changes clear only the permission cache. Logout blacklists cached tokens and cleans up via `user_refresh_rotations:<userId>`; the HarmonyOS client uses single-flight refresh for concurrent 401s.
 
 ### 4.6 Permission Model (RBAC)
 
@@ -295,14 +297,16 @@ Refresh: `POST /api/v1/auth/refresh` rotates the token pair and immediately blac
 
   权限标识格式: {method}.{path}
   例: get.admin/user  post.admin/user  delete.admin/user
-  超级管理员标识: * (跳过所有权限检查)
+  超级管理员: 持有启用 super_admin 角色 → RbacService 返回 ['*']（跳过权限检查）
 ```
 
-Super-admin protection: the currently logged-in account cannot be deleted or have its status changed; delete/disable must leave at least one enabled super administrator (otherwise 422). The check and write are serialized by the MySQL named lock `open_admin:last_super_admin` (`GET_LOCK` 3s / released in `finally`), covering delete, batch delete, batch disable and update-disable; a timeout or database error returns 503. The built-in `super_admin` role cannot be edited or deleted (403).
+Grant boundaries: when a non-super-admin assigns roles, every permission of the granted roles (including disabled roles) must be a subset of their own permissions, and `super_admin` cannot be assigned; when managing a user, all roles held by the target (including disabled ones) must be grantable, otherwise 403. `GET /admin/role/options` returns only the enabled roles the current admin can assign.
+
+Super-admin protection: the currently logged-in account cannot be deleted or have its status changed; non-super-admins cannot modify/disable/delete a super-admin target or assign `super_admin`. After delete/disable/role changes at least one enabled super administrator must remain (otherwise 422). The check and write are serialized by the MySQL named lock `open_admin:last_super_admin` (`GET_LOCK` 3s / released in `finally`), covering update (status/roles), delete, batch delete and batch enable/disable; target roles are re-read and boundaries re-checked inside the lock, and a timeout or database error returns 503. The built-in `super_admin` role cannot be edited or deleted (403).
 
 ### 4.7 Password Re-Confirmation for Sensitive Operations
 
-Sensitive operations such as deleting users, roles, and permissions require the current user's password in the request body for identity re-verification:
+Sensitive operations such as deleting users, roles, permissions, config and batch deletes require the current user's password in the request body for identity re-verification. Failures are counted in `pwd_confirm_fail:<id>` at 5 per 300 seconds; after that, confirmation is refused for 5 minutes:
 
 ```
 客户端                           服务端
@@ -362,32 +366,35 @@ Data flow: Page ← DataService ← ApiService (JWT Bearer) ← HTTP ← webman
 |------|------|
 | Method restriction | SecurityFilter HTTP method whitelist; only GET/POST/PUT/DELETE/OPTIONS/HEAD allowed, non-standard methods return 405 |
 | Attack blocking | SecurityFilter middleware detects/blocks XSS, SQL injection, path traversal, command injection, CSRF |
-| Human verification | Click captcha, mandatory for login |
+| Human verification | Click captcha, mandatory for login; the marker is consumed by an atomic `DEL`, so only one concurrent request succeeds |
 | Account lockout | 5 consecutive login failures lock the account for 15 min; 429 returned while locked |
+| Login timing | When the password length is valid, bcrypt always runs; a fixed cost-10 placeholder hash is used for unknown users or empty hashes, flattening the account-enumeration timing difference |
 | Session limit | Max 3 concurrent tokens per user; oldest token auto-blacklisted when exceeded |
+| Session revocation | Password change/disable/delete/batch disable-delete: watermark + access/refresh token blacklist + rotation and permission cache cleanup |
 | Rate limiting | RateLimit middleware, Redis sliding window, atomic Lua; `/api/` and `/admin/` fail closed (503) when Redis fails |
 | Auth degradation | AdminAuth returns 503 when the blacklist read fails, never allowing possibly logged-out tokens |
-| Super-admin protection | The current account cannot be targeted; delete/disable keeps at least one enabled super admin; the built-in role cannot be edited or deleted |
-| Import/export | Import 5MB / 2,000 rows (oversized sheets rejected before load); export 5,000 rows, HTTP 422 over the cap |
+| Super-admin protection | The current account cannot be targeted; non-super-admins cannot assign/target super admins; delete/disable/role changes keep at least one enabled super admin; the built-in role cannot be edited or deleted |
+| Grant boundaries | Role grants and target management are checked against the permission subset, disabled roles included; `/admin/role/options` returns only assignable roles |
+| Import/export | Import 5MB / 2,000 rows / 32,000 cells / ZIP 8MB precheck / Redis lock 409 / per-row transaction; export 5,000 rows, scalar condition validation, all cells written as strings against formula injection |
 | CSP | Content-Security-Policy header restricts resource origins, prevents XSS and data injection |
-| Operation confirmation | Sensitive ops such as delete require the current user's password |
-| Transport | HTTPS + JWT Bearer Token |
+| Operation confirmation | Sensitive ops such as delete require the current user's password, throttled at 5 failures per 300 seconds |
+| Transport | HTTPS + JWT Bearer Token; login password over RSA-2048 (AES/plaintext legacy fallback) |
 | API IDs | Hashids encrypted, real IDs cannot be reverse-engineered externally |
 | Request body | AES-256-CBC sensitive field encryption |
 | Database | BIGINT primary keys (no auto-increment exposed) |
 | Database | AES-128-ECB encrypted storage of sensitive fields |
-| Authentication | JWT HS256, 2h expiry + refresh token |
-| Authorization | RBAC with method.path granularity |
-| Audit | OperationLog records all operations (incl. automatic client source detection) |
+| Authentication | JWT HS256, 2h expiry + refresh token 14d, refresh rotation with 60s grace |
+| Authorization | RBAC with method.path granularity; enabled super_admin role grants wildcard `*` |
+| Audit | OperationLog records all operations (incl. automatic client source detection), with recursive PII masking of phone/email/id_card and similar |
 
 ### 6.2 Key Management
 
 ```
-JWT_SECRET_KEY      → 环境变量注入，64位随机字符串
-HASHIDS_SALT        → 唯一盐值，泄漏后需全局更换
-ENCRYPTION_KEY      → API 传输加密密钥，32字节
-ENCRYPTABLE_KEY     → DB 存储加密密钥，与传输密钥独立
-RSA_PRIVATE_KEY     → 登录密码传输公钥对应的私钥（deploy 脚本自动生成）
+JWT_SECRET_KEY      → injected via environment, 64-character random string
+HASHIDS_SALT        → unique salt; rotate globally if leaked
+ENCRYPTION_KEY      → API transport encryption key, 32 bytes
+ENCRYPTABLE_KEY     → DB storage encryption key, independent of the transport key
+RSA_PRIVATE_KEY     → private key for the login-password transport public key (generated by the deploy script)
 ```
 
 ### 6.3 Sensitive Data Protection
@@ -407,14 +414,18 @@ RSA_PRIVATE_KEY     → 登录密码传输公钥对应的私钥（deploy 脚本�
 
 ```
 请求: POST /admin/export/excel { table, columns, conditions, title }
-  → fetchExportData() 查询数据 (LIMIT 5001 probe)
-  → Over 5,000 rows → HTTP 422 (no file generated)
+  → 校验 conditions：对象、已知列、标量值，否则 HTTP 422
+  → fetchExportData() 查询数据 (LIMIT 5001 探测)
+  → 超过 5000 行 → HTTP 422（不生成文件）
   → 脱敏敏感字段
-  → PhpSpreadsheet 构建（蓝底白字表头 + 冻结首行 + 自动筛选）
+  → PhpSpreadsheet 构建（setValueExplicit TYPE_STRING 防公式注入，
+    蓝底白字表头 + 边框只写一次 + 冻结首行 + 自动筛选）
   → 写入 runtime/tmp/ → download 响应
 ```
 
-Import: `POST /admin/import/users` is limited to 5MB. `ImportController` uses `createReaderForFile` + `setReadDataOnly(true)` + `listWorksheetInfo()` before `IOFactory::load()` and rejects any workbook with a sheet over 2,001 rows with a 422, then re-checks with `getHighestDataRow()` after loading; data rows are capped at 2,000.
+5,000 rows × 9 columns take about 65MiB under the 128M worker limit, already close to the safe ceiling; the row and column caps must not both be raised.
+
+Import: `POST /admin/import/users` is limited to 5MB, 2,000 rows and 32,000 cells, with optional uniform `role_ids` assignment. The whole batch is serialized by the Redis lock `import_users_lock` (`SET NX EX 1800`); a running import returns 409. `.xlsx` files get a ZIP decompression precheck first (`xl/**.xml` > 8MB or more than 32,000 cells returns 422); before `IOFactory::load()`, `ImportController` checks every sheet with `createReaderForFile` + `setReadDataOnly(true)` + `listWorksheetInfo()` and returns 422 immediately if any sheet exceeds 2,001 rows or row × column exceeds 32,000 cells; after loading it re-checks with `getHighestDataRow()`. Each row validates username 3-50, password 6-32, real_name ≤50, phone ≤20, email ≤254 and status 0/1, with the row number and a generic reason recorded on failure; user and role links are written in one transaction and rolled back per row. Bcrypt over 2,000 rows is CPU-intensive, so the lock TTL is sized for the worst case.
 
 ### 7.2 PDF Export
 
@@ -430,7 +441,7 @@ Import: `POST /admin/import/users` is limited to 5MB. `ImportController` uses `c
 ### 8.1 Recommended Topology
 
 ```
-Nginx (:80/:443, TLS + static site) → app (webman :8791) → MySQL + Redis
+Nginx (:80/:443, TLS + static site, starts after the app health check passes) → app (webman :8791) → MySQL + Redis
 init (one-shot): schema + admin user; backup (daily): mysqldump + upload tar into deploy/data/backups, deletes operation logs older than 180 days
 Data persists to deploy/data/; logs go to stdout/stderr and are rotated by Docker
 ```
@@ -441,7 +452,7 @@ The production stack lives in `deploy/` and runs 6 services on one machine. No f
 
 | Service | Image/Build | Description |
 |------|----------|------|
-| `nginx` | nginx:alpine | 80/443, TLS, static site, reverse proxy + Gzip; logs to stdout/stderr |
+| `nginx` | nginx:alpine | 80/443, TLS, static site, reverse proxy + Gzip; waits for the app health check; logs to stdout/stderr |
 | `app` | Local `Dockerfile` build | 8791 (container network only), PHP 8.3 + OPcache + redis/zip/gd (FreeType/JPEG) + webman, runs as host UID/GID |
 | `init` | Same app image | One-shot schema + admin creation, then exits |
 | `mysql` | mysql:8.0 | Primary database with data on a host bind mount; error/slow logs to stderr |
@@ -462,7 +473,8 @@ docker compose up -d --build
 - Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; the admin password is in `deploy/secrets/admin_password.txt`; HSTS is off by default and should be enabled after a real certificate is configured.
 - Persistent directories: `deploy/data/{mysql,redis,runtime,upload,backups}`; Docker rotates logs at `10m × 3`.
 - Per-service CPU/memory/pids limits: app 1.0/512M/256, init 0.5/256M/128, mysql 1.5/768M/512, redis 0.5/384M/128, nginx 0.5/128M/128, backup 0.5/256M/128; the Redis container's 384M pairs with `--maxmemory 256mb`, leaving 128M for AOF rewrite/fork and fragmentation.
-- An in-app `log-cleanup` process (no listening port, `count=1`) performs a best-effort cleanup at startup and then daily deletes `operation_log` rows older than 180 days in batches of 10,000; it and the backup-service cleanup are fallbacks for each other.
+- `nginx` waits for the app `/health` check via `depends_on.app.condition: service_healthy` before starting, avoiding 502s during container startup.
+- An in-app `log-cleanup` process (no listening port, `count=1`) performs a best-effort cleanup at startup and then daily deletes `operation_log` rows older than 180 days, 10,000 rows per batch and at most 10 batches (100,000 rows) per run; it and the backup-service cleanup are fallbacks for each other.
 - Nginx repeats `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` and `Cache-Control` inside the static asset locations; CI runs `nginx -t` on both `deploy/nginx/default.conf` and `docs/nginx-security.conf`.
 - `backup` uses the least-privilege `backup_reader` user (`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` on the database plus `DELETE` on `erik_operation_log`). Backups default to the MySQL host/disk; offsite copies are run by host cron via `deploy/offsite-sync.sh` (reads `OFFSITE_TARGET` in `deploy/.env`, supports rsync and rclone).
 
@@ -478,7 +490,7 @@ GitHub Actions CI is defined in `.github/workflows/ci.yml`:
 
 ### 8.4 Database Backup
 
-The production stack's `backup` service writes daily database and upload backups to `deploy/data/backups` (30-day retention) and deletes operation logs older than 180 days; the in-app `log-cleanup` process performs the same daily purge. Offsite copies are synced by host cron via `deploy/offsite-sync.sh` (reads `OFFSITE_TARGET`).
+The production stack's `backup` service writes daily database and upload backups to `deploy/data/backups` (30-day retention) and deletes operation logs older than 180 days; the in-app `log-cleanup` process performs the same daily purge (at most 10 batches × 10,000 rows per run). Offsite copies are synced by host cron via `deploy/offsite-sync.sh` (reads `OFFSITE_TARGET`).
 `database/backup/backup.sh` — mysqldump + gzip backup, auto-clears backups older than 30 days (host with direct database access).
 `database/backup/restore.sh` — interactive selection and restore of backups.
 

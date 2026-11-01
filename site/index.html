@@ -137,7 +137,7 @@
         <h2>一套后台，覆盖从登录到审计的完整链路</h2>
         <p class="section-lead">后端基于 webman v2 常驻内存进程，管理端使用 Flutter Web 的 PC 布局，移动端提供 HarmonyOS 原生客户端。数据、权限、审计与导出都在同一条链路上。</p>
         <ul class="check-list">
-          <li><strong>认证与权限</strong><span>JWT、点击验证码、账号锁定、并发会话限制，以及 method.path 粒度的 RBAC。</span></li>
+          <li><strong>认证与权限</strong><span>JWT、点击验证码、账号锁定、并发会话限制与会话撤销，以及 method.path 粒度的 RBAC。</span></li>
           <li><strong>数据与审计</strong><span>Snowflake 主键、Hashids 出入参、敏感字段自动加解密、写操作自动落库。</span></li>
           <li><strong>防御与观测</strong><span>31 种攻击检测器、Redis 滑动窗口限流、Prometheus 指标与健康检查。</span></li>
         </ul>
@@ -167,8 +167,8 @@
         <article class="feature-card span-5 feature-card-tint" data-reveal>
           <p class="card-label">认证</p>
           <h3>登录与令牌</h3>
-          <p>点击验证码、JWT 签发与校验、Token 黑名单，access_token 2 小时，refresh_token 14 天。刷新轮换带 60 秒宽限与并发锁，HarmonyOS 并发 401 只刷新一次。</p>
-          <p class="feature-foot">连续 5 次失败锁定 15 分钟（按账号归一化计数），同一用户最多 3 个有效 Token；禁止删除当前账号或移除最后一名启用的超级管理员。</p>
+          <p>点击验证码（原子消费）、JWT 签发与校验、Token 黑名单，access_token 2 小时，refresh_token 14 天。刷新轮换带 60 秒宽限与并发锁，HarmonyOS 并发 401 只刷新一次。</p>
+          <p class="feature-foot">连续 5 次失败锁定 15 分钟（按账号归一化计数），同一用户最多 3 个有效 Token；密码变更、禁用或删除账号即撤销全部会话；二次确认 5 次/5 分钟节流；禁止删除当前账号或移除最后一名启用的超级管理员。</p>
         </article>
 
         <article class="feature-card span-3" data-reveal>
@@ -180,13 +180,13 @@
         <article class="feature-card span-4" data-reveal>
           <p class="card-label">用户</p>
           <h3>用户管理</h3>
-          <p>CRUD、批量删除与启禁用、软删除、Excel 导入（5MB / 2000 行上限，ZIP 解压体积预检后逐行校验）。</p>
+          <p>CRUD、批量删除与启禁用、软删除、角色分配（role_ids / GET /admin/role/options）；Excel 导入 5MB / 2000 行 / 8MB 解压 / 32000 单元格上限，单实例导入锁，逐行校验后可统一分配角色。</p>
         </article>
 
         <article class="feature-card span-4" data-reveal>
           <p class="card-label">权限</p>
           <h3>角色与权限树</h3>
-          <p>RBAC 按 method.path 校验，权限缓存 60 秒；super_admin 角色不可编辑/删除，且至少保留一名启用的超级管理员。</p>
+          <p>RBAC 按 method.path 校验，权限缓存 60 秒；分配角色要求权限不超出操作人，且目标须在可管理范围内（含禁用角色）；super_admin 角色不可编辑/删除，且至少保留一名启用的超级管理员。</p>
         </article>
 
         <article class="feature-card span-4" data-reveal>
@@ -198,14 +198,14 @@
         <article class="feature-card span-4" data-reveal>
           <p class="card-label">审计</p>
           <h3>操作日志</h3>
-          <p>写操作由中间件自动落库，记录操作人、动作、IP、UA、耗时与结果。</p>
+          <p>写操作由中间件自动落库，记录操作人、动作、IP、UA、耗时与结果；手机号、邮箱等字段自动脱敏。</p>
           <p class="feature-foot">自动识别 8 种平台来源端，支持多条件筛选。</p>
         </article>
 
         <article class="feature-card span-5" data-reveal>
           <p class="card-label">文件</p>
           <h3>文件与导出</h3>
-          <p>上传校验、Excel/PDF 导出、敏感数据自动脱敏；导出超过 5000 行返回 422。</p>
+          <p>上传校验、Excel/PDF 导出、敏感数据自动脱敏；Excel 单元格按纯文本写入防公式注入，导出超过 5000 行或筛选字段未知返回 422。</p>
         </article>
 
         <article class="feature-card span-7 feature-card-pet" data-reveal>
@@ -230,6 +230,7 @@
             <li>CSP 与安全响应头注入，静态官网与 /apidoc/ 各自独立 CSP，Nginx 静态资源单独重复安全头</li>
             <li>默认 60 次/分钟/IP/路由的 Lua 滑动窗口限流</li>
             <li>Redis 故障时 /api/、/admin/ 的鉴权与限流失败关闭（503）</li>
+            <li>角色分配按权限子集与目标管理边界校验，禁用角色一并评估</li>
             <li>security.txt 遵循 RFC 9116</li>
           </ul>
         </article>
@@ -237,7 +238,7 @@
         <article class="platform-card" data-reveal>
           <p class="card-label">运维观测</p>
           <h3>上线后看得见</h3>
-          <p>健康检查、5 项 Prometheus 指标、OpenAPI 文档与同源 /apidoc/ 调试页；单机 Docker Compose（deploy/）为每个服务设置 CPU/内存/pids 限制，Redis 容器 384M 配套 256MB maxmemory；最小权限数据库/上传备份与 offsite-sync.sh 异地同步，应用内 log-cleanup 每日清理日志。CI 构建镜像并校验 PHP 扩展、Compose 与两套 Nginx 配置。</p>
+          <p>健康检查、5 项 Prometheus 指标、OpenAPI 文档与同源 /apidoc/ 调试页；单机 Docker Compose（deploy/）为每个服务设置 CPU/内存/pids 限制，Redis 容器 384M 配套 256MB maxmemory，Nginx 等待应用健康后启动；最小权限数据库/上传备份与 offsite-sync.sh 异地同步，应用内 log-cleanup 每日分批清理（每轮最多 10 批 × 1 万行，日志保留 180 天）。CI 运行 PHPUnit（37 用例 / 81 断言）与 Flutter analyze，并校验 PHP 扩展、Compose 与两套 Nginx 配置。</p>
           <a class="text-link" href="https://github.com/erikwang2013/open-admin/blob/main/docs/API.md" target="_blank" rel="noopener">API 文档</a>
         </article>
 
@@ -495,6 +496,10 @@ docker compose up -d --build
       </div>
 
       <ol class="timeline">
+        <li data-reveal>
+          <div class="timeline-meta"><span class="version-tag">v2.1.11</span><time datetime="2026-11-01">2026-11-01</time></div>
+          <div class="timeline-body"><h3>权限边界与会话安全</h3><p>管理员重置密码、禁用或删除账号后立即撤销其全部会话；验证码原子消费，登录对不存在的账号也执行等时密码校验；二次确认密码增加 5 次/5 分钟节流；用户角色分配新增 role_ids 与 GET /admin/role/options，按“权限子集 + 目标可管理”边界校验（含禁用角色），用户与导入写入改为事务；列表脱敏的手机/邮箱在编辑时不再回写覆盖；导入逐行校验、统一错误文案、去除 N+1 查询、单实例导入锁、xls 单元格上限并支持批量分配角色；Excel 导出所有单元格按字符串写入（防公式注入）并改为区间样式，未知筛选字段返回 422；日志清理每轮最多 10 批 × 1 万行；Nginx 等待应用健康检查通过后再启动；操作日志对手机号、邮箱等 PII 脱敏。</p></div>
+        </li>
         <li data-reveal>
           <div class="timeline-meta"><span class="version-tag">v2.1.10</span><time datetime="2026-11-01">2026-11-01</time></div>
           <div class="timeline-body"><h3>并发与边界加固</h3><p>账号锁定改为按账号归一化计数（已存在用户按 userId、未知用户名按 md5(小写去空白用户名)），大小写与空白变体共享锁定；用户更新校验密码 6-32 位、姓名 50 字符、状态 0/1；最后一名超管校验与写入用 MySQL 命名锁串行化，冲突返回 503；刷新轮换增加 SET NX 锁、缓存令牌黑名单复查与并发 409；Redis 容器 384M 配套 256MB maxmemory，并为各服务补齐 CPU/pids 限制；静态官网与 /apidoc/ 增加独立 CSP；导入增加 ZIP 解压体积预检；新增 log-cleanup 进程与 offsite-sync.sh 异地备份脚本。</p></div>

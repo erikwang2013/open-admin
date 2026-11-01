@@ -4,7 +4,7 @@
 flowchart TB
     subgraph transport["传输层加密 - encryption"]
         e1["客户端发送敏感数据"]
-        e2["AES-256-CBC 加密"]
+        e2["AES-256-CBC / RSA-2048 加密"]
         e3["API传输密文"]
         e4["服务端解密处理"]
         e1 --> e2 --> e3 --> e4

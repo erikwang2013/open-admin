@@ -28,8 +28,8 @@ sequenceDiagram
     end
 
     rect rgb(255, 240, 230)
-    Note over U,CAP: Step 3: Login Verification
-    CL->>SV: POST /api/v1/auth/login {username,password,captcha_key,clicks}
+    Note over U,CAP: Step 3: Captcha Verification
+    CL->>SV: POST /api/v1/captcha/verify {key,type,clicks}
     SV->>CAP: captcha_verify(key,'click',clicks)
 
     alt Captcha Incorrect
@@ -37,7 +37,19 @@ sequenceDiagram
         SV-->>CL: 422 Captcha Error
     else Captcha Correct
         CAP-->>SV: true
-        SV->>SV: password_verify()
+        SV->>SV: SET captcha_verified:{key} TTL 300s
+        SV-->>CL: 200 {valid:true}
+    end
+    end
+
+    rect rgb(240, 230, 255)
+    Note over U,CAP: Step 4: Login
+    CL->>SV: POST /api/v1/auth/login {username,password,captcha_key}
+    SV->>SV: Atomic DEL captcha_verified:{key} (only one concurrent request wins)
+    alt Marker Missing or Consumed
+        SV-->>CL: 422 Captcha Expired
+    else Marker Present
+        SV->>SV: password_verify() after length check (fixed cost-10 placeholder hash for unknown users)
         alt Invalid Credentials
             SV-->>CL: 401 Username or Password Incorrect
         else Valid Credentials
@@ -51,7 +63,7 @@ sequenceDiagram
     end
 
     rect rgb(245, 245, 255)
-    Note over U,CL: Step 4: Subsequent Requests
+    Note over U,CL: Step 5: Subsequent Requests
     CL->>SV: GET /admin/dashboard
     Note right of CL: Authorization: Bearer token
     SV->>JWT: jwt()->verify()

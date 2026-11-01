@@ -10,7 +10,7 @@
 - **API 版本**: 版本号体现在 URL 前缀中（`/api/v1/...`、`/api/v2/...`），不使用请求头
 - **语言**: 通过 `Accept-Language` 头或 `?lang=zh_CN|en` 参数切换（默认 zh_CN），Locale 中间件自动检测
 
-> **端点总览**: 认证(4) | 仪表盘(1) | 用户(7) | 角色(4) | 权限(4) | 配置(4) | 日志(1) | 个人中心(3) | 导入导出(3) | 上传(1) | 运维(4: health/metrics/docs/security.txt) | 共 36 端点
+> **端点总览**: 认证(4) | 仪表盘(1) | 用户(7) | 角色(5) | 权限(4) | 配置(4) | 日志(1) | 个人中心(3) | 导入导出(3) | 上传(1) | 运维(4: health/metrics/docs/security.txt) | 共 37 端点
 - **认证**: `Authorization: Bearer <token>`（JWT）
 - **响应格式**: `{ "code": 0, "message": "success", "data": {...} }`
 - **文档端点**: `GET /api/docs` 返回 OpenAPI 3.0 JSON 规范；`/apidoc/` 提供轻量同源调试界面（单个 HTML，无外部资源）
@@ -31,16 +31,16 @@
 | 0 | 成功 | |
 | 400 | 请求参数错误 | 请求格式不正确 |
 | 401 | 未认证 | Token 缺失 / 过期 / 已在黑名单 |
-| 403 | 无权限 / 安全拦截 | RBAC 权限不足 / SecurityFilter 命中 |
+| 403 | 无权限 / 安全拦截 | RBAC 权限不足 / 超出可授予或可管理的角色边界 / 非超管操作超管账号 / SecurityFilter 命中 |
 | 404 | 资源不存在 | 查询/更新/删除的目标不存在 |
 | 405 | 请求方法不允许 | 仅允许 GET/POST/PUT/DELETE/OPTIONS/HEAD，非标准方法直接拒绝 |
-| 409 | 冲突 | 同一 refresh_token 的轮换正在进行，请稍后重试 |
+| 409 | 冲突 | 同一 refresh_token 的轮换正在进行；已有用户导入任务正在执行 |
 | 413 | 请求体过大 | Content-Length 超过 10MB |
 | 415 | 不支持的媒体类型 | POST/PUT 请求 Content-Type 非 JSON 且非文件上传 |
-| 422 | 参数验证失败 | 必填字段缺失、格式不符、业务校验不通过 |
+| 422 | 参数验证失败 | 必填字段缺失、格式不符、长度超限、role_ids 无效、导出筛选条件非法、业务校验不通过 |
 | 429 | 请求过于频繁 | RateLimit 触发 / 账号锁定（连续5次登录失败锁定15分钟） |
 | 500 | 服务器内部错误 | |
-| 503 | 服务暂时不可用 | Redis 不可用导致 `/api/`、`/admin/` 鉴权或限流失败关闭；超管保护命名锁等待超时或数据库异常 |
+| 503 | 服务暂时不可用 | Redis 不可用导致 `/api/`、`/admin/` 鉴权、限流或登录验证码消费失败关闭；超管保护命名锁等待超时或数据库异常 |
 
 ## 3. 公开端点
 
@@ -238,7 +238,7 @@ POST /api/v1/captcha/verify
 }
 ```
 
-验证通过后，后端将 `captcha_verified:{key}` 写入 Redis（TTL 300s），登录接口据此放行。
+验证通过后，后端将 `captcha_verified:{key}` 写入 Redis（TTL 300s），登录接口据此放行。登录时通过原子 `DEL` 消费该标记，只有 `DEL` 返回 1 的请求才继续；并发复用同一个 key 时仅一个登录请求能通过。
 验证失败时 `code` 为 422，`message` 为 `"验证失败，请重试"`，`data.valid` 为 `false`。
 
 ### 3.5 登录
@@ -332,12 +332,15 @@ GET /api/v1/auth/public-key
 | user.username | string | 用户名 |
 | user.real_name | string | 真实姓名 |
 
+密码长度合法时，登录接口始终执行一次 bcrypt 校验：用户不存在或存储哈希为空时使用固定 cost-10 占位哈希，避免通过响应时间枚举账号；长度非法时直接按凭证错误处理，不进入 bcrypt。验证码标记在密码校验前被原子消费；Redis 不可用时返回 503，不放行登录。
+
 **可能的错误**:
 - 422: 参数验证失败（缺少必填字段、格式不符）
-- 422: 请先完成验证码校验（captcha_key 未通过 `/api/v1/captcha/verify`）
+- 422: 请先完成验证码校验（captcha_key 未通过 `/api/v1/captcha/verify`，或标记已被并发请求消费）
 - 401: 用户名或密码错误
 - 403: 账号已被禁用
 - 429: 账号已被锁定，请15分钟后再试（连续5次登录失败触发）
+- 503: 验证码标记消费时 Redis 不可用（失败关闭）
 
 ### 3.6 刷新令牌
 
@@ -372,7 +375,7 @@ POST /api/v1/auth/refresh
 }
 ```
 
-刷新成功会同时返回新的 access_token 和 refresh_token，旧令牌自动失效。刷新时会更新用户最后登录时间和 IP。
+刷新成功会同时返回新的 access_token 和 refresh_token，旧令牌自动失效。刷新时会更新用户最后登录时间和 IP。刷新前还会校验密码变更水位 `user_pwd_changed:<userId>`：令牌签发时间早于水位（改密、禁用、删除等触发）时返回 401，即使 refresh_token 尚未过期。
 
 为容忍并发请求与客户端重试，旧 refresh_token 轮换后有 60 秒宽限期：服务端以旧令牌的 md5 为键缓存新令牌对 60 秒，宽限期内再次提交同一旧令牌会原样返回缓存的新令牌对，不会重复轮换；超过宽限期后旧令牌按黑名单处理并返回 401。缓存中的任一枚令牌若已被拉黑，服务端会删除缓存并返回 401。
 
@@ -517,6 +520,8 @@ GET /admin/dashboard
 
 所有用户管理接口返回的 `id` 均为 hashid 加密字符串。密码字段已在响应中排除。手机号和邮箱在列表接口中脱敏展示，在详情接口中返回明文（数据库加密字段由 Encryptable trait 自动解密）。
 
+用户可通过可选的 `role_ids`（hashid 数组）分配角色。非超级管理员只能授予自身权限范围内的角色，不能分配 `super_admin`；也不能管理持有更高权限角色（含已禁用角色）的用户，越界返回 403。
+
 ### 5.1 用户列表
 
 ```
@@ -586,7 +591,8 @@ POST /admin/user
   "real_name": "新用户",
   "phone": "13800138000",
   "email": "newuser@example.com",
-  "status": 1
+  "status": 1,
+  "role_ids": ["r1r2r3r4"]
 }
 ```
 
@@ -595,9 +601,10 @@ POST /admin/user
 | username | string | 是 | min:3, max:50 | 用户名（唯一） |
 | password | string | 是 | min:6, max:32 | 密码（bcrypt 存储） |
 | real_name | string | 是 | max:50 | 真实姓名 |
-| phone | string | 否 | | 手机号（Encryptable 加密存储） |
-| email | string | 否 | | 邮箱（Encryptable 加密存储） |
+| phone | string | 否 | max:20 | 手机号（Encryptable 加密存储） |
+| email | string | 否 | max:254 | 邮箱（Encryptable 加密存储） |
 | status | int | 否 | in:0,1 | 状态，默认 1（启用） |
+| role_ids | array{string} | 否 | | 角色 ID（hashid）数组；非超管只能授予自身权限范围内的角色，且不能分配 `super_admin` |
 
 **响应示例**:
 ```json
@@ -616,9 +623,12 @@ POST /admin/user
 }
 ```
 
+用户记录与角色关联在同一数据库事务中写入，任一失败整体回滚，不会留下无角色账号。
+
 **可能的错误**:
+- 403: 仅超级管理员可分配超级管理员角色 / 无权授予超出自身权限的角色
 - 422: 用户名已存在
-- 422: 参数验证失败（必填字段缺失）
+- 422: 参数验证失败（必填字段缺失、手机号超过 20 字符、邮箱超过 254 字符、role_ids 无效或不存在）
 
 ### 5.3 用户详情
 
@@ -641,6 +651,7 @@ GET /admin/user/{id}
     "phone": "13800138000",
     "email": "admin@example.com",
     "status": 1,
+    "role_ids": ["r1r2r3r4"],
     "last_login_at": "2026-05-21 10:30:00",
     "last_login_ip": "192.168.1.1",
     "created_at": "2026-01-01 00:00:00",
@@ -649,7 +660,7 @@ GET /admin/user/{id}
 }
 ```
 
-详情接口中 `phone` 和 `email` 返回明文（数据库中为加密存储，Encryptable cast 自动解密），不脱敏。`password` 和 `id_card` 始终不在响应中。
+详情接口中 `phone` 和 `email` 返回明文（数据库中为加密存储，Encryptable cast 自动解密），不脱敏。`password` 和 `id_card` 始终不在响应中。`role_ids` 为用户当前持有的角色（hashid 数组），无角色时为空数组。
 
 **可能的错误**:
 - 404: 用户不存在
@@ -670,7 +681,8 @@ PUT /admin/user/{id}
   "password": "",
   "phone": "13900139000",
   "email": "new@example.com",
-  "status": 1
+  "status": 1,
+  "role_ids": ["r1r2r3r4"]
 }
 ```
 
@@ -678,11 +690,14 @@ PUT /admin/user/{id}
 |------|------|------|------|
 | real_name | string | 否 | 真实姓名，最长 50 字符，不传保持原值 |
 | password | string | 否 | 新密码，6-32 位明文（客户端加密时先解密再校验）；为空字符串或不传则不修改 |
-| phone | string | 否 | 手机号 |
-| email | string | 否 | 邮箱 |
+| phone | string | 否 | 手机号，最长 20 字符 |
+| email | string | 否 | 邮箱，最长 254 字符 |
 | status | int | 否 | 必须是 0（禁用）或 1（启用） |
+| role_ids | array{string} | 否 | 角色 ID（hashid）数组，传入则覆盖现有角色；仅校验本次新增角色，非超管不能授予超出自身权限的角色或 `super_admin` |
 
-不能禁用当前登录账号（422）；禁用操作会与“最后一名启用的超级管理员”校验在同一把 MySQL 命名锁内串行化，锁等待超时或数据库异常返回 503，可稍后重试。
+不能禁用当前登录账号（422）；禁用操作会与“最后一名启用的超级管理员”校验在同一把 MySQL 命名锁内串行化，锁等待超时或数据库异常返回 503，可稍后重试。非超级管理员的更新始终经过该命名锁内的权限边界复核，并发提权无法绕过。
+
+提交的 `phone`/`email` 若等于当前值的脱敏形式（如 `138****1234`）或符合掩码形状，按“未修改”处理，避免把列表脱敏值写回库。角色变化会清除该用户的权限缓存；`password` 变更或 `status=0` 会吊销该用户全部会话（访问/刷新令牌加入黑名单，密码变更水位拒绝旧刷新令牌）。
 
 **响应示例**:
 ```json
@@ -702,9 +717,11 @@ PUT /admin/user/{id}
 ```
 
 **可能的错误**:
+- 403: 无权管理该用户 / 仅超级管理员可分配超级管理员角色 / 无权授予超出自身权限的角色
 - 404: 用户不存在
-- 422: 密码长度 6-32 位 / 真实姓名超过 50 字符 / 状态不是 0 或 1
+- 422: 密码长度 6-32 位 / 真实姓名超过 50 字符 / 手机号超过 20 字符 / 邮箱超过 254 字符 / 状态不是 0 或 1
 - 422: 不能禁用当前登录账号；系统必须保留至少一名启用的超级管理员
+- 422: role_ids 无效或角色不存在
 - 503: 最后一名超管校验的命名锁等待超时或数据库异常，请稍后重试
 
 ### 5.5 删除用户
@@ -737,12 +754,13 @@ DELETE /admin/user/{id}
 }
 ```
 
-执行软删除（Eloquent SoftDeletes），数据标记 deleted_at 而不物理删除。
+执行软删除（Eloquent SoftDeletes），数据标记 deleted_at 而不物理删除。删除成功后吊销该用户全部会话（访问/刷新令牌加入黑名单）。
 
 **可能的错误**:
+- 403: 无权管理该用户 / 仅超级管理员可删除超级管理员账号
 - 404: 用户不存在
 - 422: 敏感操作需要输入密码确认（password 为空）
-- 422: 密码验证失败（密码不匹配）
+- 422: 密码验证失败（密码不匹配）；连续失败 5 次后 5 分钟内拒绝再次确认
 - 422: 不能删除当前登录账号
 - 422: 系统必须保留至少一名启用的超级管理员
 
@@ -779,12 +797,13 @@ POST /admin/user/batch/destroy
 }
 ```
 
-执行软删除，`data.count` 为实际删除数量。
+执行软删除，`data.count` 为实际删除数量；每个被删除用户的会话都会被吊销。
 
 **可能的错误**:
+- 403: 无权管理该用户 / 仅超级管理员可删除超级管理员账号
 - 422: 请选择要删除的用户（ids 为空）
 - 422: 无效的 ID（hashid 解码失败）
-- 422: 密码验证失败
+- 422: 密码验证失败；连续失败 5 次后 5 分钟内拒绝再次确认
 - 422: 不能删除当前登录账号（ids 包含当前用户）
 - 422: 系统必须保留至少一名启用的超级管理员
 
@@ -820,13 +839,15 @@ POST /admin/user/batch/status
 }
 ```
 
-message 根据 status 值动态变化为 `"批量启用成功"` 或 `"批量禁用成功"`。
+message 根据 status 值动态变化为 `"批量启用成功"` 或 `"批量禁用成功"`。启用与禁用都在同一把 MySQL 命名锁内执行，并在锁内复核目标权限边界与超管保护；禁用会吊销目标用户的全部会话，启用不会恢复旧令牌。
 
 **可能的错误**:
+- 403: 无权管理该用户 / 仅超级管理员可修改超级管理员账号
 - 422: 请选择用户（ids 为空）
 - 422: 状态值无效（status 不是 0 或 1）
 - 422: 不能修改当前登录账号的状态
 - 422: 系统必须保留至少一名启用的超级管理员（禁用最后一名启用的超级管理员时）
+- 503: 命名锁等待超时或数据库异常，请稍后重试
 
 ## 6. 角色管理
 
@@ -988,6 +1009,36 @@ DELETE /admin/role/{id}
 ```
 
 删除时自动解除角色与所有权限、用户的关联关系，然后物理删除角色记录。内置 `super_admin` 角色禁止删除，返回 403（`超级管理员不可删除`）。
+
+### 6.5 角色选项
+
+```
+GET /admin/role/options
+```
+
+- **认证**: JWT（仅 `AdminAuth`，无需 RBAC 权限）
+
+返回当前管理员可分配的启用角色，供用户表单下拉选择。非超级管理员看不到超出自身权限范围的角色；超级管理员可看到所有启用角色。
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": [
+    { "id": "r1r2r3r4", "name": "超级管理员", "slug": "super_admin" },
+    { "id": "r5r6r7r8", "name": "编辑员", "slug": "editor" }
+  ]
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | string | hashid 加密的角色 ID |
+| name | string | 角色名称 |
+| slug | string | 角色标识 |
+
+持有启用 `super_admin` 角色的管理员拥有通配权限 `*`，可分配任意角色并管理任意用户。
 
 ## 7. 权限管理
 
@@ -1289,7 +1340,7 @@ DELETE /admin/config/{id}
 
 ## 9. 操作日志
 
-操作日志为只读接口，由 `OperationLog` 中间件在每次 POST/PUT/DELETE 请求时自动写入，存储字段包括 `user_id`、`action`、`method`、`path`、`ip`、`source`、`input`。
+操作日志为只读接口，由 `OperationLog` 中间件在每次 POST/PUT/DELETE 请求时自动写入，存储字段包括 `user_id`、`action`、`method`、`path`、`ip`、`source`、`input`。写入前对 `input` 递归脱敏 `phone`、`email`、`id_card`、`mobile`、`address` 字段，避免审计日志留存明文个人信息。
 
 ### 9.1 操作日志列表
 
@@ -1372,9 +1423,9 @@ PUT /admin/profile
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| real_name | string | 否 | 真实姓名 |
-| phone | string | 否 | 手机号（Encryptable 加密存储） |
-| email | string | 否 | 邮箱（Encryptable 加密存储） |
+| real_name | string | 否 | 真实姓名，最长 50 字符 |
+| phone | string | 否 | 手机号，最长 20 字符（Encryptable 加密存储） |
+| email | string | 否 | 邮箱，最长 254 字符（Encryptable 加密存储） |
 
 **响应示例**:
 ```json
@@ -1393,7 +1444,7 @@ PUT /admin/profile
 }
 ```
 
-响应中 `phone` 和 `email` 返回明文，`password` 和 `id_card` 已剔除。
+响应中 `phone` 和 `email` 返回明文，`password` 和 `id_card` 已剔除。字段超过长度上限时返回 422。
 
 ### 10.2 修改密码
 
@@ -1424,6 +1475,8 @@ PUT /admin/profile/password
   "data": []
 }
 ```
+
+修改成功后吊销该用户全部会话：写入密码变更水位 `user_pwd_changed:<id>`，把已登记的访问/刷新令牌加入黑名单并清理轮换缓存。所有设备（含当前会话）都需要重新登录，客户端应清除本地令牌。
 
 **可能的错误**:
 - 422: 请填写旧密码和新密码
@@ -1480,7 +1533,7 @@ POST /admin/export/excel
 |------|------|------|------|------|
 | table | string | 否 | `admin_user` | 导出表名。支持: `admin_user`, `operation_log`, `admin_role`, `system_config` |
 | columns | array{string} | 否 | | 导出列字段名数组，为空则导出该表全部列 |
-| conditions | object | 否 | `{}` | 筛选条件，key-value 对，值不为空时用于 WHERE |
+| conditions | object | 否 | `{}` | 筛选条件，key 必须是目标表的可用列，值必须是标量（字符串/数字/布尔/null），否则返回 422 |
 | title | string | 否 | `数据导出` | Excel 标题（显示为 Sheet 名称） |
 
 **支持的表和列**:
@@ -1492,9 +1545,14 @@ POST /admin/export/excel
 | `admin_role` | id, name, slug, description, status, created_at |
 | `system_config` | id, group, key, value, type, description, created_at |
 
-敏感字段 `phone`、`email`、`id_card` 在导出时自动脱敏处理。单次最多导出 5000 行（查询 `LIMIT 5001` 探测），超过时返回 HTTP 422。Excel 首行冻结、自动筛选。
+筛选字段必须在目标表可用列内，值必须是标量；不支持的字段或数组/对象值返回 422。敏感字段 `phone`、`email`、`id_card` 在导出时自动脱敏处理。
+
+所有单元格通过 `setValueExplicit(..., TYPE_STRING)` 以文本写入，以 `=`、`+`、`-`、`@` 开头的用户名等值不会被 Excel 当作公式执行（防公式注入）；数字/日期列在导出的 Excel 中按文本显示。表头与数据区边框只写一次。
+
+单次最多导出 5000 行（查询 `LIMIT 5001` 探测），超过时返回 HTTP 422。5000 行 × 9 列在 128M 工作进程内存限制下实测约占 65MiB，已接近安全上限；不要同时提高行数与列数上限。Excel 首行冻结、自动筛选。
 
 **可能的错误**:
+- 422: 筛选条件必须是对象 / 不支持的筛选字段 / 筛选条件值必须是标量
 - 422: 导出数据超过 5000 行，请缩小筛选范围（HTTP 状态码同为 422）
 
 ### 11.2 导出 PDF
@@ -1558,28 +1616,34 @@ POST /admin/import/users
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | file | file | 是 | `.xlsx` 或 `.xls` 格式，最大 5MB |
+| role_ids | array{string} | 否 | 统一分配给导入用户的角色 hashid 数组（multipart 传 `role_ids[]`）；非超管只能分配自身权限范围内的角色，且不能分配 `super_admin` |
 
 **Excel 列要求**:
 
-| 列名 | 必填 | 说明 |
-|------|------|------|
-| username | 是 | 用户名（唯一） |
-| password | 是 | 密码（bcrypt 哈希存储） |
-| real_name | 是 | 真实姓名 |
-| phone | 否 | 手机号 |
-| email | 否 | 邮箱 |
-| status | 否 | 状态，默认 1 |
+| 列名 | 必填 | 验证规则 | 说明 |
+|------|------|---------|------|
+| username | 是 | min:3, max:50 | 用户名（唯一，文件内与库内均大小写不敏感去重） |
+| password | 是 | min:6, max:32 | 密码（bcrypt 哈希存储） |
+| real_name | 是 | max:50 | 真实姓名 |
+| phone | 否 | max:20 | 手机号 |
+| email | 否 | max:254 | 邮箱 |
+| status | 否 | in:0,1 | 状态，默认 1 |
 
-第 1 行为列标题（大小写不敏感），第 2 行起为数据。单个文件不超过 5MB，数据行（不含表头）最多 2000 行（含表头 2001 行）。
+第 1 行为列标题（大小写不敏感），第 2 行起为数据。单个文件不超过 5MB，数据行（不含表头）最多 2000 行（含表头 2001 行）。已存在用户名一次性预取，逐行校验失败只记录该行并继续处理其余行；数据库写入异常只在服务端日志记录，响应中返回通用失败原因，不暴露 SQL/异常细节。每行的用户记录与角色关联在同一事务中写入，失败回滚该行，不会留下无角色账号。
 
-服务端在加载工作簿前先做 `.xlsx` ZIP 解压体积预检：`xl/**.xml` 条目解压后总大小超过 8MB，或所有工作表单元格总数超过 32,000 个，立即返回 422，防止压缩炸弹与 128M 工作进程 OOM；随后读取工作表元数据，任一工作表超过 2001 行立即返回 422，避免整本工作簿进入内存；加载后仍保留行数上限作为二次防御。文件损坏、无法读取或无法解析时返回 422 与可读提示，不暴露异常内部信息。
+服务端在加载工作簿前先做体积预检：`.xlsx` 为 ZIP 容器，`xl/**.xml` 解压后总大小超过 8MB，或工作表单元格总数超过 32,000 个，立即返回 422，防止压缩炸弹与 128M 工作进程 OOM；`.xls`/`.xlsx` 都会在 `load()` 前读取工作表元数据，任一工作表超过 2001 行、或行数 × 列数超过 32,000 个单元格即拒绝，避免整本工作簿进入内存；加载后再按实际数据行数二次校验。文件损坏、无法读取或无法解析时返回 422 与可读提示，不暴露异常内部信息。
+
+整个导入流程由 Redis 锁 `import_users_lock`（`SET NX EX 1800`，Lua 比对后释放）串行化，已有导入任务执行时返回 409。2000 行密码的 bcrypt 哈希是 CPU 密集操作，最坏耗时可达数分钟，锁 TTL 按此设置；进程异常退出时由 TTL 兜底释放。Redis 故障时降级为无锁导入（fail-open）。
 
 **可能的错误**:
+- 403: 无权分配超级管理员角色 / 无权分配所选角色
+- 409: 已有导入任务正在执行，请稍后重试
 - 422: 仅支持 .xlsx 或 .xls 文件
 - 422: 文件大小不能超过 5MB
 - 422: Excel 文件内容过大或单元格过多，无法导入（ZIP 解压后 `xl/**.xml` 超过 8MB，或单元格超过 32,000 个）
 - 422: Excel 文件无法读取/解析，请确认文件未损坏且格式正确
 - 422: 数据行数不能超过 2000 行（不含表头）
+- 422: 角色参数格式错误 / 角色不存在
 
 **响应示例**:
 ```json
@@ -1693,11 +1757,10 @@ Nginx 静态资源（`/assets/`、`/open-admin/assets/` 等）在 location 级�
     ↓
    服务端:
    a. 参数校验 → 422
-   b. 检查 captcha_verified:{key} 是否存在 → 422
-   c. 删除 captcha_verified:{key}（一次性使用）
-   d. 解密密码: EncryptionService::decrypt(password) → 明文
-   e. 校验用户凭证 (password_verify) → 401
-   f. 检查账号状态 → 403/429
+   b. 原子删除 captcha_verified:{key}，DEL 返回 1 才继续；缺失或已被并发消费 → 422
+   c. 解密密码: EncryptionService::decrypt(password) → 明文
+   d. 校验用户凭证 (password_verify) → 401；密码长度合法但用户不存在/空哈希时，用固定 cost-10 占位哈希执行校验，抹平响应时间差
+   e. 检查账号状态 → 403/429
    g. 签发 JWT (access + refresh) → 200
    h. 更新 last_login_at / last_login_ip
     ↓
@@ -1714,8 +1777,9 @@ Nginx 静态资源（`/assets/`、`/open-admin/assets/` 等）在 location 级�
     ↓
    AdminPermission 中间件:
    a. 对资源路由解析权限标识
-   b. 查询用户角色 → 角色权限，进行匹配
-   c. 无权限 → 403
+   b. 查询用户启用角色 → 角色权限（缓存 key `perm:<id>`，60 秒），进行匹配
+   c. 启用 super_admin 角色持有通配权限 `*`，直接放行
+   d. 无权限 → 403
     ↓
    Controller 处理请求
     ↓
@@ -1755,16 +1819,18 @@ Nginx 静态资源（`/assets/`、`/open-admin/assets/` 等）在 location 级�
 
 ### 安全管理
 
-- 密码以 `PASSWORD_BCRYPT` 哈希存储
-- 密码传输层使用 AES-256-CBC-HMAC 加密（客户端加密 → 服务端解密），兼容明文回退
+- 密码以 `PASSWORD_BCRYPT` 哈希存储；登录密码传输优先 RSA-2048 PKCS1v1.5，兼容 AES-256-CBC-HMAC 与明文回退（旧客户端）
+- 登录验证码标记 `captcha_verified:{key}` 由 `DEL` 原子消费，并发复用同一标记仅一个请求成功；未知用户名同样执行固定 cost-10 bcrypt 校验，避免账号枚举
 - 敏感字段（phone, email, id_card）使用 `erikwang2013/encryptable` 在数据库层透明加解密
 - API 层 ID 使用 `erikwang2013/hashids` 加密传输，避免暴露原始 snowflake ID 序列
 - SecurityFilter 全局扫描 XSS、SQL 注入、路径遍历、命令注入，同 IP 5次/60秒临时黑名单 15 分钟
-- 敏感操作（删除用户、角色、权限、配置）需要当前登录用户密码二次确认
+- 敏感操作（删除用户/角色/权限/配置、批量删除等）需要当前登录用户密码二次确认；确认失败计数 `pwd_confirm_fail:<id>` 为 5 次/300 秒，超过后 5 分钟内拒绝确认
+- 会话吊销（`SessionService`）：修改密码、禁用、删除、批量禁用/删除时写入 `user_pwd_changed:<id>` 水位（TTL = refresh 有效期 + 60 秒），按 `user_tokens:<id>` / `user_refresh_tokens:<id>` 登记把访问/刷新令牌加入 `jwt_blacklist:<md5>`，并清理 `user_refresh_rotations:<id>`、轮换缓存与 `perm:<id>`；刷新接口校验水位，旧 refresh_token 在改密后失效
 - 并发会话限制：同一用户最多 3 个有效 Token，第 4 个设备登录时最旧 Token 被强制加入黑名单
 - 账号锁定：连续 5 次登录失败触发 15 分钟账号锁定，锁定期间返回 429；已存在用户按 `account_lock:u:<userId>` / `login_fail:u:<userId>` 计数，未知用户名按 `account_lock:n:<md5(小写去空白用户名)>` / `login_fail:n:<同>` 计数，键 TTL 均为 900 秒
 - 刷新轮换：旧 refresh_token 在 60 秒宽限内重放返回同一对令牌；轮换由 `refresh_lock:<md5>` 串行化，缓存任一枚令牌被拉黑即删除缓存并返回 401，并发未命中返回 409；登出与改密会拉黑缓存令牌并清理 `user_refresh_rotations:<userId>`
-- 超级管理员保护：不能删除当前登录账号或修改其状态；删除/禁用操作不能移除最后一名启用的超级管理员（校验与写入由 MySQL 命名锁 `open_admin:last_super_admin` 串行化，超时返回 503）；内置 `super_admin` 角色禁止编辑/删除
+- RBAC 授权边界：启用 `super_admin` 角色持有通配权限 `*`；非超管分配角色时校验所授角色的全部权限（含已禁用角色）是否在自身权限集合内，不能分配 `super_admin`；管理用户时目标持有的所有角色（含已禁用）都必须可授予，越界返回 403；`GET /admin/role/options` 只返回可分配角色
+- 超级管理员保护：不能删除当前登录账号或修改其状态；角色变更与删除/禁用/批量启用/禁用均在 MySQL 命名锁 `open_admin:last_super_admin` 内复核目标权限与“最后一名启用超管”，超时返回 503；内置 `super_admin` 角色禁止编辑/删除
 
 ### 中间件架构
 
@@ -1783,8 +1849,11 @@ Cors（跨域预处理 + 响应头）
 `/health` 和 `/api/docs` 为公开端点，仅经过 `Cors → SecurityFilter → RateLimit`。
 
 安全增强：
+- **验证码一次性消费**：登录标记原子 `DEL`，并发复用同一 key 仅一个请求成功；未知用户名执行占位 bcrypt，抹平时间差
 - **账号锁定**：连续 5 次登录失败，账号自动锁定 15 分钟，期间登录返回 429
 - **并发会话限制**：同一用户最多 3 个有效 Token，超出时最旧 Token 自动加入黑名单
+- **会话吊销**：改密、禁用、删除、批量禁用/删除时水位线 + 黑名单 + 轮换缓存清理，旧令牌立即失效
+- **RBAC 边界**：`super_admin` 通配权限 `*`；角色授予与用户管理按权限子集校验，含已禁用角色
 - **security.txt**：`GET /.well-known/security.txt` 提供 RFC 9116 标准安全联系信息
 - **Nginx 安全配置**：参考 `docs/nginx-security.conf` 提供完整的反向代理安全加固示例
 

@@ -12,7 +12,7 @@ open-admin is built on webman v2 and provides a RESTful JSON API. All admin endp
 - **API version**: embedded in the URL prefix (`/api/v1/...`, `/api/v2/...`); no request header is used
 - **Language**: switched via the `Accept-Language` header or the `?lang=zh_CN|en` parameter (default zh_CN), auto-detected by the Locale middleware
 
-> **Endpoint overview**: Auth (4) | Dashboard (1) | Users (7) | Roles (4) | Permissions (4) | Config (4) | Logs (1) | Profile (3) | Import/Export (3) | Upload (1) | Ops (4: health/metrics/docs/security.txt) | 36 endpoints in total
+> **Endpoint overview**: Auth (4) | Dashboard (1) | Users (7) | Roles (5) | Permissions (4) | Config (4) | Logs (1) | Profile (3) | Import/Export (3) | Upload (1) | Ops (4: health/metrics/docs/security.txt) | 37 endpoints in total
 - **Authentication**: `Authorization: Bearer <token>` (JWT)
 - **Response format**: `{ "code": 0, "message": "success", "data": {...} }`
 - **Docs endpoint**: `GET /api/docs` returns the OpenAPI 3.0 JSON specification; `/apidoc/` provides a lightweight same-origin debug UI (a single HTML file with no external assets)
@@ -33,16 +33,16 @@ open-admin is built on webman v2 and provides a RESTful JSON API. All admin endp
 | 0 | Success | |
 | 400 | Bad request | Incorrect request format |
 | 401 | Unauthenticated | Token missing / expired / blacklisted |
-| 403 | No permission / security block | Insufficient RBAC permission / SecurityFilter hit |
+| 403 | No permission / security block | Insufficient RBAC permission / beyond grantable or manageable role boundaries / non-super-admin acting on a super-admin account / SecurityFilter hit |
 | 404 | Resource not found | Target of query/update/delete does not exist |
 | 405 | Method not allowed | Only GET/POST/PUT/DELETE/OPTIONS/HEAD allowed; non-standard methods rejected outright |
-| 409 | Conflict | A rotation for the same refresh_token is in progress; retry later |
+| 409 | Conflict | A rotation for the same refresh_token is in progress; a user import is already running |
 | 413 | Payload too large | Content-Length exceeds 10MB |
 | 415 | Unsupported media type | POST/PUT Content-Type is not JSON and not a file upload |
-| 422 | Validation failed | Required fields missing, invalid format, business validation failed |
+| 422 | Validation failed | Required fields missing, invalid format, length exceeded, invalid role_ids, invalid export conditions, business validation failed |
 | 429 | Too many requests | RateLimit triggered / account locked (5 failed logins lock for 15 min) |
 | 500 | Internal server error | |
-| 503 | Service unavailable | Redis unavailable, so auth/rate limiting for `/api/` and `/admin/` fails closed; super-admin named-lock wait timeout or database error |
+| 503 | Service unavailable | Redis unavailable, so auth/rate limiting for `/api/` and `/admin/` or login captcha consumption fails closed; super-admin named-lock wait timeout or database error |
 
 ## 3. Public Endpoints
 
@@ -239,7 +239,7 @@ POST /api/v1/captcha/verify
 }
 ```
 
-After a successful verification, the backend writes `captcha_verified:{key}` to Redis (TTL 300s), which the login endpoint checks to allow login.
+After a successful verification, the backend writes `captcha_verified:{key}` to Redis (TTL 300s), which the login endpoint checks to allow login. Login consumes the marker with an atomic `DEL`: only the request that gets `DEL` returning 1 proceeds, so concurrent reuse of the same key lets exactly one login through.
 On failure, `code` is 422, `message` is `"验证失败，请重试"`, and `data.valid` is `false`.
 
 ### 3.5 Login
@@ -333,12 +333,15 @@ Returns `code: 404` when `RSA_PRIVATE_KEY` is not configured. `deploy/generate-s
 | user.username | string | Username |
 | user.real_name | string | Real name |
 
+When the password length is valid, login always performs one bcrypt check: a fixed cost-10 dummy hash is used when the user does not exist or the stored hash is empty, preventing account enumeration through response timing; invalid lengths are rejected as bad credentials without running bcrypt. The captcha marker is consumed atomically before password verification; if Redis is unavailable the endpoint returns 503 and does not allow login.
+
 **Possible errors**:
 - 422: Parameter validation failed (missing required fields, invalid format)
-- 422: Complete the captcha verification first (captcha_key has not passed `/api/v1/captcha/verify`)
+- 422: Complete the captcha verification first (captcha_key has not passed `/api/v1/captcha/verify`, or the marker was consumed by a concurrent request)
 - 401: Incorrect username or password
 - 403: Account has been disabled
 - 429: Account is locked, try again in 15 minutes (triggered by 5 consecutive login failures)
+- 503: Redis unavailable while consuming the captcha marker (fails closed)
 
 ### 3.6 Refresh Token
 
@@ -373,7 +376,7 @@ POST /api/v1/auth/refresh
 }
 ```
 
-A successful refresh returns new access_token and refresh_token, and the old tokens automatically become invalid. The refresh also updates the user's last login time and IP.
+A successful refresh returns new access_token and refresh_token, and the old tokens automatically become invalid. The refresh also updates the user's last login time and IP. Before refreshing, the server checks the password-change watermark `user_pwd_changed:<userId>`: if the token was issued before the watermark (set by password change, disable, delete, etc.), it returns 401 even when the refresh_token has not expired.
 
 To tolerate concurrent requests and client retries, a rotated refresh_token keeps a 60-second grace period: the server caches the new token pair for 60 seconds under the md5 of the old token, and resubmitting the same old token within that window returns the cached pair unchanged instead of rotating again. After the grace period the old token is treated as blacklisted and returns 401. If either token in the cached pair has been blacklisted, the server deletes the cache and returns 401.
 
@@ -518,6 +521,8 @@ GET /admin/dashboard
 
 All `id` values returned by user management endpoints are hashid-encrypted strings. The password field is excluded from responses. Phone and email are masked in list endpoints and returned in plaintext in detail endpoints (encrypted database fields are decrypted automatically by the Encryptable trait).
 
+Users can be assigned roles via the optional `role_ids` (hashid array). A non-super-admin can only grant roles within their own permission set and cannot assign `super_admin`; they also cannot manage users holding higher-permission roles (including disabled roles). Boundary violations return 403.
+
 ### 5.1 User List
 
 ```
@@ -587,7 +592,8 @@ POST /admin/user
   "real_name": "新用户",
   "phone": "13800138000",
   "email": "newuser@example.com",
-  "status": 1
+  "status": 1,
+  "role_ids": ["r1r2r3r4"]
 }
 ```
 
@@ -596,9 +602,10 @@ POST /admin/user
 | username | string | Yes | min:3, max:50 | Username (unique) |
 | password | string | Yes | min:6, max:32 | Password (stored as bcrypt hash) |
 | real_name | string | Yes | max:50 | Real name |
-| phone | string | No | | Phone number (stored encrypted via Encryptable) |
-| email | string | No | | Email (stored encrypted via Encryptable) |
+| phone | string | No | max:20 | Phone number (stored encrypted via Encryptable) |
+| email | string | No | max:254 | Email (stored encrypted via Encryptable) |
 | status | int | No | in:0,1 | Status, default 1 (enabled) |
+| role_ids | array{string} | No | | Role IDs (hashid array); a non-super-admin can only grant roles within their own permission set and cannot assign `super_admin` |
 
 **Example response**:
 ```json
@@ -617,9 +624,12 @@ POST /admin/user
 }
 ```
 
+The user row and role assignments are written in one database transaction; either failure rolls the whole operation back, so no user is left without roles.
+
 **Possible errors**:
+- 403: Only a super admin may assign the super admin role / cannot grant roles beyond your own permissions
 - 422: Username already exists
-- 422: Parameter validation failed (required fields missing)
+- 422: Parameter validation failed (missing required fields, phone over 20 characters, email over 254 characters, invalid or nonexistent role_ids)
 
 ### 5.3 User Detail
 
@@ -642,6 +652,7 @@ GET /admin/user/{id}
     "phone": "13800138000",
     "email": "admin@example.com",
     "status": 1,
+    "role_ids": ["r1r2r3r4"],
     "last_login_at": "2026-05-21 10:30:00",
     "last_login_ip": "192.168.1.1",
     "created_at": "2026-01-01 00:00:00",
@@ -650,7 +661,7 @@ GET /admin/user/{id}
 }
 ```
 
-In the detail endpoint, `phone` and `email` are returned in plaintext (stored encrypted in the database, decrypted automatically by the Encryptable cast), unmasked. `password` and `id_card` are never included in responses.
+In the detail endpoint, `phone` and `email` are returned in plaintext (stored encrypted in the database, decrypted automatically by the Encryptable cast), unmasked. `password` and `id_card` are never included in responses. `role_ids` is the user's current role set (hashid array), empty when the user has no roles.
 
 **Possible errors**:
 - 404: User does not exist
@@ -671,7 +682,8 @@ PUT /admin/user/{id}
   "password": "",
   "phone": "13900139000",
   "email": "new@example.com",
-  "status": 1
+  "status": 1,
+  "role_ids": ["r1r2r3r4"]
 }
 ```
 
@@ -679,11 +691,14 @@ PUT /admin/user/{id}
 |------|------|------|------|
 | real_name | string | No | Real name, max 50 characters; keeps the original value when omitted |
 | password | string | No | New password, 6-32 plaintext characters (decrypted first when the client encrypts it); empty string or omitted means unchanged |
-| phone | string | No | Phone number |
-| email | string | No | Email |
+| phone | string | No | Phone number, max 20 characters |
+| email | string | No | Email, max 254 characters |
 | status | int | No | Must be exactly 0 (disabled) or 1 (enabled) |
+| role_ids | array{string} | No | Role IDs (hashid array); when provided, replaces the current roles. Only newly added roles are checked; a non-super-admin cannot grant roles beyond their own permissions or assign `super_admin` |
 
-The current logged-in account cannot be disabled (422). Disable operations are serialized with the "last enabled super admin" check under a MySQL named lock; a lock timeout or database error returns 503 so the caller can retry.
+The current logged-in account cannot be disabled (422). Disable operations are serialized with the "last enabled super admin" check under a MySQL named lock; a lock timeout or database error returns 503 so the caller can retry. Updates by a non-super-admin always repeat the permission-boundary check inside the named lock, so concurrent promotion cannot bypass it.
+
+A submitted `phone`/`email` equal to the masked form of the current value (e.g. `138****1234`) or matching the mask shape is treated as unchanged, so masked list values are never written back. Role changes clear the user's permission cache; a `password` change or `status=0` revokes all of that user's sessions (access/refresh tokens blacklisted; the password-change watermark rejects old refresh tokens).
 
 **Example response**:
 ```json
@@ -703,9 +718,11 @@ The current logged-in account cannot be disabled (422). Disable operations are s
 ```
 
 **Possible errors**:
+- 403: Cannot manage this user / only a super admin may assign the super admin role / cannot grant roles beyond your own permissions
 - 404: User does not exist
-- 422: Password must be 6-32 characters / real name exceeds 50 characters / status is not 0 or 1
+- 422: Password must be 6-32 characters / real name exceeds 50 characters / phone exceeds 20 characters / email exceeds 254 characters / status is not 0 or 1
 - 422: Cannot disable the current account; at least one enabled super admin must remain
+- 422: Invalid role_ids or nonexistent role
 - 503: Named-lock wait timeout or database error during the last-super-admin check; retry later
 
 ### 5.5 Delete User
@@ -738,12 +755,13 @@ DELETE /admin/user/{id}
 }
 ```
 
-Soft deletion is performed (Eloquent SoftDeletes): rows are marked with deleted_at rather than physically deleted.
+Soft deletion is performed (Eloquent SoftDeletes): rows are marked with deleted_at rather than physically deleted. All sessions of the deleted user are revoked (access/refresh tokens blacklisted).
 
 **Possible errors**:
+- 403: Cannot manage this user / only a super admin may delete a super admin account
 - 404: User does not exist
 - 422: Sensitive operations require password confirmation (password empty)
-- 422: Password verification failed (password mismatch)
+- 422: Password verification failed (password mismatch); after 5 consecutive failures, confirmation is rejected for 5 minutes
 - 422: Cannot delete the currently logged-in account
 - 422: At least one enabled super administrator must remain
 
@@ -780,12 +798,13 @@ POST /admin/user/batch/destroy
 }
 ```
 
-Soft deletion is performed; `data.count` is the number of users actually deleted.
+Soft deletion is performed; `data.count` is the number of users actually deleted. Every deleted user's sessions are revoked.
 
 **Possible errors**:
+- 403: Cannot manage this user / only a super admin may delete a super admin account
 - 422: Select users to delete (ids empty)
 - 422: Invalid ID (hashid decode failed)
-- 422: Password verification failed
+- 422: Password verification failed; after 5 consecutive failures, confirmation is rejected for 5 minutes
 - 422: Cannot delete the currently logged-in account (ids include the current user)
 - 422: At least one enabled super administrator must remain
 
@@ -821,13 +840,15 @@ POST /admin/user/batch/status
 }
 ```
 
-message dynamically changes based on status to `"批量启用成功"` (batch enable succeeded) or `"批量禁用成功"` (batch disable succeeded).
+message dynamically changes based on status to `"批量启用成功"` (batch enable succeeded) or `"批量禁用成功"` (batch disable succeeded). Enable and disable both run under the same MySQL named lock, rechecking the target's permission boundary and super-admin protection inside the lock; disable revokes all target sessions, enable does not restore old tokens.
 
 **Possible errors**:
+- 403: Cannot manage this user / only a super admin may modify a super admin account
 - 422: Select users (ids empty)
 - 422: Invalid status value (status is not 0 or 1)
 - 422: Cannot change the status of the currently logged-in account
 - 422: At least one enabled super administrator must remain (when disabling the last enabled super administrator)
+- 503: Named-lock wait timeout or database error; retry later
 
 ## 6. Role Management
 
@@ -989,6 +1010,36 @@ DELETE /admin/role/{id}
 ```
 
 Deletion automatically detaches the role from all its permissions and users, then physically deletes the role record. The built-in `super_admin` role cannot be deleted; the request returns 403 (`超级管理员不可删除`).
+
+### 6.5 Role Options
+
+```
+GET /admin/role/options
+```
+
+- **Authentication**: JWT only (`AdminAuth`, no RBAC permission required)
+
+Returns the enabled roles the current admin can assign, for user-form dropdowns. Non-super-admins do not see roles beyond their own permission scope; super admins see every enabled role.
+
+**Example response**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": [
+    { "id": "r1r2r3r4", "name": "超级管理员", "slug": "super_admin" },
+    { "id": "r5r6r7r8", "name": "编辑员", "slug": "editor" }
+  ]
+}
+```
+
+| Field | Type | Description |
+|------|------|------|
+| id | string | Hashid-encrypted role ID |
+| name | string | Role name |
+| slug | string | Role slug |
+
+An admin holding the enabled `super_admin` role has the wildcard permission `*` and can assign any role and manage any user.
 
 ## 7. Permission Management
 
@@ -1347,7 +1398,7 @@ GET /admin/log
 | path | string | Request path |
 | ip | string | Client IP |
 | source | string | Request source |
-| input | string | Request parameter JSON string (files excluded) |
+| input | string | Request parameter JSON string (files excluded); `phone`, `email`, `id_card`, `mobile`, `address` are recursively masked before storage |
 | created_at | string | Operation time (datetime) |
 
 ## 10. Profile
@@ -1373,9 +1424,9 @@ PUT /admin/profile
 
 | Field | Type | Required | Description |
 |------|------|------|------|
-| real_name | string | No | Real name |
-| phone | string | No | Phone number (stored encrypted via Encryptable) |
-| email | string | No | Email (stored encrypted via Encryptable) |
+| real_name | string | No | Real name, max 50 characters |
+| phone | string | No | Phone number, max 20 characters (stored encrypted via Encryptable) |
+| email | string | No | Email, max 254 characters (stored encrypted via Encryptable) |
 
 **Example response**:
 ```json
@@ -1394,7 +1445,7 @@ PUT /admin/profile
 }
 ```
 
-`phone` and `email` are returned in plaintext; `password` and `id_card` are removed.
+`phone` and `email` are returned in plaintext; `password` and `id_card` are removed. Values exceeding the length limits return 422.
 
 ### 10.2 Change Password
 
@@ -1425,6 +1476,8 @@ PUT /admin/profile/password
   "data": []
 }
 ```
+
+On success, all sessions of the user are revoked: the password-change watermark `user_pwd_changed:<id>` is written, registered access/refresh tokens are blacklisted, and rotation caches are cleared. Every device (including the current session) must log in again; the client should discard its local tokens.
 
 **Possible errors**:
 - 422: Please fill in both the old and new password
@@ -1481,7 +1534,7 @@ POST /admin/export/excel
 |------|------|------|------|------|
 | table | string | No | `admin_user` | Table to export. Supported: `admin_user`, `operation_log`, `admin_role`, `system_config` |
 | columns | array{string} | No | | Field names of columns to export; empty exports all columns of the table |
-| conditions | object | No | `{}` | Filter conditions, key-value pairs; non-empty values are used in WHERE |
+| conditions | object | No | `{}` | Filter conditions; keys must be available columns of the target table and values must be scalar (string/number/bool/null), otherwise 422 |
 | title | string | No | `数据导出` | Excel title (shown as the sheet name) |
 
 **Supported tables and columns**:
@@ -1493,9 +1546,14 @@ POST /admin/export/excel
 | `admin_role` | id, name, slug, description, status, created_at |
 | `system_config` | id, group, key, value, type, description, created_at |
 
-Sensitive fields `phone`, `email`, and `id_card` are automatically masked on export. A single export is capped at 5,000 rows (the query uses `LIMIT 5001` as a probe); exceeding the cap returns HTTP 422. The first Excel row is frozen and auto-filter is enabled.
+Filter keys must be available columns of the target table and values must be scalar; unknown fields or array/object values return 422. Sensitive fields `phone`, `email`, and `id_card` are automatically masked on export.
+
+Every cell is written as text via `setValueExplicit(..., TYPE_STRING)`, so values starting with `=`, `+`, `-` or `@` (such as usernames) are never executed as Excel formulas (formula-injection protection); numeric/date columns display as text in the exported file. Header and data borders are written once.
+
+A single export is capped at 5,000 rows (the query uses `LIMIT 5001` as a probe); exceeding the cap returns HTTP 422. At 5,000 rows × 9 columns the export uses about 65MiB in a 128M worker, close to the safe ceiling; do not raise the row and column limits together. The first Excel row is frozen and auto-filter is enabled.
 
 **Possible errors**:
+- 422: Conditions must be an object / unsupported filter field / condition values must be scalar
 - 422: Export exceeds 5,000 rows; narrow the filter (the HTTP status is also 422)
 
 ### 11.2 Export PDF
@@ -1559,28 +1617,34 @@ POST /admin/import/users
 | Field | Type | Required | Description |
 |------|------|------|------|
 | file | file | Yes | `.xlsx` or `.xls` format, max 5MB |
+| role_ids | array{string} | No | Role hashid array assigned to every imported user (send `role_ids[]` in multipart); a non-super-admin can only assign roles within their own permission set and cannot assign `super_admin` |
 
 **Excel column requirements**:
 
-| Column | Required | Description |
-|------|------|------|
-| username | Yes | Username (unique) |
-| password | Yes | Password (stored as bcrypt hash) |
-| real_name | Yes | Real name |
-| phone | No | Phone number |
-| email | No | Email |
-| status | No | Status, default 1 |
+| Column | Required | Validation | Description |
+|------|------|---------|------|
+| username | Yes | min:3, max:50 | Username (unique; deduplicated case-insensitively within the file and against the database) |
+| password | Yes | min:6, max:32 | Password (stored as bcrypt hash) |
+| real_name | Yes | max:50 | Real name |
+| phone | No | max:20 | Phone number |
+| email | No | max:254 | Email |
+| status | No | in:0,1 | Status, default 1 |
 
-Row 1 contains column headers (case-insensitive); data starts at row 2. Files are limited to 5MB and 2,000 data rows (2,001 including the header).
+Row 1 contains column headers (case-insensitive); data starts at row 2. Files are limited to 5MB and 2,000 data rows (2,001 including the header). Existing usernames are prefetched once; a row that fails validation is recorded and the remaining rows continue. Database write errors are logged server-side only and return a generic failure reason, never SQL/exception details. Each row's user record and role assignments are written in one transaction; a failure rolls back that row, so no user is left without roles.
 
-Before loading the workbook the server checks `.xlsx` ZIP expansion: if the uncompressed total of `xl/**.xml` entries exceeds 8MB, or the total worksheet cell count exceeds 32,000, it returns 422, blocking zip bombs and OOM in the 128M worker. It then reads worksheet metadata and rejects any workbook with a sheet over 2,001 rows with a 422, keeping the whole workbook out of memory; the row limit is checked again after loading as a second defense. Corrupt, unreadable or unparseable files return 422 with a readable message and never expose exception internals.
+Before loading the workbook the server runs size guards: for `.xlsx` (a ZIP container), if the uncompressed total of `xl/**.xml` entries exceeds 8MB or the worksheet cell count exceeds 32,000 it returns 422, blocking zip bombs and OOM in the 128M worker. For both `.xls` and `.xlsx` it reads worksheet metadata before `load()` and rejects any sheet over 2,001 rows or with rows × columns above 32,000 cells, keeping the whole workbook out of memory; the actual data-row count is checked again after loading. Corrupt, unreadable or unparseable files return 422 with a readable message and never expose exception internals.
+
+The whole import is serialized by the Redis lock `import_users_lock` (`SET NX EX 1800`, released by a Lua compare-and-delete). If an import is already running the request returns 409. Hashing 2,000 passwords with bcrypt is CPU-intensive and can take minutes in the worst case, hence the lock TTL; an abnormally terminated process releases it via TTL. If Redis is unavailable the import degrades to lock-free (fail-open).
 
 **Possible errors**:
+- 403: Cannot assign the super admin role / cannot assign the selected roles
+- 409: Another import is already running; retry later
 - 422: Only .xlsx or .xls files are supported
 - 422: File size must not exceed 5MB
 - 422: Excel content is too large or has too many cells to import (ZIP-expanded `xl/**.xml` exceeds 8MB or cells exceed 32,000)
 - 422: Excel file cannot be read/parsed; confirm it is not corrupt and has the right format
 - 422: Data rows must not exceed 2,000 (excluding the header)
+- 422: Invalid role parameter format / role does not exist
 
 **Example response**:
 ```json
@@ -1694,11 +1758,10 @@ The complete authentication sequence:
     ↓
    Server:
    a. Parameter validation → 422
-   b. Checks captcha_verified:{key} exists → 422
-   c. Deletes captcha_verified:{key} (single-use)
-   d. Decrypts password: EncryptionService::decrypt(password) → plaintext
-   e. Validates user credentials (password_verify) → 401
-   f. Checks account status → 403/429
+   b. Atomically deletes captcha_verified:{key}; proceeds only when DEL returns 1; missing or concurrently consumed → 422
+   c. Decrypts password: EncryptionService::decrypt(password) → plaintext
+   d. Validates user credentials (password_verify) → 401; when the length is valid but the user does not exist or the hash is empty, a fixed cost-10 dummy hash is verified, flattening the timing difference
+   e. Checks account status → 403/429
    g. Issues JWT (access + refresh) → 200
    h. Updates last_login_at / last_login_ip
     ↓
@@ -1715,8 +1778,9 @@ The complete authentication sequence:
     ↓
    AdminPermission middleware:
    a. Resolves the permission identifier for resource routes
-   b. Queries user roles → role permissions, performs matching
-   c. No permission → 403
+   b. Queries the user's enabled roles → role permissions (cache key `perm:<id>`, 60 seconds), performs matching
+   c. An enabled super_admin role holder has wildcard permission `*` and is allowed through
+   d. No permission → 403
     ↓
    Controller processes the request
     ↓
@@ -1756,16 +1820,18 @@ The complete authentication sequence:
 
 ### Security Management
 
-- Passwords are stored as `PASSWORD_BCRYPT` hashes
-- Password transport uses AES-256-CBC-HMAC encryption (client encrypts → server decrypts), with plaintext fallback
+- Passwords are stored as `PASSWORD_BCRYPT` hashes; login password transport uses RSA-2048 PKCS1v1.5 first, with AES-256-CBC-HMAC and plaintext fallback for legacy clients
+- The login captcha marker `captcha_verified:{key}` is consumed atomically with `DEL`, so concurrent reuse of the same marker lets exactly one request through; an unknown username still performs a fixed cost-10 bcrypt check, preventing account enumeration
 - Sensitive fields (phone, email, id_card) are transparently encrypted/decrypted at the database layer with `erikwang2013/encryptable`
 - API-layer IDs are encrypted in transit with `erikwang2013/hashids` to avoid exposing the raw snowflake ID sequence
 - SecurityFilter globally scans for XSS, SQL injection, path traversal, and command injection; 5 hits per IP in 60 seconds trigger a 15-minute temporary blacklist
-- Sensitive operations (deleting users, roles, permissions, configs) require password confirmation from the currently logged-in user
+- Sensitive operations (deleting users/roles/permissions/configs, batch delete, etc.) require password confirmation from the currently logged-in user; failed confirmations are counted under `pwd_confirm_fail:<id>` (5 per 300 seconds), after which confirmation is rejected for 5 minutes
+- Session revocation (`SessionService`): password change, disable, delete, batch disable/delete write the `user_pwd_changed:<id>` watermark (TTL = refresh lifetime + 60 seconds), blacklist access/refresh tokens registered in `user_tokens:<id>` / `user_refresh_tokens:<id>` via `jwt_blacklist:<md5>`, and clear `user_refresh_rotations:<id>`, rotation caches and `perm:<id>`; the refresh endpoint checks the watermark so old refresh_tokens stop working after a password change
 - Concurrent session limit: at most 3 valid tokens per user; when a 4th device logs in, the oldest token is forcibly blacklisted
 - Account lockout: 5 consecutive login failures trigger a 15-minute lock; 429 is returned while locked. Existing users are counted under `account_lock:u:<userId>` / `login_fail:u:<userId>`; unknown usernames under `account_lock:n:<md5(lower(trim(username)))>` / `login_fail:n:<same>`; every key has a 900-second TTL
 - Refresh rotation: replaying the old refresh_token within the 60-second grace returns the same pair; rotation is serialized by `refresh_lock:<md5>`, a blacklisted cached token deletes the cache and returns 401, and a concurrent cache miss returns 409; logout and password changes blacklist cached pairs and clear `user_refresh_rotations:<userId>`
-- Super-admin protection: you cannot delete or change the status of the currently logged-in account; delete/disable operations cannot remove the last enabled super administrator (the check and write are serialized by the MySQL named lock `open_admin:last_super_admin`, with a 503 on timeout); the built-in `super_admin` role cannot be edited or deleted
+- RBAC grant boundaries: an enabled `super_admin` role holder has wildcard permission `*`; when a non-super-admin assigns roles, every permission of the proposed roles (including disabled roles) must be in their own permission set, and `super_admin` cannot be assigned; managing a user requires all of the target's roles (including disabled ones) to be grantable, otherwise 403; `GET /admin/role/options` only returns assignable roles
+- Super-admin protection: you cannot delete or change the status of the currently logged-in account; role changes and delete/disable/batch enable/disable all recheck the target boundary and the "last enabled super admin" inside the MySQL named lock `open_admin:last_super_admin`, returning 503 on timeout; the built-in `super_admin` role cannot be edited or deleted
 
 ### Middleware Architecture
 
@@ -1784,8 +1850,11 @@ Cors（跨域预处理 + 响应头）
 `/health` and `/api/docs` are public endpoints, passing only `Cors → SecurityFilter → RateLimit`.
 
 Security enhancements:
+- **Single-use captcha**: the login marker is consumed atomically with `DEL`, so concurrent reuse of the same key lets only one request through; unknown usernames run a dummy bcrypt check to flatten timing
 - **Account lockout**: 5 consecutive login failures lock the account for 15 minutes; logins return 429 during the lock
 - **Concurrent session limit**: at most 3 valid tokens per user; when exceeded, the oldest token is automatically blacklisted
+- **Session revocation**: password change, disable, delete and batch disable/delete use a watermark plus blacklist plus rotation-cache clearing, invalidating old tokens immediately
+- **RBAC boundaries**: `super_admin` has wildcard permission `*`; role grants and user management are checked against the actor's permission subset, including disabled roles
 - **Refresh rotation lock**: `refresh_lock:<md5>` serializes rotation, a blacklisted cached token is rejected, and a concurrent cache miss returns 409
 - **security.txt**: `GET /.well-known/security.txt` serves RFC 9116 standard security contact information
 - **Nginx security config**: see `docs/nginx-security.conf` for a complete reverse-proxy security hardening example, including per-location CSP for `/open-admin/`, `/open-admin/en/` and `/apidoc/`

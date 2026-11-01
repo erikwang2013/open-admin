@@ -16,7 +16,7 @@ flowchart TB
         perm["AdminPermission<br/>RBAC鉴权"]
         admin["管理端Controller<br/>Dashboard/User/Role/Permission"]
         public["公开Controller<br/>Captcha/Auth"]
-        common["Common Services<br/>Hashids/Snowflake/Encryption"]
+        common["Common Services<br/>Hashids/Snowflake/Encryption<br/>Session/RBAC"]
     end
 
     subgraph storage["存储层"]

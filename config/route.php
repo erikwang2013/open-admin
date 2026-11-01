@@ -55,6 +55,11 @@ TXT
 // API 文档（全局，无需认证）
 Route::get('/api/docs', [app\admin\controller\DocsController::class, 'index']);
 
+// 角色选项 — 用户表单下拉/多选使用（无需权限校验，只需认证）
+// 必须在 /admin 组之前注册，避免被 /admin/role/{id} 抢先匹配
+Route::get('/admin/role/options', [app\admin\controller\RoleController::class, 'options'])
+    ->middleware([app\middleware\AdminAuth::class]);
+
 // ============================================================
 // 管理端路由
 // ============================================================

@@ -11,7 +11,7 @@ flowchart LR
     end
 
     subgraph roles["角色"]
-        r1["super_admin<br/>权限标识: *"]
+        r1["super_admin<br/>启用后返回通配 *"]
         r2["editor<br/>权限标识: get.* post.*"]
         r3["viewer<br/>权限标识: get.*"]
     end
@@ -47,13 +47,15 @@ flowchart TD
     extract --> findRoles["查询用户角色"]
     findRoles --> collectSlug["收集所有permission.slug"]
     collectSlug --> buildKey["构造method.path"]
-    buildKey --> check{"slug==* 或<br/>slug匹配?"}
+    buildKey --> check{"启用 super_admin?<br/>或权限匹配?"}
     check -->|"是"| allow["200 放行"]
     check -->|"否"| deny["403 Forbidden"]
 
     style allow fill:#52C41A,color:#fff
     style deny fill:#FF4D4F,color:#fff
 ```
+
+授权边界：非超管只能授予自身权限子集内的角色（禁用角色的权限行同样参与判断），不能分配 `super_admin`；`GET /admin/role/options` 仅返回当前管理员可分配的启用角色。
 
 ## 权限类型
 

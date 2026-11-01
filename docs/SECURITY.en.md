@@ -223,7 +223,9 @@ Implemented by the AdminAuth middleware, mounted on route groups that require au
 
 **Blacklist mechanism**: on logout, `md5(token)` is written to Redis with the TTL set to the JWT's remaining validity. When Redis fails, `AdminAuth` cannot read the blacklist and returns 503 (fail closed) instead of allowing tokens that may have been logged out.
 
-**Refresh token rotation**: every successful `/api/v1/auth/refresh` issues a new access/refresh pair and immediately blacklists the old refresh_token. To tolerate concurrent requests and client retries, the server caches the new pair for 60 seconds under the md5 of the old token (`refresh_rotation:<md5>`): resubmitting the same old token within the grace period returns the same pair instead of rotating again, and after 60 seconds it is rejected as blacklisted.
+**Login-side protection**: the captcha marker `captcha_verified:{key}` is consumed by the login endpoint with an atomic `DEL`; only a request receiving 1 proceeds, so concurrent reuse of the same marker lets exactly one login through. Before password verification the password length is checked once; when it is valid, `password_verify` always runs, against a fixed cost-10 dummy bcrypt hash when the user does not exist or the stored hash is empty, flattening the timing difference between existing and nonexistent accounts to prevent enumeration (invalid lengths are rejected as bad credentials without bcrypt). If Redis is unavailable while consuming the marker, login returns 503 instead of degrading to fail-open.
+
+**Refresh token rotation**: every successful `/api/v1/auth/refresh` issues a new access/refresh pair and immediately blacklists the old refresh_token. To tolerate concurrent requests and client retries, the server caches the new pair for 60 seconds under the md5 of the old token (`refresh_rotation:<md5>`): resubmitting the same old token within the grace period returns the same pair instead of rotating again, and after 60 seconds it is rejected as blacklisted. Before refreshing, the server checks the password-change watermark `user_pwd_changed:<userId>`; a token issued before the watermark (set by password change, disable, delete, etc.) returns 401.
 
 Concurrent rotation is serialized by `refresh_lock:<md5>` (`SET NX EX 5`, released with a Lua compare-and-delete). A request that fails to take the lock waits briefly for the cache; if it appears it reuses the same pair, otherwise it returns 409. The lock holder writes the cache before blacklisting the old token. When reading the cache, if either cached token is blacklisted the server deletes the cache and returns 401, so logout or a password change cannot be undone through the cache. Each user tracks their own rotation keys in `user_refresh_rotations:<userId>` (TTL 120 seconds); logout and password changes blacklist cached pairs and clear the rotation caches/set. Clients should refresh serially; the HarmonyOS client uses single-flight refresh for concurrent 401s so all requests share one result.
 
@@ -287,16 +289,32 @@ For example:
 
 **Authorization flow**:
 1. `$request->adminId` empty → allow (route has no auth prerequisite configured)
-2. Get user → roles (skip disabled roles with `status=0`) → permission list
-3. Super admin (`slug = '*'`) → allow directly
+2. Get user → enabled roles (skip disabled roles with `status=0`) → permission list (`perm:<id>` cache for 60 seconds)
+3. A user holding the enabled `super_admin` role → wildcard permission `['*']`, allow directly
 4. Build `strtolower(method) . '.' . trim(path, '/')` → compare against the permission list
 5. No match → 403 `{"code": 403, "message": "无权限访问"}`
 
-**Password re-confirmation**: BaseController provides `confirmPassword()`. Sensitive operations (deleting users, data export, etc.) additionally require the current password at the controller layer, preventing unauthorized actions after session hijacking.
+**Grant boundaries (RbacService)**: when assigning roles, every permission of the proposed roles (including permissions carried by disabled roles) must be in the non-super-admin actor's own permission set, and `super_admin` cannot be assigned; editing/deleting/batch-deleting/batch-enabling/disabling a user requires all of the target's roles (including disabled ones) to be grantable, otherwise 403 `无权管理该用户`. `GET /admin/role/options` only returns enabled roles the current admin can assign. Disabled roles participate in boundary checks so a disabled high-permission role cannot be planted and later enabled to escalate.
 
-**Super-admin protection**: delete, batch delete and batch disable reject the currently logged-in account (422) and count enabled users with `slug = super_admin` before writing; if the operation would leave zero, the request returns 422 `系统必须保留至少一名启用的超级管理员`. The built-in `super_admin` role itself cannot be edited or deleted (403).
+**Password re-confirmation**: BaseController provides `confirmPassword()`. Deleting users/roles/permissions/configs, batch delete and similar sensitive operations additionally require the current password at the controller layer, preventing unauthorized actions after session hijacking. Failed confirmations are counted under `pwd_confirm_fail:<id>` at 5 per 300 seconds; after that, confirmation is rejected for 5 minutes (the counter is non-atomic; see 12.2).
 
-The "last enabled super admin" check and the write are serialized under a MySQL named lock: `GET_LOCK('open_admin:last_super_admin', 3)` with `RELEASE_LOCK` in `finally`. This covers `destroy`, `batchDestroy`, `batchStatus(disable)` and `update(disable)`; a lock timeout or database error returns HTTP 503 so the caller can retry, preventing concurrent disable/delete calls from both passing the check. Named locks belong to the connection and are released by MySQL if it drops.
+**Super-admin protection**: delete, batch delete and batch enable/disable reject the currently logged-in account (422), and a non-super-admin cannot modify, disable or delete a super-admin target or assign `super_admin` (403). Before writing, the system counts enabled users with `slug = super_admin`; if the operation would leave zero, the request returns 422 `系统必须保留至少一名启用的超级管理员`. The built-in `super_admin` role itself cannot be edited or deleted (403).
+
+The "last enabled super admin" check and the write are serialized under a MySQL named lock: `GET_LOCK('open_admin:last_super_admin', 3)` with `RELEASE_LOCK` in `finally`. This covers `update` (status or role change, super-admin target, non-super actor), `destroy`, `batchDestroy` and both enable/disable paths of `batchStatus`, and re-reads the target roles inside the lock to recheck the permission boundary and super-admin protection; a lock timeout or database error returns HTTP 503 so the caller can retry. Named locks belong to the connection and are released by MySQL if it drops.
+
+### 6.4 Session Revocation (SessionService)
+
+On password change, user disable, delete, or batch disable/delete, `SessionService::revokeUser()` revokes every session of that user:
+
+| Key | TTL | Purpose |
+|----|-----|------|
+| `user_pwd_changed:<userId>` | refresh lifetime + 60 seconds | Password-change watermark; refresh rejects tokens issued before it |
+| `user_tokens:<userId>` / `user_refresh_tokens:<userId>` | access/refresh lifetime | ZSETs tracking issued access/refresh tokens; revocation blacklists each member, then deletes the sets |
+| `jwt_blacklist:<md5(token)>` | remaining token lifetime (at least 1 second) | Access and refresh token blacklist |
+| `user_refresh_rotations:<userId>` | 120 seconds | The user's 60-second rotation-cache keys, cleared on revocation |
+| `perm:<userId>` | 60 seconds | Permission cache, cleared on role change or revocation |
+
+A role change without password/status change only clears `perm:<id>` and does not revoke sessions. All Redis work is caught and logged, so a successful database write is never rolled back because Redis failed; however, revocation may be incomplete while Redis is down, which is a known post-commit fail-open (see 12.2).
 
 ---
 
@@ -323,6 +341,8 @@ The OperationLog middleware automatically records operation logs for POST / PUT 
 **Sensitive field filtering**: the request body is traversed recursively, and the values of the following fields are replaced with `***`:
 
 `password`, `old_password`, `new_password`, `new_password_confirmation`, `token`, `secret`, `access_token`, `refresh_token`
+
+**PII masking**: before writing, `OperationLog` recursively masks `phone`, `email`, `id_card`, `mobile` and `address` (phone keeps the first 3 and last 4 digits, email keeps the first character and domain, ID numbers are fully hidden), so audit logs never become a plaintext PII leak channel.
 
 **Client source detection** (`detectSource()`), in priority order:
 
@@ -400,7 +420,9 @@ Key rotation: the `ENCRYPTION_PREVIOUS_KEYS` environment variable supports a com
 - Email: `a***@example.com`
 - ID card: fully masked as `********`
 
-**Import/export resource limits**: a single Excel export is capped at 5,000 rows (the query uses `LIMIT 5001` as a probe; over the cap returns HTTP 422), limiting memory use and the data-exfiltration surface of bulk exports. User imports are limited to a 5MB file and 2,000 data rows (2,001 including the header). Before loading the workbook the server checks `.xlsx` ZIP expansion: if the uncompressed total of `xl/**.xml` entries exceeds 8MB, or the total worksheet cell count exceeds 32,000, it returns 422, blocking zip bombs and OOM in the 128M worker; it then reads worksheet metadata and rejects any sheet over 2,001 rows with a 422, validating the row count again after loading. Corrupt, unreadable or unparseable workbooks return 422 with a readable message and never leak exception internals.
+**Excel export protection**: export conditions must be an object whose keys are available columns of the target table and whose values are scalar, otherwise 422, preventing arbitrary columns/array conditions from reaching the query. Every cell is written as text via `setValueExplicit(..., TYPE_STRING)`, so values starting with `=`, `+`, `-` or `@` are never executed as Excel formulas (formula injection); header and data borders are written once. A single export is capped at 5,000 rows (query uses `LIMIT 5001` as a probe; over the cap returns HTTP 422); 5,000 rows × 9 columns uses about 65MiB in a 128M worker, close to the ceiling, so row and column limits should not be raised together.
+
+**User import protection**: limited to a 5MB file, 2,000 data rows (2,001 including the header) and 32,000 cells. For `.xlsx`, a ZIP-expansion precheck runs before loading (returning 422 when `xl/**.xml` exceeds 8MB or cells exceed 32,000) to block zip bombs; for both `.xls` and `.xlsx`, worksheet metadata is read first and any sheet over 2,001 rows or rows × columns above 32,000 cells is rejected, keeping the whole workbook out of memory, with the actual row count rechecked after loading. Each row is validated independently (username 3-50, password 6-32, real name ≤50, phone ≤20, email ≤254, status 0/1); existing usernames are prefetched once, failed rows record the row number and a generic reason, and database errors are logged server-side only. The whole import is serialized by the Redis lock `import_users_lock` (`SET NX EX 1800`), returning 409 when an import is already running so concurrent imports cannot bypass duplicate checks; hashing 2,000 bcrypt passwords is CPU-intensive, so the TTL covers the worst case and an abnormally terminated process releases the lock via TTL. Each row's user and role assignments run in one transaction and roll back on failure. Corrupt, unreadable or unparseable workbooks return 422 with a readable message and never leak exception internals.
 
 ---
 
@@ -439,7 +461,7 @@ All keys are injected via `.env` environment variables; config files read them w
 
 The production `backup` service uses a dedicated least-privilege MySQL user, `backup_reader` (`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` plus `DELETE` on `erik_operation_log`), and never holds the root password. It runs `mysqldump --single-transaction --no-tablespaces` daily and archives `deploy/data/upload` as `upload_<timestamp>.tar.gz`; both are kept for 30 days. It also deletes operation logs older than 180 days daily (at most 10,000 rows per run, failures never block backups).
 
-The application also runs a non-listening `log-cleanup` webman process (`count=1`): it performs a best-effort cleanup on startup and then daily deletes `operation_log` rows older than 180 days in batches of 10,000, logging failures without affecting service. It and the backup-service cleanup are fallbacks for each other.
+The application also runs a non-listening `log-cleanup` webman process (`count=1`): it performs a best-effort cleanup on startup and then daily deletes `operation_log` rows older than 180 days in batches of 10,000, up to 10 batches (100,000 rows) per run, yielding database resources between batches; failures are logged without affecting service. It and the backup-service cleanup are fallbacks for each other.
 
 Backups live on the same host/disk as the database, so they must be copied offsite to avoid losing data and backups together in a single-machine failure. `deploy/offsite-sync.sh` reads `OFFSITE_TARGET` from `deploy/.env` and supports rsync (`user@host:/path/`) and rclone (`rclone:remote:path`); it refuses to run when the target is unset or the backup directory is empty, excludes in-progress temp files, and is scheduled by host cron — no container calls it automatically.
 
@@ -518,11 +540,12 @@ The single-machine production stack uses `deploy/nginx/default.conf`: port 80 re
 | CSRF cross-site request forgery | Malicious websites forging requests | SecurityMiddleware (erikwang2013/security-php) Origin/Referer validation |
 | Path traversal | `../../etc/passwd` | SecurityMiddleware (erikwang2013/security-php) path traversal patterns + UploadController extension whitelist |
 | Command injection | `;ls`, `` `whoami` ``, `$(cat ...)` | SecurityMiddleware (erikwang2013/security-php) (4 modes) |
-| Session hijacking | Stealing the JWT token | Short-lived JWT (2h) + blacklist logout + password re-confirmation for sensitive operations |
+| Session hijacking | Stealing the JWT token | Short-lived JWT (2h) + blacklist logout + full session revocation on password change/disable/delete + password re-confirmation for sensitive operations |
 | ID enumeration | Enumerating numeric IDs to guess data volume | Hashids obfuscation to random strings |
-| Data leakage | DB dump / man-in-the-middle / log leakage | Three-layer encryption/masking + OperationLog sensitive field filtering |
-| DoS attacks | Oversized request bodies / high-frequency requests | 10MB request body limit + RateLimit 60/min + IP blacklist |
-| Privilege escalation | Low-privilege users accessing admin endpoints | RBAC method.path granularity authorization |
+| Data leakage | DB dump / man-in-the-middle / log leakage | Three-layer encryption/masking + OperationLog sensitive-field and PII filtering |
+| DoS attacks | Oversized request bodies / high-frequency requests / zip bombs / wide sheets | 10MB request body limit + RateLimit 60/min + IP blacklist + import 5MB/2,000 rows/32,000 cells/ZIP 8MB precheck + 5,000-row export cap |
+| Privilege escalation | Low-privilege users accessing admin endpoints / assigning high-permission roles / managing high-permission users | RBAC method.path authorization + grant and target-management boundaries (including disabled roles) + non-super-admins cannot assign or act on super admins |
+| Excel formula injection | Values in cells such as usernames starting with `=`/`+`/`-`/`@` | Exports always write `TYPE_STRING` text |
 | File upload attacks | shell.php.png double extension | SecurityMiddleware (erikwang2013/security-php) malicious file detection |
 
 ### 12.2 Known Limitations
@@ -533,6 +556,11 @@ The single-machine production stack uses `deploy/nginx/default.conf`: port 80 re
 | `/api/` and `/admin/` fail closed (503) when Redis is unavailable | The admin UI and API are unavailable while Redis is down | Non-API paths such as `/health` and `/metrics` pass through; monitor and alert on Redis and restore it quickly |
 | 60-second refresh token grace period | An old refresh_token replayed within 60 seconds of rotation returns the cached new pair | The old token is blacklisted and the cache lives only 60 seconds; clients refresh serially and HarmonyOS uses single-flight |
 | No standalone WAF engine | Regex-based detection, not a dedicated WAF rule engine | Recommended: Nginx ModSecurity or Cloudflare WAF in front in production |
-| Stateless JWT cannot be actively invalidated | Tokens cannot be revoked server-side before expiry (except via blacklist) | Blacklist + short 2h TTL narrows the risk window |
+| Stateless JWT cannot be actively invalidated | Tokens cannot be revoked server-side before expiry (except via blacklist) | Blacklist + password-change watermark + short 2h TTL narrows the risk window |
 | No special rate limit for admin endpoints | Admin endpoints share the 60/min default limit with normal endpoints | Admin operation frequency is naturally low; no distinction needed for now |
 | PCRE backtracking limit | The package has a built-in 1,000,000 backtracking cap with finally-based recovery; extremely complex inputs still pose a performance risk | Request body size limit (10MB) as a fallback |
+| Non-atomic confirmation-failure counter | `pwd_confirm_fail:<id>` uses separate `INCR` and first-time `EXPIRE` calls, so the window may be slightly extended under extreme concurrency | Only affects password-guessing rate limiting, not password correctness; Redis failure does not block the confirmation |
+| Session revocation runs after DB commit | If Redis fails, the user/role write succeeds but blacklist and watermark are not written, so old tokens may stay valid until natural expiry | Redis failures are logged; alert and blacklist manually if needed; TTL is at most 2h for access and 14d for refresh |
+| Import lock fails open | When Redis is unavailable, `import_users_lock` degrades to a lock-free import | Low-concurrency admin scenario limits the risk; the lock applies again once Redis recovers |
+| PHP ≥ 8.4 bcrypt default cost change | Since 8.4, the default `PASSWORD_BCRYPT` cost rises from 10 to 12, making new hashes slower; the fixed cost-10 dummy hash can reintroduce a timing difference, and 2,000-row imports consume more of the 1,800-second lock TTL | Production pins PHP 8.3 (see Dockerfile); before upgrading to 8.4, evaluate login latency and import lock TTL, and align the dummy hash cost with stored hashes |
+| Role permission edits do not actively clear caches | After `RoleController` changes `permission_ids`, affected users' `perm:<id>` cache can take up to 60 seconds to expire | Permission tightening can be delayed up to 60 seconds; wait for expiry or delete `perm:<id>` manually for sensitive cases |

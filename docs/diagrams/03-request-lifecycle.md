@@ -31,7 +31,7 @@ sequenceDiagram
     CTL->>CTL: decodeId(hashid)
 
     opt 敏感操作
-        CTL->>CTL: confirmPassword()
+        CTL->>CTL: confirmPassword()（5 次/300 秒节流）
         alt 密码错误
             CTL-->>C: 422
         end

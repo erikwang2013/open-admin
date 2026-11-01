@@ -97,6 +97,8 @@ flowchart TD
         S1["HashidsService<br/>ID Encode/Decode"]
         S2["SnowflakeService<br/>Globally Unique ID Generation"]
         S3["EncryptionService<br/>Encryption + Masking"]
+        S4["SessionService<br/>Session Revocation<br/>Blacklist / Watermark / Cache Cleanup"]
+        S5["RbacService<br/>Grant Boundaries<br/>Assignable Roles / Target Management"]
     end
 
     subgraph "Model Layer"
@@ -119,9 +121,11 @@ flowchart TD
     M2 --> CT2 & CT3 & CT4 & CT5 & CT6
     CT1 -.->|extends| CT2 & CT3 & CT4 & CT5 & CT6
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> S1 & S2 & S3
+    CT2 & CT3 & CT6 --> S4 & S5
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> MD1 & MD2 & MD3 & MD4 & MD5
     MD1 & MD2 & MD3 & MD4 & MD5 --> D1
     CT7 --> D3
+    S4 --> D3
 
     style R1 fill:#722ED1,color:#fff
     style M_SF fill:#FF4D4F,color:#fff
@@ -238,24 +242,31 @@ sequenceDiagram
     U->>CL: Click text positions in the image in order
     CL->>CL: Collect clicks: [{x,y}, {x,y}, {x,y}]
 
-    Note over U,CAP: === Step 3: Login ===
-    CL->>SV: POST /api/v1/auth/login { username, password, captcha_key, clicks }
+    Note over U,CAP: === Step 3: Verify Captcha ===
+    CL->>SV: POST /api/v1/captcha/verify { key, type, clicks }
     SV->>CAP: captcha_verify(key, 'click', clicks)
     alt Incorrect captcha
         CAP-->>SV: false
         SV-->>CL: 422 Captcha error
     else Captcha correct
         CAP-->>SV: true
-        SV->>SV: password_verify()
-        alt Invalid credentials
-            SV-->>CL: 401 Incorrect username or password
-        else Credentials valid
-            SV->>JWT: jwt()->create({sub, username})
-            JWT-->>SV: access_token (2h)
-            SV->>JWT: jwt()->refresh()
-            JWT-->>SV: refresh_token (14d)
-            SV-->>CL: 200 { access_token, refresh_token, user }
-        end
+        SV->>SV: SET captcha_verified:{key} = 1<br/>TTL 300s
+        SV-->>CL: 200 { valid: true }
+    end
+
+    Note over U,CAP: === Step 4: Login ===
+    CL->>SV: POST /api/v1/auth/login { username, password, captcha_key }
+    SV->>SV: Atomic DEL captcha_verified:{key}<br/>proceed only when DEL returns 1, else 422
+    SV->>SV: Decrypt password + length check
+    SV->>SV: password_verify(real hash / fixed cost-10 dummy hash)
+    alt Invalid credentials
+        SV-->>CL: 401 Incorrect username or password
+    else Credentials valid
+        SV->>JWT: jwt()->create({sub, username})
+        JWT-->>SV: access_token (2h)
+        SV->>JWT: jwt()->refresh()
+        JWT-->>SV: refresh_token (14d)
+        SV-->>CL: 200 { access_token, refresh_token, user }
     end
 
     Note over U,CAP: === Subsequent Requests ===
@@ -265,7 +276,7 @@ sequenceDiagram
     SV-->>CL: 200 { dashboard data }
 ```
 
-Refresh tokens: every successful `POST /api/v1/auth/refresh` rotates the access/refresh pair; the old refresh_token is blacklisted immediately and the new pair is cached for 60 seconds under `refresh_rotation:<md5(old token)>`, so resubmitting the same old token within the grace period returns the same pair. Concurrent rotation is serialized by `refresh_lock:<md5>` (`SET NX EX 5` + Lua release); a concurrent request that misses the cache returns 409, and a blacklisted cached token deletes the cache and returns 401. A password change clears the rotation cache and logout blacklists the cached tokens, cleaning up via `user_refresh_rotations:<userId>`; the HarmonyOS client uses single-flight refresh for concurrent 401s.
+Refresh tokens: every successful `POST /api/v1/auth/refresh` rotates the access/refresh pair; the old refresh_token is blacklisted immediately and the new pair is cached for 60 seconds under `refresh_rotation:<md5(old token)>`, so resubmitting the same old token within the grace period returns the same pair. Concurrent rotation is serialized by `refresh_lock:<md5>` (`SET NX EX 5` + Lua release); a concurrent request that misses the cache returns 409, and a blacklisted cached token deletes the cache and returns 401. Before refreshing, the server checks the password-change watermark `user_pwd_changed:<userId>` and returns 401 when the token was issued before it. Password change, disable, delete and batch disable/delete use `SessionService::revokeUser()` to write the watermark, blacklist access/refresh tokens tracked in `user_tokens` / `user_refresh_tokens`, and clear `user_refresh_rotations` plus `perm:<id>`; a role change only clears the permission cache. Logout blacklists cached tokens and cleans up via `user_refresh_rotations:<userId>`; the HarmonyOS client uses single-flight refresh for concurrent 401s.
 
 ---
 
@@ -324,8 +335,8 @@ flowchart TD
 
     subgraph "Decision Flow"
         J1["Extract Token → adminId"]
-        J2["Look Up User Roles"]
-        J3["Collect All Permission Slugs"]
+        J2["Look Up Enabled User Roles"]
+        J3["Collect Permission Slugs<br/>perm:&lt;id&gt; cached 60s"]
         J4["Build method.path"]
         J5{"Match?"}
         J6["Allow"]
@@ -335,13 +346,15 @@ flowchart TD
         J2 --> J3
         J3 --> J4
         J4 --> J5
-        J5 -->|"Yes / slug=*"| J6
+        J5 -->|"Yes / holds enabled super_admin (*)"| J6
         J5 -->|"No"| J7
     end
 
     style J6 fill:#52C41A,color:#fff
     style J7 fill:#FF4D4F,color:#fff
 ```
+
+`super_admin` is not allowed through by wildcard slug matching: `RbacService::permissionsOf()` returns `['*']` when the user holds the **enabled** `super_admin` role, and the middleware allows the request directly. Role assignment and user management have additional boundaries: a non-super-admin's proposed roles (including disabled roles) must be a permission subset of their own, and `super_admin` cannot be assigned; editing/deleting/batch-operating on a target requires all of the target's roles (including disabled) to be grantable, otherwise 403. `GET /admin/role/options` only returns enabled roles the current admin can assign.
 
 ---
 
@@ -517,12 +530,13 @@ sequenceDiagram
 
     Note over C,FS: === Excel Export ===
     C->>CTL: POST /admin/export/excel<br/>{ table, columns, conditions }
+    CTL->>CTL: Validate conditions: object, known columns, scalar values<br/>otherwise HTTP 422
     CTL->>DB: SELECT ... LIMIT 5001
     DB-->>CTL: Data
     CTL->>CTL: Over 5,000 rows → HTTP 422
     CTL->>CTL: Decrypt sensitive fields
     CTL->>CTL: Masking (maskPhone/maskEmail)
-    CTL->>CTL: PhpSpreadsheet build<br/>Blue header with white text<br/>Thin borders on data rows<br/>Frozen first row<br/>Auto-filter
+    CTL->>CTL: PhpSpreadsheet build<br/>setValueExplicit TYPE_STRING (formula-injection protection)<br/>Header / borders written once<br/>Frozen first row / Auto-filter
     CTL->>FS: Write runtime/tmp/export_*.xlsx
     CTL-->>C: File download
 
@@ -534,7 +548,9 @@ sequenceDiagram
     CTL-->>C: File download
 ```
 
-For user import, `ImportController` reads worksheet metadata (`listWorksheetInfo`) before `IOFactory::load()` and rejects any workbook with a sheet over 2,001 rows with HTTP 422; after loading it re-checks with `getHighestDataRow()`. Files are limited to 5MB and 2,000 data rows.
+At 5,000 rows × 9 columns the export uses about 65MiB in a 128M worker, close to the safe ceiling; row and column limits should not be raised together.
+
+For user import, `ImportController` first serializes the whole run with the Redis lock `import_users_lock` (`SET NX EX 1800`), returning 409 when an import is already running. For `.xlsx`, a ZIP-expansion precheck runs before loading (HTTP 422 when `xl/**.xml` exceeds 8MB or cells exceed 32,000); for both `.xls` and `.xlsx`, worksheet metadata (`listWorksheetInfo`) is read before `IOFactory::load()`, rejecting any sheet over 2,001 rows or rows × columns above 32,000 cells with HTTP 422, and `getHighestDataRow()` rechecks after loading. Files are limited to 5MB and 2,000 data rows. Each row is validated independently (username 3-50, password 6-32, real name ≤50, phone ≤20, email ≤254, status 0/1); failed rows record the row number and a generic reason, user and role assignment run in one transaction per row with rollback, and 2,000 bcrypt hashes are CPU-intensive, so the lock TTL covers the worst case.
 
 ---
 
@@ -600,27 +616,27 @@ flowchart TB
     end
 
     subgraph "Layer 2: Operation Confirmation"
-        L2["Password Re-Confirmation<br/>confirmPassword()<br/>Required for DELETE"]
+        L2["Password Re-Confirmation<br/>confirmPassword()<br/>Delete/Config Sensitive Ops<br/>5 failures / 300s Throttle"]
     end
 
     subgraph "Layer 3: Transport Security"
-        L3["HTTPS<br/>JWT Bearer Token<br/>AES-256-CBC"]
+        L3["HTTPS<br/>JWT Bearer Token<br/>RSA-2048 Login Password<br/>AES Compatibility Fallback"]
     end
 
     subgraph "Layer 4: Authentication"
-        L4["JWT HS256<br/>access_token 2h<br/>refresh_token 14d"]
+        L4["JWT HS256<br/>access_token 2h<br/>refresh_token 14d<br/>60s Rotation Grace + Session Revocation"]
     end
 
     subgraph "Layer 5: Authorization"
-        L5["RBAC<br/>method.path Granularity<br/>Super Admin * "]
+        L5["RBAC method.path<br/>Enabled super_admin → *<br/>Grant / Management Boundaries (incl. disabled roles)"]
     end
 
     subgraph "Layer 6: Data Protection"
-        L6["API ID: Hashids Encrypted<br/>Request Body: Encryption Encrypted<br/>Storage: Encryptable Encrypted<br/>Export: Masked + Copyright"]
+        L6["API ID: Hashids Encrypted<br/>Request Body: Encryption Encrypted<br/>Storage: Encryptable Encrypted<br/>Export: Masked + TYPE_STRING Formula Protection"]
     end
 
     subgraph "Layer 7: Audit Trail"
-        L7["OperationLog<br/>Records All Operations<br/>User/IP/Time/Source/Params"]
+        L7["OperationLog<br/>User/IP/Time/Source/Params<br/>Phone/Email/ID-card PII Masked"]
     end
 
     L1 --> L2 --> L3 --> L4 --> L5 --> L6 --> L7
@@ -634,7 +650,7 @@ flowchart TB
     style L7 fill:#FF4D4F,color:#fff
 ```
 
-Additional notes: when Redis fails, `AdminAuth` blacklist checks and `RateLimit` return 503 (fail closed) for `/api/` and `/admin/`, while non-API paths such as `/health` and `/metrics` pass through; delete/disable operations cannot remove the last enabled super administrator, and the built-in `super_admin` role cannot be edited or deleted.
+Additional notes: when Redis fails, `AdminAuth` blacklist checks and `RateLimit` return 503 (fail closed) for `/api/` and `/admin/`, while non-API paths such as `/health` and `/metrics` pass through; captcha markers are consumed atomically and unknown usernames run a dummy bcrypt check to flatten timing; password change/disable/delete revoke all target sessions; delete/disable/role changes cannot remove the last enabled super administrator, non-super-admins cannot assign or act on super admins, and the built-in `super_admin` role cannot be edited or deleted.
 
 ---
 
@@ -664,7 +680,7 @@ flowchart TB
     end
 
     DNS --> NGX
-    NGX --> WM
+    NGX -->|"depends_on: service_healthy"| WM
     WM --> MYSQL
     WM --> REDIS
     INIT --> MYSQL
@@ -683,7 +699,7 @@ flowchart TB
     style DATA fill:#F6F8FC,color:#1677FF
 ```
 
-> Environment variables are isolated per service in `deploy/env/{app,init,mysql,redis,backup}.env` (`600`, directory `700`); the master `deploy/.env` only holds compose interpolation values. The app and init containers run as the host `APP_UID`/`APP_GID`. `backup` uses the least-privilege `backup_reader` user to back up the database and uploads and to delete operation logs older than 180 days; the in-app `log-cleanup` process purges the same table daily as a fallback. Every service has CPU/memory/pids limits (app 1.0/512M/256, init 0.5/256M/128, mysql 1.5/768M/512, redis 0.5/384M/128, nginx 0.5/128M/128, backup 0.5/256M/128); the Redis container's 384M pairs with `--maxmemory 256mb`, leaving 128M for AOF rewrite/fork and fragmentation. Offsite copies are run by host cron via `deploy/offsite-sync.sh` (reads `OFFSITE_TARGET`). Nginx/MySQL logs go to stdout/stderr and are rotated by Docker at `10m × 3`; HSTS is off by default and should be enabled after a real domain certificate is configured.
+> Environment variables are isolated per service in `deploy/env/{app,init,mysql,redis,backup}.env` (`600`, directory `700`); the master `deploy/.env` only holds compose interpolation values. The app and init containers run as the host `APP_UID`/`APP_GID`. `backup` uses the least-privilege `backup_reader` user to back up the database and uploads and to delete operation logs older than 180 days; the in-app `log-cleanup` process purges the same table daily as a fallback (10,000 rows per batch, up to 10 batches). `nginx` waits for the app `/health` check via `depends_on.app.condition: service_healthy`, avoiding 502s during startup. Every service has CPU/memory/pids limits (app 1.0/512M/256, init 0.5/256M/128, mysql 1.5/768M/512, redis 0.5/384M/128, nginx 0.5/128M/128, backup 0.5/256M/128); the Redis container's 384M pairs with `--maxmemory 256mb`, leaving 128M for AOF rewrite/fork and fragmentation. Offsite copies are run by host cron via `deploy/offsite-sync.sh` (reads `OFFSITE_TARGET`). Nginx/MySQL logs go to stdout/stderr and are rotated by Docker at `10m × 3`; HSTS is off by default and should be enabled after a real domain certificate is configured.
 
 ---
 

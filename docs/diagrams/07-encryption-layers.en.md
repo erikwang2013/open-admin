@@ -8,7 +8,7 @@
 flowchart TB
     subgraph transport["Transport Layer Encryption - encryption"]
         e1["Client Sends Sensitive Data"]
-        e2["AES-256-CBC Encryption"]
+        e2["AES-256-CBC / RSA-2048 Encryption"]
         e3["API Transfers Ciphertext"]
         e4["Server Decrypts and Processes"]
         e1 --> e2 --> e3 --> e4

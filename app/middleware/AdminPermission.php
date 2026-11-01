@@ -63,6 +63,11 @@ class AdminPermission
         $permissions = [];
         foreach ($user->roles as $role) {
             if ($role->status === 0) continue;
+            // 超级管理员不受权限行约束，直接放行全部权限（命中下方 '*' 分支）
+            if ($role->slug === 'super_admin') {
+                $permissions = ['*'];
+                break;
+            }
             foreach ($role->permissions as $perm) {
                 $permissions[] = $perm->slug;
             }

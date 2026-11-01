@@ -13,7 +13,7 @@ use Workerman\Timer;
 use Workerman\Worker;
 
 /**
- * 操作日志清理进程：保留 180 天，每轮最多删除 10000 行
+ * 操作日志清理进程：保留 180 天，每轮最多分 10 批删除 100000 行
  */
 class LogCleanup
 {
@@ -22,6 +22,9 @@ class LogCleanup
 
     /** 单次删除上限，避免长事务锁表 */
     private const BATCH_SIZE = 10000;
+
+    /** 每轮最多批次数，避免积压时一次删除过久 */
+    private const MAX_BATCHES = 10;
 
     public function onWorkerStart(Worker $worker): void
     {
@@ -37,14 +40,22 @@ class LogCleanup
             $table  = $model->getConnection()->getTablePrefix() . $model->getTable();
             $cutoff = date('Y-m-d H:i:s', time() - self::RETENTION_DAYS * 86400);
 
-            // 原生 DELETE 才能带 LIMIT，查询构造器的 delete 会忽略 limit
-            $deleted = $model->getConnection()->delete(
-                "DELETE FROM {$table} WHERE created_at < ? LIMIT " . self::BATCH_SIZE,
-                [$cutoff]
-            );
+            $total = 0;
+            for ($batch = 0; $batch < self::MAX_BATCHES; $batch++) {
+                // 原生 DELETE 才能带 LIMIT，查询构造器的 delete 会忽略 limit
+                $deleted = $model->getConnection()->delete(
+                    "DELETE FROM {$table} WHERE created_at < ? LIMIT " . self::BATCH_SIZE,
+                    [$cutoff]
+                );
+                $total += $deleted;
+                // 不足一批说明已清完，提前结束
+                if ($deleted < self::BATCH_SIZE) {
+                    break;
+                }
+            }
 
-            if ($deleted > 0) {
-                Log::info("operation_log cleanup: deleted {$deleted} rows older than " . self::RETENTION_DAYS . ' days');
+            if ($total > 0) {
+                Log::info("operation_log cleanup: deleted {$total} rows older than " . self::RETENTION_DAYS . ' days');
             }
         } catch (\Throwable $e) {
             // 清理失败不影响进程，下一轮定时器继续尝试

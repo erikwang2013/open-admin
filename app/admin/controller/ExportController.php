@@ -9,6 +9,8 @@ namespace app\admin\controller;
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
@@ -48,6 +50,18 @@ class ExportController extends BaseController
 
         // 获取导出字段映射，仅保留已知字段
         $exportColumns = $this->getExportColumns($table);
+        if (!is_array($conditions)) {
+            return $this->fail('筛选条件必须是对象', 422)->withStatus(422);
+        }
+        $unknownConditions = array_diff(array_keys($conditions), array_keys($exportColumns));
+        if (!empty($unknownConditions)) {
+            return $this->fail('不支持的筛选字段: ' . implode(', ', $unknownConditions), 422)->withStatus(422);
+        }
+        foreach ($conditions as $conditionValue) {
+            if ($conditionValue !== null && !is_scalar($conditionValue)) {
+                return $this->fail('筛选条件值必须是标量', 422)->withStatus(422);
+            }
+        }
         $columns = is_array($columns) ? $columns : [];
         $columns = array_values(array_intersect($columns, array_keys($exportColumns)));
         if (empty($columns)) {
@@ -105,11 +119,17 @@ class ExportController extends BaseController
                         $value = str_repeat('*', 8); // id_card等彻底隐藏
                     }
                 }
-                $sheet->getCell($colIndex . $row)->setValue($value);
-                $sheet->getStyle($colIndex . $row)->applyFromArray($dataStyle);
+                // 强制字符串写入，防止以 = + - @ 开头的值被解析为公式
+                $sheet->getCell($colIndex . $row)->setValueExplicit((string) $value, DataType::TYPE_STRING);
                 $colIndex++;
             }
             $row++;
+        }
+
+        // 边框一次性应用到整个数据区域，避免逐格 applyFromArray 造成内存/耗时膨胀
+        if ($row > 2) {
+            $lastCol = Coordinate::stringFromColumnIndex(count($columns));
+            $sheet->getStyle('A2:' . $lastCol . ($row - 1))->applyFromArray($dataStyle);
         }
 
         // 冻结首行

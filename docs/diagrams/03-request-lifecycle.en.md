@@ -35,7 +35,7 @@ sequenceDiagram
     CTL->>CTL: decodeId(hashid)
 
     opt Sensitive Operations
-        CTL->>CTL: confirmPassword()
+        CTL->>CTL: confirmPassword() (5 failures / 300s throttle)
         alt Wrong Password
             CTL-->>C: 422
         end

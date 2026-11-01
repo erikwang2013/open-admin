@@ -87,8 +87,8 @@
   <rect class="card" x="200" y="496" width="690" height="78" rx="12"/>
   <text class="sTitle" x="222" y="526">Auth</text>
   <text class="sWhere" x="322" y="526">/admin route group</text>
-  <text class="sItem" x="222" y="548">AdminAuth: JWT verify + token blacklist; failure returns 401 Unauthorized</text>
-  <text class="sItem" x="222" y="565">AdminPermission: compare method.path against Redis cache (TTL 60s); forbidden returns 403</text>
+  <text class="sItem" x="222" y="548">AdminAuth: JWT verify + blacklist + revocation; failure returns 401</text>
+  <text class="sItem" x="222" y="565">AdminPermission: permission-subset boundary + 60s cache; forbidden returns 403</text>
 
   <path d="M 150 555 L 150 605" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
 
@@ -98,7 +98,7 @@
   <rect class="card" x="200" y="586" width="690" height="78" rx="12"/>
   <text class="sTitle" x="222" y="616">Handle</text>
   <text class="sWhere" x="332" y="616">Controller</text>
-  <text class="sItem" x="222" y="638">Validate (422 on failure) → hashids decode ID → business logic → Model query</text>
+  <text class="sItem" x="222" y="638">Validate (422) → hashids decode ID → role/transaction boundaries → Model query</text>
   <text class="sItem" x="222" y="655">Sensitive ops require a password again; uncaught errors return masked 500 responses</text>
 
   <path d="M 150 645 L 150 695" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
@@ -110,7 +110,7 @@
   <text class="sTitle" x="222" y="706">Persist</text>
   <text class="sWhere" x="342" y="706">Model / Service</text>
   <text class="sItem" x="222" y="728">Snowflake BIGINT key → encryptable sensitive fields → MySQL write</text>
-  <text class="sItem" x="222" y="745">Redis stores cache / captcha / permissions / rate counts; data persists under deploy/data</text>
+  <text class="sItem" x="222" y="745">Redis stores cache / captcha / permissions / rate counts / revocations; data and backups under deploy/data</text>
 
   <path d="M 150 735 L 150 785" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
 
@@ -148,7 +148,7 @@
     <text x="942" y="634">Logout: token goes to Redis blacklist</text>
     <text x="942" y="662">Sessions: max 3 active tokens per user</text>
     <text x="942" y="690">Over limit: oldest token banned</text>
-    <text x="942" y="718">Permission cache: Redis TTL 60s</text>
+    <text x="942" y="718">Revocation: password change / disable / delete</text>
     <text x="942" y="746">Rate window: 60 / min / IP / route</text>
     <text x="942" y="774">Login 10/min · default 60/min</text>
     <text x="942" y="816" fill="#8C9AAF">Stateless; blacklist + counters in Redis</text>

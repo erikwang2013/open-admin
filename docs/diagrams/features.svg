@@ -37,9 +37,9 @@
   <text class="fWhere" x="98" y="167">app/api/v1/controller</text>
   <line x1="50" y1="184" x2="290" y2="184" stroke="#EEF2F7"/>
   <text class="fItem" x="50" y="205">· 登录 / 刷新 / 登出</text>
-  <text class="fItem" x="50" y="224">· 点击验证码（poster-php）</text>
+  <text class="fItem" x="50" y="224">· 验证码标记原子消费 + 占位 bcrypt</text>
   <text class="fItem" x="50" y="243">· 账号锁定 5 次 × 15 分钟</text>
-  <text class="fItem" x="50" y="262">· 并发会话上限 3，超出踢最旧</text>
+  <text class="fItem" x="50" y="262">· 并发会话上限 3 + 会话吊销</text>
 
   <!-- 仪表盘 -->
   <rect class="card" x="330" y="112" width="280" height="152" rx="14"/>
@@ -65,10 +65,10 @@
   <text class="fName" x="698" y="150">用户管理</text>
   <text class="fWhere" x="698" y="167">UserController · ImportController</text>
   <line x1="650" y1="184" x2="890" y2="184" stroke="#EEF2F7"/>
-  <text class="fItem" x="650" y="205">· CRUD + 批量删除 / 启禁用</text>
-  <text class="fItem" x="650" y="224">· Excel 导入逐行校验 + 错误报告</text>
-  <text class="fItem" x="650" y="243">· 软删除 + 敏感操作二次确认</text>
-  <text class="fItem" x="650" y="262">· 密码 bcrypt 哈希存储</text>
+  <text class="fItem" x="650" y="205">· CRUD + 批量操作 + 角色分配</text>
+  <text class="fItem" x="650" y="224">· Excel 导入 5MB / 2000 行</text>
+  <text class="fItem" x="650" y="243">· 32000 单元格 + 导入锁 409</text>
+  <text class="fItem" x="650" y="262">· 逐行事务校验 + 二次确认</text>
 
   <!-- 角色权限 -->
   <rect class="card" x="930" y="112" width="280" height="152" rx="14"/>
@@ -80,10 +80,10 @@
   <text class="fName" x="998" y="150">角色权限</text>
   <text class="fWhere" x="998" y="167">RoleController · PermissionController</text>
   <line x1="950" y1="184" x2="1190" y2="184" stroke="#EEF2F7"/>
-  <text class="fItem" x="950" y="205">· 角色 CRUD + 权限树</text>
-  <text class="fItem" x="950" y="224">· RBAC 校验 method.path 粒度</text>
-  <text class="fItem" x="950" y="243">· 权限缓存 Redis TTL 60s</text>
-  <text class="fItem" x="950" y="262">· super_admin 角色保护</text>
+  <text class="fItem" x="950" y="205">· 角色 CRUD + 权限树 + 角色选项</text>
+  <text class="fItem" x="950" y="224">· RBAC method.path · 超管通配 *</text>
+  <text class="fItem" x="950" y="243">· 授权边界：仅权限子集可授予</text>
+  <text class="fItem" x="950" y="262">· 最后超管命名锁保护</text>
 
   <!-- ===== 第 2 行 ===== -->
   <!-- 系统配置 -->
@@ -116,7 +116,7 @@
   <text class="fItem" x="350" y="377">· 写操作自动落库（中间件）</text>
   <text class="fItem" x="350" y="396">· 8 平台来源端自动检测</text>
   <text class="fItem" x="350" y="415">· 日志查询 + 多条件筛选</text>
-  <text class="fItem" x="350" y="434">· 记录 IP / UA / 耗时 / 结果</text>
+  <text class="fItem" x="350" y="434">· PII 递归脱敏（手机 / 邮箱等）</text>
 
   <!-- 文件 -->
   <rect class="card" x="630" y="284" width="280" height="152" rx="14"/>
@@ -129,9 +129,9 @@
   <text class="fWhere" x="698" y="339">UploadController · ExportController</text>
   <line x1="650" y1="356" x2="890" y2="356" stroke="#EEF2F7"/>
   <text class="fItem" x="650" y="377">· 文件上传（类型 + 大小校验）</text>
-  <text class="fItem" x="650" y="396">· Excel 导出（phpspreadsheet）</text>
-  <text class="fItem" x="650" y="415">· PDF 导出（dompdf，含版权页脚）</text>
-  <text class="fItem" x="650" y="434">· 敏感数据自动脱敏</text>
+  <text class="fItem" x="650" y="396">· Excel 导出 5000 行 + 条件校验</text>
+  <text class="fItem" x="650" y="415">· TYPE_STRING 防公式注入</text>
+  <text class="fItem" x="650" y="434">· PDF 版权页脚 + 敏感数据脱敏</text>
 
   <!-- 安全防御 -->
   <rect class="card" x="930" y="284" width="280" height="152" rx="14" stroke="#FFCCC7"/>
@@ -143,10 +143,10 @@
   <text class="fName" x="998" y="322">安全防御</text>
   <text class="fWhere" x="998" y="339">security-php · 8 个中间件</text>
   <line x1="950" y1="356" x2="1190" y2="356" stroke="#EEF2F7"/>
-  <text class="fItem" x="950" y="377">· 31 种攻击检测器 + IP 升级黑名单</text>
-  <text class="fItem" x="950" y="396">· CSP / 安全响应头注入</text>
-  <text class="fItem" x="950" y="415">· 限流 60 次/分/IP/路由（Lua）</text>
-  <text class="fItem" x="950" y="434">· security.txt（RFC 9116）</text>
+  <text class="fItem" x="950" y="377">· 31 种攻击检测器 + IP 黑名单</text>
+  <text class="fItem" x="950" y="396">· CSP / 安全响应头 + RSA 传输</text>
+  <text class="fItem" x="950" y="415">· 验证码原子消费 + 会话吊销</text>
+  <text class="fItem" x="950" y="434">· 限流 60 次/分 · security.txt</text>
 
   <!-- ===== 第 3 行 ===== -->
   <!-- 国际化 -->
@@ -244,7 +244,7 @@
   <text class="fItem" x="650" y="708">· 每张表必备 id / created_at / updated_at；软删除表加 deleted_at</text>
   <text class="fItem" x="650" y="732">· ID 出入参一律 hashids 加解密，不暴露真实数据库 ID</text>
   <text class="fItem" x="650" y="756">· 统一响应 { code, message, data }，code = 0 为成功</text>
-  <text class="fItem" x="650" y="780">· 错误码：400 / 401 / 403 / 404 / 422 / 429 / 500</text>
+  <text class="fItem" x="650" y="780">· 错误码：400 / 401 / 403 / 404 / 409 / 422 / 429 / 500 / 503</text>
   <text class="fItem" x="650" y="804">· 敏感字段 encryptable 自动加解密，密文存 VARCHAR(500)</text>
 
   <text class="t2" x="30" y="866" font-size="11.5">

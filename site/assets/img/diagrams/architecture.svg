@@ -111,10 +111,10 @@
   <text class="chipS" x="64" y="516" font-size="11">/admin 路由组鉴权链</text>
   <rect class="node" x="64" y="524" width="261" height="46" rx="10" fill="#FFF2E8" stroke="#FFBB96"/>
   <text class="chipT ctr" x="194" y="544" fill="#AD4E00">AdminAuth</text>
-  <text class="chipS ctr" x="194" y="560">JWT 验签 + Token 黑名单</text>
+  <text class="chipS ctr" x="194" y="560">JWT 验签 · 黑名单 · 会话撤销</text>
   <rect class="node" x="341" y="524" width="261" height="46" rx="10" fill="#FFF2E8" stroke="#FFBB96"/>
   <text class="chipT ctr" x="471" y="544" fill="#AD4E00">AdminPermission</text>
-  <text class="chipS ctr" x="471" y="560">RBAC method.path · Redis 60s 缓存</text>
+  <text class="chipS ctr" x="471" y="560">RBAC 权限边界 · Redis 60s</text>
   <rect class="node" x="618" y="524" width="262" height="46" rx="10" fill="#FFF2E8" stroke="#FFBB96"/>
   <text class="chipT ctr" x="749" y="544" fill="#AD4E00">OperationLog</text>
   <text class="chipS ctr" x="749" y="560">8 平台来源端自动检测</text>
@@ -142,10 +142,10 @@
   <text class="chipS ctr" x="368" y="735">BIGINT 分布式主键</text>
   <rect class="node" x="480" y="710" width="192" height="30" rx="8" fill="#F7F9FC" stroke="#DCE4EF"/>
   <text class="chipS ctr" x="576" y="722" font-size="11.5" fill="#16233A" font-weight="600">EncryptionService</text>
-  <text class="chipS ctr" x="576" y="735">传输加密 + 数据脱敏</text>
+  <text class="chipS ctr" x="576" y="735">传输加密 · 字段加解密</text>
   <rect class="node" x="688" y="710" width="192" height="30" rx="8" fill="#F7F9FC" stroke="#DCE4EF"/>
-  <text class="chipS ctr" x="784" y="722" font-size="11.5" fill="#16233A" font-weight="600">encryptable · scout</text>
-  <text class="chipS ctr" x="784" y="735">字段加解密 · ES 同步</text>
+  <text class="chipS ctr" x="784" y="722" font-size="11.5" fill="#16233A" font-weight="600">SessionService · RbacService</text>
+  <text class="chipS ctr" x="784" y="735">会话撤销 · 权限边界</text>
 
   <!-- 箭头：应用 → 存储 -->
   <path d="M 480 740 L 480 770" stroke="#1677FF" stroke-width="2" fill="none" marker-end="url(#arwBlue)"/>
@@ -162,7 +162,7 @@
   <text class="chipS" x="84" y="869">erik_ 前缀 · BIGINT 非自增 · 软删除</text>
   <rect class="node" x="344" y="830" width="256" height="52" rx="12" fill="#E6F4FF" stroke="#91CAFF"/>
   <text class="chipT" x="364" y="851">Redis 7 · 缓存与会话</text>
-  <text class="chipS" x="364" y="869">限流 · 验证码 · 权限缓存 · 黑名单</text>
+  <text class="chipS" x="364" y="869">限流 · 验证码 · 权限 · 黑名单/撤销</text>
   <rect class="node" x="624" y="830" width="256" height="52" rx="12" fill="#E6F4FF" stroke="#91CAFF"/>
   <text class="chipT" x="644" y="851">单机部署 · 数据持久化</text>
   <text class="chipS" x="644" y="869">backup 每日备份 + offsite 同步 · 30 天</text>
@@ -174,7 +174,7 @@
     <text x="968" y="170">· 31 种攻击检测器（XSS / SQLi / SSRF…）</text>
     <text x="968" y="192">· CSP + 安全响应头注入</text>
     <text x="968" y="214">· 账号锁定：5 次失败锁 15 分钟</text>
-    <text x="968" y="236">· 并发会话上限 3，超出踢最旧</text>
+    <text x="968" y="236">· 会话上限 3 · 变更/禁用即撤销</text>
     <text x="968" y="258">· 限流默认 60 次/分钟/IP/路由</text>
     <text x="968" y="280">· security.txt（RFC 9116）</text>
   </g>
@@ -186,8 +186,8 @@
     <text x="968" y="398">· GET /metrics Prometheus 指标 ×5</text>
     <text x="968" y="420">· GET /api/docs OpenAPI 文档</text>
     <text x="968" y="442">· Docker Compose：6 个服务</text>
-    <text x="968" y="464">· CI：PHPUnit / Flutter / Docker 校验</text>
-    <text x="968" y="486">· 备份 + 异地同步 · 日志清理 180 天</text>
+    <text x="968" y="464">· CI：37/81 · Flutter · Docker</text>
+    <text x="968" y="486">· 日志清理 10×10k · 异地备份</text>
   </g>
 
   <!-- 项目宠物 -->

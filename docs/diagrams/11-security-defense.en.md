@@ -6,13 +6,13 @@
 
 ```mermaid
 flowchart TB
-    l1["Layer 1: Human Verification<br/>Click Captcha ClickCaptcha<br/>Mandatory for Login"]
-    l2["Layer 2: Operation Confirmation<br/>Password Re-confirmation<br/>Required for DELETE Operations"]
-    l3["Layer 3: Transport Security<br/>HTTPS + JWT Bearer<br/>AES-256-CBC"]
-    l4["Layer 4: Identity Authentication<br/>JWT HS256<br/>access_token 2h<br/>refresh_token 14d"]
-    l5["Layer 5: Permission Authorization<br/>RBAC method.path Granularity<br/>Super Admin *"]
-    l6["Layer 6: Data Protection<br/>ID: Hashids Encryption<br/>Request: Encryption Encryption<br/>Storage: Encryptable Encryption<br/>Export: Masking + Copyright"]
-    l7["Layer 7: Audit Trail<br/>OperationLog<br/>User/IP/Time/Parameters"]
+    l1["Layer 1: Human Verification<br/>Click Captcha ClickCaptcha<br/>Mandatory for Login · Atomic Marker Consumption"]
+    l2["Layer 2: Operation Confirmation<br/>Password Re-confirmation<br/>5 failures / 300s Throttle"]
+    l3["Layer 3: Transport Security<br/>HTTPS + JWT Bearer<br/>RSA-2048 Login Password / AES Fallback"]
+    l4["Layer 4: Identity Authentication<br/>JWT HS256<br/>access_token 2h<br/>refresh_token 14d · Session Revocation"]
+    l5["Layer 5: Permission Authorization<br/>RBAC method.path Granularity<br/>Enabled super_admin Wildcard *<br/>Grant Boundaries: Permission Subset"]
+    l6["Layer 6: Data Protection<br/>ID: Hashids Encryption<br/>Request: Encryption Encryption<br/>Storage: Encryptable Encryption<br/>Export: Masking + Copyright + Formula Guard"]
+    l7["Layer 7: Audit Trail<br/>OperationLog<br/>User/IP/Time/Parameters<br/>Recursive PII Masking"]
 
     l1 --> l2 --> l3 --> l4 --> l5 --> l6 --> l7
 

@@ -134,18 +134,24 @@
   <!-- Row D 公共服务 -->
   <line x1="64" y1="682" x2="880" y2="682" stroke="#E1E7F0" stroke-width="1"/>
   <text class="chipS" x="64" y="702" font-size="11">公共服务 · app/common</text>
-  <rect class="node" x="64" y="710" width="192" height="30" rx="8" fill="#F7F9FC" stroke="#DCE4EF"/>
-  <text class="chipS ctr" x="160" y="722" font-size="11.5" fill="#16233A" font-weight="600">HashidsService</text>
-  <text class="chipS ctr" x="160" y="735">API 层 ID 加解密</text>
-  <rect class="node" x="272" y="710" width="192" height="30" rx="8" fill="#F7F9FC" stroke="#DCE4EF"/>
-  <text class="chipS ctr" x="368" y="722" font-size="11.5" fill="#16233A" font-weight="600">SnowflakeService</text>
-  <text class="chipS ctr" x="368" y="735">BIGINT 分布式主键</text>
-  <rect class="node" x="480" y="710" width="192" height="30" rx="8" fill="#F7F9FC" stroke="#DCE4EF"/>
-  <text class="chipS ctr" x="576" y="722" font-size="11.5" fill="#16233A" font-weight="600">EncryptionService</text>
-  <text class="chipS ctr" x="576" y="735">传输加密 + 数据脱敏</text>
-  <rect class="node" x="688" y="710" width="192" height="30" rx="8" fill="#F7F9FC" stroke="#DCE4EF"/>
-  <text class="chipS ctr" x="784" y="722" font-size="11.5" fill="#16233A" font-weight="600">encryptable · scout</text>
-  <text class="chipS ctr" x="784" y="735">字段加解密 · ES 同步</text>
+  <rect class="node" x="64" y="710" width="126" height="30" rx="8" fill="#F7F9FC" stroke="#DCE4EF"/>
+  <text class="chipS ctr" x="127" y="722" font-size="10.5" fill="#16233A" font-weight="600">HashidsService</text>
+  <text class="chipS ctr" x="127" y="735" font-size="9.5">ID 编解码</text>
+  <rect class="node" x="202" y="710" width="126" height="30" rx="8" fill="#F7F9FC" stroke="#DCE4EF"/>
+  <text class="chipS ctr" x="265" y="722" font-size="10.5" fill="#16233A" font-weight="600">SnowflakeService</text>
+  <text class="chipS ctr" x="265" y="735" font-size="9.5">分布式主键</text>
+  <rect class="node" x="340" y="710" width="126" height="30" rx="8" fill="#F7F9FC" stroke="#DCE4EF"/>
+  <text class="chipS ctr" x="403" y="722" font-size="10.5" fill="#16233A" font-weight="600">EncryptionService</text>
+  <text class="chipS ctr" x="403" y="735" font-size="9.5">传输 / 字段加密 · 脱敏</text>
+  <rect class="node" x="478" y="710" width="126" height="30" rx="8" fill="#F7F9FC" stroke="#DCE4EF"/>
+  <text class="chipS ctr" x="541" y="722" font-size="10.5" fill="#16233A" font-weight="600">SessionService</text>
+  <text class="chipS ctr" x="541" y="735" font-size="9.5">会话吊销 · 缓存清理</text>
+  <rect class="node" x="616" y="710" width="126" height="30" rx="8" fill="#F7F9FC" stroke="#DCE4EF"/>
+  <text class="chipS ctr" x="679" y="722" font-size="10.5" fill="#16233A" font-weight="600">RbacService</text>
+  <text class="chipS ctr" x="679" y="735" font-size="9.5">授权边界</text>
+  <rect class="node" x="754" y="710" width="126" height="30" rx="8" fill="#F7F9FC" stroke="#DCE4EF"/>
+  <text class="chipS ctr" x="817" y="722" font-size="10.5" fill="#16233A" font-weight="600">encryptable · scout</text>
+  <text class="chipS ctr" x="817" y="735" font-size="9.5">字段加密 · ES 同步</text>
 
   <!-- 箭头：应用 → 存储 -->
   <path d="M 480 740 L 480 770" stroke="#1677FF" stroke-width="2" fill="none" marker-end="url(#arwBlue)"/>
@@ -174,7 +180,7 @@
     <text x="968" y="170">· 31 种攻击检测器（XSS / SQLi / SSRF…）</text>
     <text x="968" y="192">· CSP + 安全响应头注入</text>
     <text x="968" y="214">· 账号锁定：5 次失败锁 15 分钟</text>
-    <text x="968" y="236">· 并发会话上限 3，超出踢最旧</text>
+    <text x="968" y="236">· 会话上限 3 · 吊销 · RBAC 边界</text>
     <text x="968" y="258">· 限流默认 60 次/分钟/IP/路由</text>
     <text x="968" y="280">· security.txt（RFC 9116）</text>
   </g>

@@ -88,7 +88,7 @@
   <text class="sTitle" x="222" y="526">鉴权 Auth</text>
   <text class="sWhere" x="322" y="526">/admin 路由组</text>
   <text class="sItem" x="222" y="548">AdminAuth：JWT 验签 + Token 黑名单比对，失败返回 401 Unauthorized</text>
-  <text class="sItem" x="222" y="565">AdminPermission：读 Redis 权限缓存（TTL 60s）比对 method.path，越权返回 403 Forbidden</text>
+  <text class="sItem" x="222" y="565">AdminPermission：权限缓存（TTL 60s）比对 method.path；启用 super_admin 通配 *，越权 403</text>
 
   <path d="M 150 555 L 150 605" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
 
@@ -99,7 +99,7 @@
   <text class="sTitle" x="222" y="616">处理 Handle</text>
   <text class="sWhere" x="332" y="616">Controller</text>
   <text class="sItem" x="222" y="638">参数校验（失败 422）→ hashids 解码 ID → 业务逻辑 → Model 查询</text>
-  <text class="sItem" x="222" y="655">敏感操作需二次密码确认；未捕获异常统一 500 兜底并脱敏堆栈</text>
+  <text class="sItem" x="222" y="655">敏感操作需二次密码确认（失败 5 次/300 秒）；未捕获异常统一 500 兜底并脱敏堆栈</text>
 
   <path d="M 150 645 L 150 695" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
 
@@ -110,7 +110,7 @@
   <text class="sTitle" x="222" y="706">持久化 Persist</text>
   <text class="sWhere" x="342" y="706">Model / Service</text>
   <text class="sItem" x="222" y="728">Snowflake 生成 BIGINT 主键 → encryptable 敏感字段加解密 → MySQL 落库</text>
-  <text class="sItem" x="222" y="745">Redis 写缓存 / 验证码 / 权限 / 限流计数；数据挂载到 deploy/data 持久化</text>
+  <text class="sItem" x="222" y="745">Redis 写缓存 / 验证码 / 权限 / 限流 / 会话；数据挂载到 deploy/data 持久化</text>
 
   <path d="M 150 735 L 150 785" stroke="#A9B8CD" stroke-width="2" marker-end="url(#lcArw)"/>
 
@@ -121,7 +121,7 @@
   <text class="sTitle" x="222" y="796">响应与审计 Respond</text>
   <text class="sWhere" x="382" y="796">统一响应 + OperationLog</text>
   <text class="sItem" x="222" y="818">encodeId（hashids）→ { code, message, data } → 回写限流响应头 → 客户端 200</text>
-  <text class="sItem" x="222" y="835">OperationLog 落库：操作人 / 动作 / IP / 来源端（8 平台）/ 耗时 / 结果</text>
+  <text class="sItem" x="222" y="835">OperationLog 落库：操作人 / 动作 / IP / 来源端（8 平台）/ 耗时 / 结果 / PII 脱敏</text>
 
   <!-- ===== 右栏 ===== -->
   <rect class="card" x="920" y="136" width="280" height="340" rx="14" stroke="#FFD8BF"/>
@@ -148,7 +148,7 @@
     <text x="942" y="634">登出：Token 写入 Redis 黑名单</text>
     <text x="942" y="662">并发会话：同一用户上限 3 个有效 Token</text>
     <text x="942" y="690">超限策略：最旧 Token 立即拉黑</text>
-    <text x="942" y="718">权限缓存：Redis TTL 60 秒</text>
+    <text x="942" y="718">改密/禁用/删除：全量吊销会话</text>
     <text x="942" y="746">限流窗口：60 次 / 分钟 / IP / 路由</text>
     <text x="942" y="774">登录限流 10 次/分 · 其余默认 60 次/分</text>
     <text x="942" y="816" fill="#8C9AAF">令牌无状态，黑名单与计数集中在 Redis</text>

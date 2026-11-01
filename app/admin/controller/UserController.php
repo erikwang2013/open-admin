@@ -7,8 +7,11 @@ declare(strict_types=1);
 
 namespace app\admin\controller;
 
+use app\model\AdminRole;
 use app\model\AdminUser;
 use app\common\EncryptionService;
+use app\common\RbacService;
+use app\common\SessionService;
 use Illuminate\Database\QueryException;
 use support\Db;
 use support\Request;
@@ -61,11 +64,10 @@ class UserController extends BaseController
                           unset($data['password'], $data['id_card']);
                           // 脱敏处理（Encryptable cast 已自动解密，直接对明文脱敏）
                           if (!empty($data['phone'])) {
-                              $data['phone'] = preg_replace('/^(\d{3})\d+(\d{4})$/', '$1****$2', $data['phone']);
+                              $data['phone'] = self::maskPhone((string) $data['phone']);
                           }
                           if (!empty($data['email'])) {
-                              $parts = explode('@', $data['email']);
-                              $data['email'] = mb_substr($parts[0], 0, 1) . '***@' . ($parts[1] ?? '');
+                              $data['email'] = self::maskEmail((string) $data['email']);
                           }
                           return $this->encodeIds($data);
                       });
@@ -90,12 +92,16 @@ class UserController extends BaseController
      * @Apidoc\Param("status", type="int", require=false, desc="状态(0禁用1启用)", default="1")
      * @Apidoc\Param("phone", type="string", require=false, desc="手机号")
      * @Apidoc\Param("email", type="string", require=false, desc="邮箱")
+     * @Apidoc\Param("role_ids", type="array", require=false, desc="角色hashid数组；非超管只能分配自身权限范围内的角色")
      */
     public function store(Request $request): Response
     {
-        $password = EncryptionService::decryptTransmission($request->input('password', ''));
-        $phone = EncryptionService::decryptTransmission($request->input('phone', ''));
-        $email = EncryptionService::decryptTransmission($request->input('email', ''));
+        $passwordInput = $request->input('password');
+        $password = is_string($passwordInput) ? EncryptionService::decryptTransmission($passwordInput) : $passwordInput;
+        $phoneInput = $request->input('phone', '');
+        $phone = is_string($phoneInput) ? EncryptionService::decryptTransmission($phoneInput) : $phoneInput;
+        $emailInput = $request->input('email', '');
+        $email = is_string($emailInput) ? EncryptionService::decryptTransmission($emailInput) : $emailInput;
 
         $data = array_merge($request->all(), [
             'password' => $password,
@@ -108,10 +114,25 @@ class UserController extends BaseController
             'password' => 'required|string|min:6|max:32',
             'real_name' => 'required|string|max:50',
             'status' => 'in:0,1',
+            'phone' => 'string|max:20',
+            'email' => 'string|max:254',
         ]);
 
         if ($validator->fails()) {
             return $this->fail($validator->errors()->first(), 422);
+        }
+
+        $roleIds = $this->resolveRoleIds($request);
+        if ($roleIds instanceof Response) {
+            return $roleIds;
+        }
+        $adminId = (int) ($request->adminId ?? 0);
+        if ($roleIds !== null && $this->containsSuperAdminRole($roleIds) && !$this->isSuperAdmin($adminId)) {
+            return $this->fail('仅超级管理员可分配超级管理员角色', 403);
+        }
+        // 非超级管理员不能授予超出自身权限集合的角色
+        if ($roleIds !== null && !RbacService::canGrant($adminId, $roleIds)) {
+            return $this->fail('无权授予超出自身权限的角色', 403);
         }
 
         $exists = AdminUser::withTrashed()->where('username', $request->input('username'))->exists();
@@ -128,10 +149,19 @@ class UserController extends BaseController
         $user->phone = $phone;
         $user->email = $email;
         try {
-            $user->save();
+            // 用户与角色关联同一事务：角色写入失败时回滚用户，避免留下无角色账号
+            Db::connection()->transaction(function () use ($user, $roleIds): void {
+                $user->save();
+                if ($roleIds !== null) {
+                    $user->roles()->sync($roleIds);
+                }
+            });
         } catch (QueryException $e) {
-            // 并发创建同名用户时唯一索引兜底
-            return $this->fail(trans('messages.username_exists'), 422);
+            // 并发创建同名用户时唯一索引兜底；其他写入错误继续抛出
+            if (AdminUser::withTrashed()->where('username', $request->input('username'))->exists()) {
+                return $this->fail(trans('messages.username_exists'), 422);
+            }
+            throw $e;
         }
 
         $udata = $user->toArray();
@@ -157,6 +187,10 @@ class UserController extends BaseController
         $data = $user->toArray();
         unset($data['password'], $data['id_card']);
         // Encryptable cast 已自动解密，phone/email 直接为明文
+        $data['role_ids'] = $user->roles
+            ->map(fn ($role) => $this->encodeId((int) $role->id))
+            ->values()
+            ->all();
         return $this->success($this->encodeIds($data));
     }
 
@@ -172,6 +206,7 @@ class UserController extends BaseController
      * @Apidoc\Param("password", type="string", require=false, desc="新密码")
      * @Apidoc\Param("phone", type="string", require=false, desc="手机号")
      * @Apidoc\Param("email", type="string", require=false, desc="邮箱")
+     * @Apidoc\Param("role_ids", type="array", require=false, desc="角色hashid数组；仅校验本次新增角色，非超管受权限边界限制")
      */
     public function update(Request $request, string $id): Response
     {
@@ -180,6 +215,8 @@ class UserController extends BaseController
         if (!$user) {
             return $this->fail(trans('messages.user_not_found'), 404);
         }
+
+        $adminId = (int) ($request->adminId ?? 0);
 
         // 密码只解密一次，校验通过后才哈希；未提供或空密码视为不修改
         $data = $request->all();
@@ -194,26 +231,83 @@ class UserController extends BaseController
             unset($data['password']);
         }
 
+        // phone/email 解密后参与校验；null 视为不修改
+        foreach (['phone', 'email'] as $field) {
+            $raw = $request->input($field);
+            if ($raw === null) {
+                unset($data[$field]);
+                continue;
+            }
+            $data[$field] = is_string($raw) ? EncryptionService::decryptTransmission($raw) : $raw;
+        }
+
         $validator = Validator::make($data, [
             'password'  => 'string|min:6|max:32',
             'real_name' => 'string|max:50',
+            'phone'     => 'string|max:20',
+            'email'     => 'string|max:254',
             'status'    => 'in:0,1',
         ]);
         if ($validator->fails()) {
             return $this->fail($validator->errors()->first(), 422);
         }
 
-        $status = (int) $request->input('status', $user->status);
+        $statusInput = $request->input('status');
+        $status = $statusInput === null ? (int) $user->status : (int) $statusInput;
         if (!in_array($status, [0, 1], true)) {
             return $this->fail(trans('messages.invalid_status'), 422);
         }
-        if ($status !== 1 && $id === (int) ($request->adminId ?? 0)) {
+        if ($status !== 1 && $id === $adminId) {
             return $this->fail('不能禁用当前登录账号', 422);
         }
 
-        $apply = function () use ($request, $user, $id, $status, $plainPassword): Response {
-            // 最后一名超级管理员校验与写操作在同一把锁内，避免并发禁用绕过
+        $roleIds = $this->resolveRoleIds($request);
+        if ($roleIds instanceof Response) {
+            return $roleIds;
+        }
+
+        // 低权限管理员不得操作超级管理员账号，也不得分配超级管理员角色（锁内会重新校验）
+        $actorIsSuper = $this->isSuperAdmin($adminId);
+        $currentRoleIds = $this->userRoleIds($user);
+        $currentHasSuper = $this->containsSuperAdminRole($currentRoleIds);
+        $newHasSuper = $roleIds === null ? $currentHasSuper : $this->containsSuperAdminRole($roleIds);
+        $authError = $this->superAdminGuard($actorIsSuper, $currentHasSuper, $newHasSuper);
+        if ($authError !== null) {
+            return $authError;
+        }
+        // 非超级管理员不能操作持有更高权限角色的账号（改密/禁用/删除等）
+        if (!$actorIsSuper && !RbacService::canManageUser($adminId, $id)) {
+            return $this->fail('无权管理该用户', 403);
+        }
+        // 只校验本次新增的角色：保留用户原有更高角色或移除角色不受限制
+        if ($roleIds !== null && !RbacService::canGrant($adminId, array_diff($roleIds, $currentRoleIds))) {
+            return $this->fail('无权授予超出自身权限的角色', 403);
+        }
+
+        $apply = function () use ($request, $user, $id, $adminId, $status, $statusInput, $plainPassword, $roleIds, $data): Response {
+            // 锁内重新读取角色，防止并发分配使目标在上面的检查之后才成为超级管理员
+            $liveCurrentRoleIds = $this->userRoleIds($user);
+            $liveCurrentHasSuper = $this->containsSuperAdminRole($liveCurrentRoleIds);
+            $liveNewHasSuper = $roleIds === null
+                ? $liveCurrentHasSuper
+                : $this->containsSuperAdminRole($roleIds);
+            $liveActorIsSuper = $this->isSuperAdmin($adminId);
+            $authError = $this->superAdminGuard($liveActorIsSuper, $liveCurrentHasSuper, $liveNewHasSuper);
+            if ($authError !== null) {
+                return $authError;
+            }
+            if (!$liveActorIsSuper && !RbacService::canManageUser($adminId, $id)) {
+                return $this->fail('无权管理该用户', 403);
+            }
+            if ($roleIds !== null && !RbacService::canGrant($adminId, array_diff($roleIds, $liveCurrentRoleIds))) {
+                return $this->fail('无权授予超出自身权限的角色', 403);
+            }
+
+            // 最后一名启用超级管理员校验与写操作在同一把锁内，避免并发绕过
             if ($status !== 1 && $this->leavesNoSuperAdmin([$id])) {
+                return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
+            }
+            if ($liveCurrentHasSuper && !$liveNewHasSuper && $this->leavesNoSuperAdmin([$id])) {
                 return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
             }
 
@@ -222,22 +316,43 @@ class UserController extends BaseController
             if ($plainPassword !== null) {
                 $user->password = password_hash($plainPassword, PASSWORD_BCRYPT);
             }
-            if ($request->input('phone') !== null) {
-                $user->phone = EncryptionService::decryptTransmission($request->input('phone', ''));
+            // 客户端可能回传列表中的脱敏值：与当前值一致或本身就是掩码形状时视为未修改
+            if (array_key_exists('phone', $data)
+                && !self::looksMaskedPhone((string) $data['phone'])
+                && $data['phone'] !== self::maskPhone((string) $user->phone)) {
+                $user->phone = (string) $data['phone'];
             }
-            if ($request->input('email') !== null) {
-                $user->email = EncryptionService::decryptTransmission($request->input('email', ''));
+            if (array_key_exists('email', $data)
+                && !self::looksMaskedEmail((string) $data['email'])
+                && $data['email'] !== self::maskEmail((string) $user->email)) {
+                $user->email = (string) $data['email'];
             }
 
-            $user->save();
+            // 字段与角色关联同一事务：角色写入失败时回滚字段修改
+            Db::connection()->transaction(function () use ($user, $roleIds): void {
+                $user->save();
+                if ($roleIds !== null) {
+                    $user->roles()->sync($roleIds);
+                }
+            });
 
-            $data = $user->toArray();
-            unset($data['password'], $data['id_card']);
-            return $this->success($this->encodeIds($data), trans('messages.update_success'));
+            // 密码/禁用吊销会话；仅角色变更时清理权限缓存即可
+            if ($plainPassword !== null || ($statusInput !== null && $status === 0)) {
+                SessionService::revokeUser($id);
+            } elseif ($roleIds !== null) {
+                SessionService::clearPermissionCache($id);
+            }
+
+            $udata = $user->toArray();
+            // roles 关系在校验时已加载，避免以其原始 ID 混入响应
+            unset($udata['password'], $udata['id_card'], $udata['roles']);
+            return $this->success($this->encodeIds($udata), trans('messages.update_success'));
         };
 
-        // 仅禁用路径需要与超级管理员守卫串行化
-        if ($status !== 1) {
+        // 状态变化、角色变更、目标是超级管理员，或操作者不是超级管理员时，
+        // 都与角色分配/最后一名超级管理员守卫串行化（锁内会重新校验授权）
+        $statusChanged = $statusInput !== null && $status !== (int) $user->status;
+        if ($statusChanged || $roleIds !== null || $currentHasSuper || !$actorIsSuper) {
             return $this->withSuperAdminLock($apply) ?? $this->serviceBusyResponse();
         }
         return $apply();
@@ -260,16 +375,31 @@ class UserController extends BaseController
             return $this->fail(trans('messages.user_not_found'), 404);
         }
 
-        $adminId = $request->adminId ?? 0;
-        if ((int) $id === (int) $adminId) {
+        $adminId = (int) ($request->adminId ?? 0);
+        if ($id === $adminId) {
             return $this->fail('不能删除当前登录账号', 422);
+        }
+        $actorIsSuper = $this->isSuperAdmin($adminId);
+        if (!$actorIsSuper && $this->hasSuperAdminRoleOnUsers([$id])) {
+            return $this->fail('仅超级管理员可删除超级管理员账号', 403);
+        }
+        if (!$actorIsSuper && !RbacService::canManageUser($adminId, $id)) {
+            return $this->fail('无权管理该用户', 403);
         }
         $error = $this->confirmPassword($adminId, $request->input('password', ''), $request);
         if ($error !== null) {
             return $this->fail($error, 422);
         }
 
-        return $this->withSuperAdminLock(function () use ($id, $user): Response {
+        return $this->withSuperAdminLock(function () use ($id, $user, $adminId): Response {
+            // 锁内复核：并发角色分配可能刚把目标提升为超级管理员
+            $liveActorIsSuper = $this->isSuperAdmin($adminId);
+            if (!$liveActorIsSuper && $this->hasSuperAdminRoleOnUsers([$id])) {
+                return $this->fail('仅超级管理员可删除超级管理员账号', 403);
+            }
+            if (!$liveActorIsSuper && !RbacService::canManageUser($adminId, $id)) {
+                return $this->fail('无权管理该用户', 403);
+            }
             if ($this->leavesNoSuperAdmin([$id])) {
                 return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
             }
@@ -279,6 +409,7 @@ class UserController extends BaseController
             $user->username = mb_substr($user->username, 0, max(0, 50 - mb_strlen($suffix))) . $suffix;
             $user->save();
             $user->delete();
+            SessionService::revokeUser($id);
             return $this->success([], trans('messages.delete_success'));
         }) ?? $this->serviceBusyResponse();
     }
@@ -320,11 +451,27 @@ class UserController extends BaseController
             return $this->fail(trans('messages.invalid_ids') . ': ' . implode(', ', $invalidIds), 422);
         }
 
-        if (in_array((int) $adminId, $decodedIds, true)) {
+        $actorId = (int) $adminId;
+        if (in_array($actorId, $decodedIds, true)) {
             return $this->fail('不能删除当前登录账号', 422);
         }
+        $actorIsSuper = $this->isSuperAdmin($actorId);
+        if (!$actorIsSuper && $this->hasSuperAdminRoleOnUsers($decodedIds)) {
+            return $this->fail('仅超级管理员可删除超级管理员账号', 403);
+        }
+        if (!$actorIsSuper && !$this->canManageUsers($actorId, $decodedIds)) {
+            return $this->fail('无权管理该用户', 403);
+        }
 
-        return $this->withSuperAdminLock(function () use ($decodedIds): Response {
+        return $this->withSuperAdminLock(function () use ($decodedIds, $actorId): Response {
+            // 锁内复核：并发角色分配可能刚把目标提升为超级管理员
+            $liveActorIsSuper = $this->isSuperAdmin($actorId);
+            if (!$liveActorIsSuper && $this->hasSuperAdminRoleOnUsers($decodedIds)) {
+                return $this->fail('仅超级管理员可删除超级管理员账号', 403);
+            }
+            if (!$liveActorIsSuper && !$this->canManageUsers($actorId, $decodedIds)) {
+                return $this->fail('无权管理该用户', 403);
+            }
             if ($this->leavesNoSuperAdmin($decodedIds)) {
                 return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
             }
@@ -334,6 +481,7 @@ class UserController extends BaseController
                 $user->username = mb_substr($user->username, 0, max(0, 50 - mb_strlen($suffix))) . $suffix;
                 $user->save();
                 $user->delete();
+                SessionService::revokeUser((int) $user->id);
             }
 
             return $this->success(['count' => count($decodedIds)], '删除成功');
@@ -379,22 +527,174 @@ class UserController extends BaseController
         if (in_array($adminId, $decodedIds, true)) {
             return $this->fail('不能修改当前登录账号的状态', 422);
         }
+        $actorIsSuper = $this->isSuperAdmin($adminId);
+        if (!$actorIsSuper && $this->hasSuperAdminRoleOnUsers($decodedIds)) {
+            return $this->fail('仅超级管理员可修改超级管理员账号', 403);
+        }
+        if (!$actorIsSuper && !$this->canManageUsers($adminId, $decodedIds)) {
+            return $this->fail('无权管理该用户', 403);
+        }
 
         $message = $status === 1 ? trans('messages.batch_enable_success') : trans('messages.batch_disable_success');
 
-        // 仅禁用路径需要与超级管理员守卫串行化
-        if ($status === 0) {
-            return $this->withSuperAdminLock(function () use ($decodedIds, $message): Response {
+        // 启用/禁用都与角色分配与最后一名超级管理员守卫串行化
+        return $this->withSuperAdminLock(function () use ($decodedIds, $status, $message, $adminId): Response {
+            // 锁内复核：并发角色分配可能刚把目标提升为超级管理员
+            $liveActorIsSuper = $this->isSuperAdmin($adminId);
+            if (!$liveActorIsSuper && $this->hasSuperAdminRoleOnUsers($decodedIds)) {
+                return $this->fail('仅超级管理员可修改超级管理员账号', 403);
+            }
+            if (!$liveActorIsSuper && !$this->canManageUsers($adminId, $decodedIds)) {
+                return $this->fail('无权管理该用户', 403);
+            }
+            if ($status === 0) {
                 if ($this->leavesNoSuperAdmin($decodedIds)) {
                     return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
                 }
                 AdminUser::whereIn('id', $decodedIds)->update(['status' => 0]);
-                return $this->success(['count' => count($decodedIds)], $message);
-            }) ?? $this->serviceBusyResponse();
+                foreach ($decodedIds as $uid) {
+                    SessionService::revokeUser((int) $uid);
+                }
+            } else {
+                AdminUser::whereIn('id', $decodedIds)->update(['status' => 1]);
+            }
+            return $this->success(['count' => count($decodedIds)], $message);
+        }) ?? $this->serviceBusyResponse();
+    }
+
+    /**
+     * 解码 role_ids（hashid 数组）；无效或不存在的角色返回 422 响应，未提交返回 null
+     *
+     * @return int[]|Response|null
+     */
+    private function resolveRoleIds(Request $request): array|Response|null
+    {
+        $input = $request->input('role_ids');
+        if ($input === null) {
+            return null;
+        }
+        if (!is_array($input)) {
+            return $this->fail(trans('messages.invalid_ids'), 422);
         }
 
-        AdminUser::whereIn('id', $decodedIds)->update(['status' => $status]);
-        return $this->success(['count' => count($decodedIds)], $message);
+        $ids = [];
+        foreach ($input as $hashid) {
+            if (!is_string($hashid)) {
+                return $this->fail(trans('messages.invalid_ids'), 422);
+            }
+            try {
+                $ids[] = $this->decodeId($hashid);
+            } catch (\InvalidArgumentException $e) {
+                return $this->fail(trans('messages.invalid_ids'), 422);
+            }
+        }
+
+        $ids = array_values(array_unique($ids));
+        if ($ids !== [] && AdminRole::whereIn('id', $ids)->count() !== count($ids)) {
+            return $this->fail(trans('messages.invalid_ids'), 422);
+        }
+        return $ids;
+    }
+
+    /**
+     * 读取用户当前角色 ID（直接查库，不使用可能过期的关系缓存）
+     *
+     * @return int[]
+     */
+    private function userRoleIds(AdminUser $user): array
+    {
+        return $user->roles()->get()->map(static fn ($role) => (int) $role->id)->all();
+    }
+
+    /**
+     * 角色 ID 中是否包含超级管理员角色
+     */
+    private function containsSuperAdminRole(array $roleIds): bool
+    {
+        return $roleIds !== []
+            && AdminRole::whereIn('id', $roleIds)->where('slug', 'super_admin')->exists();
+    }
+
+    /**
+     * 超级管理员操作授权：低权限管理员不得操作超级管理员账号或分配该角色
+     */
+    private function superAdminGuard(bool $actorIsSuper, bool $currentHasSuper, bool $newHasSuper): ?Response
+    {
+        if (($currentHasSuper || $newHasSuper) && !$actorIsSuper) {
+            return $this->fail(
+                $currentHasSuper ? '仅超级管理员可修改超级管理员账号' : '仅超级管理员可分配超级管理员角色',
+                403
+            );
+        }
+        return null;
+    }
+
+    /**
+     * 给定用户中是否有人拥有超级管理员角色
+     */
+    private function hasSuperAdminRoleOnUsers(array $userIds): bool
+    {
+        return AdminUser::whereIn('id', $userIds)
+            ->whereHas('roles', static fn ($query) => $query->where('slug', 'super_admin'))
+            ->exists();
+    }
+
+    /**
+     * 操作者能否管理全部目标账号（任一目标权限高于操作者即拒绝）
+     *
+     * @param int[] $targetIds
+     */
+    private function canManageUsers(int $adminId, array $targetIds): bool
+    {
+        foreach ($targetIds as $targetId) {
+            if (!RbacService::canManageUser($adminId, (int) $targetId)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 当前登录管理员是否为启用的超级管理员
+     */
+    private function isSuperAdmin(int $adminId): bool
+    {
+        return $adminId > 0 && AdminUser::where('id', $adminId)
+            ->whereHas('roles', static fn ($query) => $query->where('slug', 'super_admin')->where('status', 1))
+            ->exists();
+    }
+
+    /**
+     * 手机号脱敏（与列表接口保持一致，用于识别客户端回传的脱敏值）
+     */
+    private static function maskPhone(string $phone): string
+    {
+        return preg_replace('/^(\d{3})\d+(\d{4})$/', '$1****$2', $phone) ?? $phone;
+    }
+
+    /**
+     * 邮箱脱敏（与列表接口保持一致，用于识别客户端回传的脱敏值）
+     */
+    private static function maskEmail(string $email): string
+    {
+        $parts = explode('@', $email);
+        return mb_substr($parts[0], 0, 1) . '***@' . ($parts[1] ?? '');
+    }
+
+    /**
+     * 是否为手机号掩码形状（客户端列表脱敏值，可能已过期）
+     */
+    private static function looksMaskedPhone(string $phone): bool
+    {
+        return preg_match('/^\d{3}\*{4}\d{4}$/', $phone) === 1;
+    }
+
+    /**
+     * 是否为邮箱掩码形状（客户端列表脱敏值，可能已过期）
+     */
+    private static function looksMaskedEmail(string $email): bool
+    {
+        return preg_match('/^[^@\s]?\*{3}@[^@\s]*$/', $email) === 1;
     }
 
     /**

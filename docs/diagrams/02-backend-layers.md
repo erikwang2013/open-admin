@@ -26,6 +26,8 @@ flowchart TD
         s1["HashidsService<br/>ID编解码"]
         s2["SnowflakeService<br/>全局ID生成"]
         s3["EncryptionService<br/>加解密+脱敏"]
+        s4["SessionService<br/>会话吊销+缓存清理"]
+        s5["RbacService<br/>授权边界"]
     end
 
     subgraph model["模型层"]
@@ -45,10 +47,11 @@ flowchart TD
     m2 --> user & role & perm & dash & export
     m1 --> captcha & auth
     base -.->|extends| user & role & perm & dash & export
-    user & role & perm & dash & export & captcha & auth --> s1 & s2 & s3
+    user & role & perm & dash & export & captcha & auth --> s1 & s2 & s3 & s4 & s5
     user & role & perm & dash & export & captcha & auth --> md1 & md2 & md3 & md4 & md5
     md1 & md2 & md3 & md4 & md5 --> d1
     captcha --> d3
+    s4 --> d3
 
     style r1 fill:#722ED1,color:#fff
     style m1 fill:#FA8C16,color:#fff
@@ -57,4 +60,6 @@ flowchart TD
     style s1 fill:#52C41A,color:#fff
     style s2 fill:#52C41A,color:#fff
     style s3 fill:#52C41A,color:#fff
+    style s4 fill:#52C41A,color:#fff
+    style s5 fill:#52C41A,color:#fff
 ```

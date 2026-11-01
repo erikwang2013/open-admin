@@ -18,13 +18,13 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 
 | Domain | Feature |
 |----|------|
-| Authentication | Login/Refresh/Logout + click CAPTCHA + account lockout + session limit + refresh rotation with 60s grace and rotation lock |
+| Authentication | Login/Refresh/Logout + click CAPTCHA (marker consumed atomically) + account lockout + session limit + refresh rotation with 60s grace and rotation lock; placeholder bcrypt for unknown users at valid password lengths |
 | Dashboard | Real-time stats/trends/distribution/logs (Redis 5m cache) |
-| Users | CRUD + batch delete/enable-disable + Excel import (5MB/2000-row cap, ZIP-expansion guard) |
-| Roles & Permissions | CRUD + permission tree + RBAC method.path authorization |
+| Users | CRUD + batch delete/enable-disable + role assignment + Excel import (5MB/2000-row/32,000-cell guards, HTTP 409 when an import is running) |
+| Roles & Permissions | CRUD + permission tree + RBAC method.path authorization + assignable-role options + permission-subset boundary |
 | System Config | Key-value CRUD |
-| Operation Audit | Log query + automatic detection of 8 platform client sources |
-| Files | Upload + Excel/PDF export (sensitive data masking; HTTP 422 above 5000 rows) |
+| Operation Audit | Log query + automatic detection of 8 platform client sources + recursive PII masking of request bodies |
+| Files | Upload + Excel/PDF export (sensitive data masking, formula-injection protection; HTTP 422 above 5000 rows) |
 | Security | 18-layer defense in depth (XSS/SQL injection/CSRF/rate limiting/CSP..., Redis fail-closed) |
 | Operations | Health check/Prometheus metrics/API docs (incl. /apidoc/)/security.txt + Docker + CI/CD |
 
@@ -84,7 +84,9 @@ open-admin/
 │   ├── common/                 # Common utilities
 │   │   ├── HashidsService.php
 │   │   ├── SnowflakeService.php
-│   │   └── EncryptionService.php
+│   │   ├── EncryptionService.php
+│   │   ├── SessionService.php  # Session revocation + permission-cache clearing
+│   │   └── RbacService.php     # RBAC authorization boundaries
 │   ├── common/                 # Common definitions (incl. Apidoc Definitions)
 │   ├── middleware/             # Middleware (7)
 │   │   ├── Cors.php            # CORS (global)
@@ -174,9 +176,13 @@ open-admin/
 - **Attack detection**: erikwang2013/security-php package (31 detectors: XSS/SQL injection/command injection/path traversal/SSRF/XXE/JNDI/deserialization/JWT attacks/CSRF/sensitive data leakage, etc. + HTTP method validation/request body size limit/Content-Type validation + IP attack escalation blacklist)
 - **CSP header**: Content-Security-Policy + X-Permitted-Cross-Domain-Policies injected into all responses; `/open-admin/`, `/open-admin/en/` and `/apidoc/` also get dedicated CSPs in Nginx (same-origin default, inline scripts allowed, busuanzi allowed on the site, frames and cross-origin forms denied)
 - **Account lockout**: after 5 consecutive failed logins the account is locked for 15 minutes; existing users use `account_lock:u:<userId>` / `login_fail:u:<userId>`, unknown usernames use `account_lock:n:<md5(lower(trim(username)))>` / `login_fail:n:<same>`, all keys have a 900-second TTL, and case/whitespace variants share the counter; `AuthController::lockKeys()` is the single source
+- **Login timing and CAPTCHA**: the verified marker is consumed atomically with `Redis::del("captcha_verified:<key>") === 1`, so only one concurrent/replayed login succeeds; when the password length is valid, `password_verify` always runs, against a fixed cost-10 dummy bcrypt hash for unknown users or empty hashes, removing the timing oracle
 - **Concurrent session limit**: at most 3 valid tokens per user (`user_tokens:<userId>` ZSET, member md5(token), score expiry time); the oldest token is blacklisted when exceeded
-- **Refresh rotation**: after a refresh token is exchanged, the old token is blacklisted; replaying the old token within a 60-second grace window returns the same token pair. Rotation is serialized by `refresh_lock:<md5>` (`SET NX EX 5` + Lua release); a blacklisted cached token deletes the cache and returns 401, and a concurrent cache miss returns 409. Logout and password changes blacklist cached pairs and clear `user_refresh_rotations:<userId>`; HarmonyOS issues only one refresh for concurrent 401s
-- **Super admin protection**: cannot delete the current account or change its status; at least one enabled super admin must remain; the `super_admin` role cannot be edited/deleted. The last-super-admin check and write are serialized by the MySQL named lock `open_admin:last_super_admin` (`GET_LOCK` 3s / released in `finally`), covering delete, batch delete, batch disable and update-disable; a timeout or database error returns 503
+- **Session revocation**: `SessionService::revokeUser()` writes the `user_pwd_changed:<id>` watermark (TTL = refresh TTL + 60), blacklists every member of the `user_tokens` / `user_refresh_tokens` ZSETs with its remaining TTL under `jwt_blacklist:<md5>`, deletes both ZSETs, and clears `user_refresh_rotations:<id>` rotation caches and the `perm:<id>` permission cache. It runs on self-service password change, admin password reset, disable, delete, batch delete and batch disable; enable and ordinary edits do not revoke
+- **Refresh rotation**: after a refresh token is exchanged, the old token is blacklisted; replaying the old token within a 60-second grace window returns the same token pair. Rotation is serialized by `refresh_lock:<md5>` (`SET NX EX 5` + Lua release); a blacklisted cached token deletes the cache and returns 401, and a concurrent cache miss returns 409. Logout blacklists cached pairs and clears `user_refresh_rotations:<userId>`; the refresh endpoint rejects tokens whose `iat` predates the `user_pwd_changed` watermark; HarmonyOS issues only one refresh for concurrent 401s
+- **Super admin protection**: cannot delete the current account or change its status; at least one enabled super admin must remain; the `super_admin` role cannot be edited/deleted; an enabled `super_admin` role yields the wildcard permission `['*']` in `AdminPermission`/`RbacService`. The last-super-admin check and write are serialized by the MySQL named lock `open_admin:last_super_admin` (`GET_LOCK` 3s / released in `finally`), covering delete, batch delete, update-disable, batch enable/disable and role changes; a timeout or database error returns 503
+- **Role assignment boundary**: non-super admins may grant only roles whose permissions are a subset of their own (`RbacService::canGrant`; disabled roles' permission rows are evaluated too) and may manage only accounts whose permissions do not exceed theirs (`canManageUser`); they cannot assign `super_admin` or operate on super-admin targets. Authorization is re-checked inside the named lock against freshly read roles
+- **Confirmation throttle**: `BaseController::confirmPassword` tracks `pwd_confirm_fail:<adminId>` per admin; 5 failures in 300 seconds block further confirmation until the window passes, and success clears the counter. Redis errors do not break the confirmation flow
 - **Redis fail-closed**: authentication and rate limiting for `/api/` and `/admin/` return 503 when Redis is unavailable (health checks, metrics and other non-API routes pass through)
 - **security.txt**: `/.well-known/security.txt` RFC 9116 endpoint
 - **Nginx security config**: `docs/nginx-security.conf` reverse-proxy hardening reference; static assets repeat security headers in their own location, and CI validates with `nginx -t`
@@ -210,9 +216,12 @@ Redis sliding window (Lua atomic), default 60 req/min/IP/route:
 - **Redis is accessed via the `support\Redis` utility class** (singleton connection pool, automatically reads the `REDIS_HOST/PORT/PASSWORD/DB` environment variables); all keys are automatically prefixed (default `open-admin:`, configurable via the `REDIS_PREFIX` environment variable)
 - **Route permissions**: routes in the `/admin` group require `method.path`-style permissions (e.g. `get.admin/dashboard`); routes needing no permission check are placed outside the group with only the `AdminAuth` middleware
 - **CORS**: when adding request headers, update the `Cors.php` middleware and the `Access-Control-Allow-Headers` fallback in `route.php` accordingly
-- **Super admin protection**: the `update`/`destroy` methods of `RoleController` are forbidden from operating on roles with `slug == 'super_admin'`; `UserController` forbids deleting the current account or changing its status, and at least one enabled super admin must remain; the last-super-admin check must run through `withSuperAdminLock()` so it shares the MySQL named lock with the write
-- **User update validation**: `UserController::update` decrypts the transport password before validating; when a password is provided it must be 6-32 plaintext characters, `real_name` is at most 50 characters, and `status` must be exactly 0 or 1
-- **Import protection**: `ImportController` caps files at 5MB and data at 2,000 rows; before loading the workbook it checks that `.xlsx` entries under `xl/**.xml` expand to no more than 8MB and that the total worksheet cell count is at most 32,000, and corrupt/unparseable workbooks return 422 without leaking exception internals
+- **Super admin protection**: the `update`/`destroy` methods of `RoleController` are forbidden from operating on roles with `slug == 'super_admin'`; `UserController` forbids deleting the current account or changing its status, and at least one enabled super admin must remain; non-super admins cannot assign `super_admin`, operate on super-admin targets, or manage users with higher permissions; the last-super-admin check and role-grant authorization must run through `withSuperAdminLock()` so they share the MySQL named lock with the write and re-read roles inside it
+- **User update validation**: `UserController` / `ProfileController` decrypt the transport password, phone and email before validating; passwords are 6-32 plaintext characters, `real_name` at most 50, `phone` at most 20, `email` at most 254, and `status` exactly 0 or 1. Masked list values (`138****1234`, `a***@domain`) submitted by clients are treated as unchanged, and mask-shaped values are always skipped so they cannot overwrite stored data
+- **Import protection**: `ImportController` caps files at 5MB and data at 2,000 rows; every row is validated (username 3-50, password 6-32, required real_name ≤50, phone ≤20, email ≤254, status ∈ {0,1}) with generic failure reasons and server-side exception logging; before loading the workbook it checks that `.xlsx` entries under `xl/**.xml` expand to no more than 8MB and stream-counts all worksheet cells to at most 32,000; for both `.xls` and `.xlsx`, `listWorksheetInfo` pre-checks every sheet and rejects any sheet over 2,001 rows or with `totalRows * totalColumns` above 32,000, and corrupt/unparseable workbooks return 422 without leaking exception internals
+- **Import lock and roles**: the Redis `import_users_lock` (`SET NX EX 1800`, Lua compare-and-delete release) serializes the whole import, returning 409 when busy and degrading to an unlocked import when Redis is down; optional `role_ids` pass through `RbacService::canGrant`, and each user row plus role sync run in one transaction that rolls back on failure. Imports still hash every row with bcrypt, so the lock prevents concurrent imports from stacking CPU load
+- **Export protection**: `ExportController` writes data cells with `setValueExplicit(..., DataType::TYPE_STRING)` to block `= + - @` formula injection; `conditions` must be an array whose keys belong to the export columns and whose values are scalar, otherwise 422; the border style is applied once to the data range, and 5000 rows × 9 columns peak around 65MiB under a 128M limit
+- **Log masking**: `OperationLog::filterSensitive` recursively masks request bodies; `password`/`token`/`secret` and similar keys become `***`, and `phone`/`email`/`id_card`/`mobile`/`address` are masked as well
 - webman converts PHP warnings into exceptions; undefined properties/variables cause 500 errors
 
 ### Database
@@ -230,6 +239,7 @@ Redis sliding window (Lua atomic), default 60 req/min/IP/route:
 - **DataTables must be wrapped in `SingleChildScrollView(scrollDirection: Axis.horizontal)`** to prevent column overflow
 - Standalone pages (e.g. ProfilePage) must include a `Scaffold`, otherwise Material widgets like `TextField` throw "No Material widget found"
 - When the sidebar expands/collapses, use `_showCollapsedContent` to delay content switching, avoiding RenderFlex overflow during animation
+- The user edit form must first request `GET /admin/user/{id}` for the full phone/email/status/`role_ids`; never reuse masked list values. Role multi-select options come from `GET /admin/role/options`; require at least one role on create and allow none on edit (legacy zero-role users)
 
 ### HarmonyOS
 - Uses the `@ohos.net.http` native HTTP client
@@ -268,7 +278,8 @@ docker compose up -d --build
 - Logs: Nginx and MySQL write to stdout/stderr and Docker rotates at `10m × 3`; use `docker compose logs -f app`. Host persistent directories: `deploy/data/{mysql,redis,runtime,upload,backups}`.
 - Resource limits: `deploy/docker-compose.yml` sets CPU/memory/pids limits per service (app 1.0/512M/256, init 0.5/256M/128, mysql 1.5/768M/512, redis 0.5/384M/128, nginx 0.5/128M/128, backup 0.5/256M/128). The Redis container's 384M pairs with `redis-server --maxmemory 256mb`, leaving 128M for AOF rewrite/fork, client buffers and fragmentation; change both values together.
 - Automatic backup: the `backup` service runs `mysqldump` daily as the least-privilege `backup_reader` user (read-only on the application database plus `DELETE` on `erik_operation_log`) into `deploy/data/backups`, and archives `deploy/data/upload` as tar; backups are retained for 30 days and operation logs older than 180 days are purged daily.
-- Log cleanup: `config/process.php` registers a non-listening `log-cleanup` process (`count=1`) that performs a best-effort cleanup on startup and then daily deletes `operation_log` rows older than 180 days in 10,000-row batches; it and the backup-service cleanup are fallbacks for each other.
+- Log cleanup: `config/process.php` registers a non-listening `log-cleanup` process (`count=1`) that performs a best-effort cleanup on startup and then daily deletes `operation_log` rows older than 180 days in 10,000-row batches, up to 10 batches (100,000 rows) per run; it and the backup-service cleanup are fallbacks for each other.
+- Startup order: in `deploy/docker-compose.yml`, `nginx` waits for the app health check via `depends_on.app.condition: service_healthy`, avoiding 502s during startup.
 - Offsite backup: backups stay on the DB host disk by default; host cron calls `deploy/offsite-sync.sh`, which reads `OFFSITE_TARGET` from `deploy/.env` and supports rsync (`user@host:/path/`) and rclone (`rclone:remote:path`), refusing an unset target or empty backup directory.
 - RSA public key: `GET /api/v1/auth/public-key` returns the current public key. Flutter fetches it before login and falls back to the embedded key on failure; after `--regenerate` rotates the keypair, verify the endpoint is reachable and rebuild clients that rely on the embedded fallback.
 
@@ -277,7 +288,7 @@ docker compose up -d --build
 `.github/workflows/ci.yml` defines the GitHub Actions pipeline:
 
 - PHP syntax check (`php -l`)
-- PHPUnit unit tests (including `tests/LockKeyTest.php`, `tests/RefreshRotationCacheTest.php` and `tests/ProcessConfigTest.php`)
+- PHPUnit unit tests (37 tests / 81 assertions, including `LockKeyTest`, `RefreshRotationCacheTest`, `ProcessConfigTest`, `SessionServiceTest`, `OperationLogFilterTest`, `UserMaskHelperTest` and `ImportSizeGuardTest`)
 - Flutter static analysis (`flutter analyze`)
 - Docker image build and runtime dependency checks (`php -m` for redis/zip/gd, `gd_info` for FreeType/JPEG)
 - Compose/Nginx config validation: root compose, a temporary `deploy/` compose, and `nginx -t` for both Nginx configs

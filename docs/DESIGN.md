@@ -264,22 +264,24 @@ curl http://localhost:8791/api/v2/auth/login
   │                                    │
   │  ② 用户点击图中文字位置              │
   │                                    │
-  │  ③ POST /api/v1/auth/login           │
-  │     {username, password,          │
-  │      captcha_key, clicks}         │
-  │────────────────────────────────►  │
-  │                                    │ ① captcha_verify()
-  │                                    │ ② password_verify()
-  │                                    │ ③ jwt()->create()
+  │  ③ POST /api/v1/captcha/verify       │ captcha_verify()
+  │     {key, type, clicks}           │ 成功 → SET captcha_verified:{key}
+  │◄── {valid: true}                  │        TTL 300s
+  │                                    │
+  │  ④ POST /api/v1/auth/login           │ 原子 DEL captcha_verified:{key}
+  │     {username, password,          │ 返回 1 才继续（并发仅一次成功）
+  │      captcha_key}                 │ 长度合法后 password_verify()（未知用户
+  │────────────────────────────────►  │ 用固定 cost-10 占位哈希抹平时间差）
+  │                                    │ jwt()->create()
   │◄── {access_token, refresh_token}  │
   │                                    │
-  │  ④ GET /admin/dashboard           │
+  │  ⑤ GET /admin/dashboard           │
   │     Authorization: Bearer xxx     │
   │────────────────────────────────►  │ AdminAuth → AdminPermission
   │◄── 200 {dashboard data}           │
 ```
 
-刷新：`POST /api/v1/auth/refresh` 轮换令牌对，旧 refresh_token 立即拉黑，并以 `refresh_rotation:<md5>` 缓存新令牌对 60 秒；宽限期内重复提交旧令牌返回同一对令牌。并发轮换由 `refresh_lock:<md5>`（`SET NX EX 5` + Lua 释放）串行化，并发未命中返回 409；缓存令牌被拉黑时删除缓存并返回 401。密码修改清除轮换缓存，登出拉黑缓存令牌并按 `user_refresh_rotations:<userId>` 清理；HarmonyOS 客户端并发 401 单飞刷新。
+刷新：`POST /api/v1/auth/refresh` 轮换令牌对，旧 refresh_token 立即拉黑，并以 `refresh_rotation:<md5>` 缓存新令牌对 60 秒；宽限期内重复提交旧令牌返回同一对令牌。并发轮换由 `refresh_lock:<md5>`（`SET NX EX 5` + Lua 释放）串行化，并发未命中返回 409；缓存令牌被拉黑时删除缓存并返回 401。刷新前校验密码变更水位 `user_pwd_changed:<userId>`。改密、禁用、删除、批量禁用/删除由 `SessionService::revokeUser()` 写入水位、拉黑访问/刷新令牌并清理轮换缓存与权限缓存；角色变化只清权限缓存。登出拉黑缓存令牌并按 `user_refresh_rotations:<userId>` 清理；HarmonyOS 客户端并发 401 单飞刷新。
 
 ### 4.6 权限模型 (RBAC)
 
@@ -293,14 +295,16 @@ curl http://localhost:8791/api/v2/auth/login
 
   权限标识格式: {method}.{path}
   例: get.admin/user  post.admin/user  delete.admin/user
-  超级管理员标识: * (跳过所有权限检查)
+  超级管理员: 持有启用 super_admin 角色 → RbacService 返回 ['*']（跳过权限检查）
 ```
 
-超级管理员保护：不能删除当前登录账号或修改其状态；删除/禁用后必须至少保留一名启用的超管（否则 422）。校验与写操作由 MySQL 命名锁 `open_admin:last_super_admin`（`GET_LOCK` 3 秒 / `finally` 释放）串行化，覆盖删除、批量删除、批量禁用与更新禁用，超时或数据库异常返回 503；内置 `super_admin` 角色禁止编辑/删除（403）。
+授权边界：非超管分配角色时，所授角色（含禁用角色）的全部权限必须是自身权限子集，且不能分配 `super_admin`；管理用户时目标持有的所有角色（含禁用）都必须可授予，否则 403。`GET /admin/role/options` 仅返回当前管理员可分配的启用角色。
+
+超级管理员保护：不能删除当前登录账号或修改其状态；非超管不能修改/禁用/删除超管目标或分配 `super_admin`。删除/禁用/角色变更后必须至少保留一名启用的超管（否则 422）。校验与写操作由 MySQL 命名锁 `open_admin:last_super_admin`（`GET_LOCK` 3 秒 / `finally` 释放）串行化，覆盖更新（状态/角色）、删除、批量删除与批量启用/禁用，锁内重新读取目标角色并复核边界，超时或数据库异常返回 503；内置 `super_admin` 角色禁止编辑/删除（403）。
 
 ### 4.7 敏感操作二次确认
 
-删除用户、角色、权限等敏感操作，需要在请求体中传入当前用户密码进行身份复核：
+删除用户、角色、权限、配置及批量删除等敏感操作，需要在请求体中传入当前用户密码进行身份复核。失败计数 `pwd_confirm_fail:<id>` 为 5 次/300 秒，超过后 5 分钟内拒绝确认：
 
 ```
 客户端                           服务端
@@ -360,23 +364,26 @@ curl http://localhost:8791/api/v2/auth/login
 |------|------|
 | 方法限制 | SecurityFilter HTTP 方法白名单，仅允许 GET/POST/PUT/DELETE/OPTIONS/HEAD，非标准方法返回 405 |
 | 攻击拦截 | SecurityFilter 中间件，XSS/SQL注入/路径遍历/命令注入/CSRF 检测拦截 |
-| 人机验证 | 点击验证码（Click Captcha），登录强制校验 |
+| 人机验证 | 点击验证码（Click Captcha），登录强制校验；标记原子 `DEL` 消费，并发仅一次成功 |
 | 账号锁定 | 连续 5 次登录失败锁定账号 15 分钟，锁定期间返回 429 |
+| 登录计时 | 密码长度合法时始终执行 bcrypt；未知用户/空哈希使用固定 cost-10 占位哈希，抹平账号枚举时间差 |
 | 会话限制 | 同一用户最多 3 个并发 Token，超出时最旧 Token 自动黑名单 |
+| 会话吊销 | 改密/禁用/删除/批量禁用删除：水位线 + 访问/刷新令牌黑名单 + 轮换缓存/权限缓存清理 |
 | 限流 | RateLimit 中间件，Redis 滑动窗口，Lua 原子化；Redis 故障时 `/api/`、`/admin/` 失败关闭（503） |
 | 鉴权降级 | AdminAuth 黑名单读取失败返回 503，不放行可能已登出的 Token |
-| 超管保护 | 不能操作当前账号；删除/禁用保留至少一名启用的超级管理员；内置超管角色禁改删 |
-| 导入导出 | 导入 5MB / 2000 行（加载前拒绝超大工作表）；导出 5000 行，超出 HTTP 422 |
+| 超管保护 | 不能操作当前账号；非超管不能分配/操作超管；删除/禁用/角色变更保留至少一名启用的超级管理员；内置超管角色禁改删 |
+| 授权边界 | 角色授予与目标管理按权限子集校验，禁用角色同样参与；`/admin/role/options` 只返回可分配角色 |
+| 导入导出 | 导入 5MB / 2000 行 / 32000 单元格 / ZIP 8MB 预检 / Redis 锁 409 / 逐行事务；导出 5000 行，条件标量校验，单元格统一文本写入防公式注入 |
 | CSP | Content-Security-Policy 头限制资源来源，防 XSS 与数据注入 |
-| 操作确认 | 删除等敏感操作需输入当前用户密码二次确认 |
-| 传输 | HTTPS + JWT Bearer Token |
+| 操作确认 | 删除等敏感操作需输入当前用户密码二次确认，失败 5 次/300 秒限速 |
+| 传输 | HTTPS + JWT Bearer Token；登录密码 RSA-2048（AES/明文兼容回退） |
 | 接口ID | Hashids 加密，外部不可逆推真实 ID |
 | 请求体 | AES-256-CBC 敏感字段加密 |
 | 数据库 | BIGINT 主键（不暴露自增量） |
-| 数据库 | AES-128-ECB 敏感字段加密存储 |
-| 认证 | JWT HS256，2h 过期 + refresh token |
-| 授权 | RBAC，method.path 粒度权限控制 |
-| 审计 | OperationLog 记录所有操作（含来源端 source 自动检测） |
+| 数据库 | Encryptable 敏感字段加密存储 |
+| 认证 | JWT HS256，2h 过期 + refresh token 14d，刷新轮换 60 秒宽限 |
+| 授权 | RBAC，method.path 粒度权限控制；启用 super_admin 通配 `*` |
+| 审计 | OperationLog 记录所有操作（含来源端 source 自动检测），手机号/邮箱/身份证等 PII 递归脱敏 |
 
 ### 6.2 密钥管理
 
@@ -385,6 +392,7 @@ JWT_SECRET_KEY      → 环境变量注入，64位随机字符串
 HASHIDS_SALT        → 唯一盐值，泄漏后需全局更换
 ENCRYPTION_KEY      → API 传输加密密钥，32字节
 ENCRYPTABLE_KEY     → DB 存储加密密钥，与传输密钥独立
+RSA_PRIVATE_KEY     → 登录密码传输公钥对应的私钥（deploy 脚本自动生成）
 ```
 
 ### 6.3 敏感数据保护
@@ -404,14 +412,18 @@ ENCRYPTABLE_KEY     → DB 存储加密密钥，与传输密钥独立
 
 ```
 请求: POST /admin/export/excel { table, columns, conditions, title }
+  → 校验 conditions：对象、已知列、标量值，否则 HTTP 422
   → fetchExportData() 查询数据 (LIMIT 5001 探测)
   → 超过 5000 行 → HTTP 422（不生成文件）
   → 脱敏敏感字段
-  → PhpSpreadsheet 构建（蓝底白字表头 + 冻结首行 + 自动筛选）
+  → PhpSpreadsheet 构建（setValueExplicit TYPE_STRING 防公式注入，
+    蓝底白字表头 + 边框只写一次 + 冻结首行 + 自动筛选）
   → 写入 runtime/tmp/ → download 响应
 ```
 
-导入：`POST /admin/import/users` 限制 5MB；`ImportController` 在 `IOFactory::load()` 前用 `createReaderForFile` + `setReadDataOnly(true)` + `listWorksheetInfo()` 检查所有工作表，任一工作表超过 2001 行立即返回 422；加载后再用 `getHighestDataRow()` 复核，数据行最多 2000 行。
+5000 行 × 9 列在 128M 工作进程下实测约占 65MiB，已接近安全上限，行数与列数上限不应同时提高。
+
+导入：`POST /admin/import/users` 限制 5MB、2000 行、32000 单元格，可统一分配 `role_ids`。整批任务由 Redis 锁 `import_users_lock`（`SET NX EX 1800`）串行化，已有任务返回 409。`.xlsx` 先做 ZIP 解压预检（`xl/**.xml` > 8MB 或单元格 > 32000 返回 422）；`ImportController` 在 `IOFactory::load()` 前用 `createReaderForFile` + `setReadDataOnly(true)` + `listWorksheetInfo()` 检查所有工作表，任一工作表超过 2001 行或行 × 列超过 32000 单元格立即返回 422；加载后再用 `getHighestDataRow()` 复核。每行校验用户名 3-50、密码 6-32、姓名 ≤50、手机 ≤20、邮箱 ≤254、状态 0/1，失败行记录行号与通用原因；用户与角色关联同事务写入并按行回滚。2000 行 bcrypt 属 CPU 密集操作，锁 TTL 按最坏耗时设置。
 
 ### 7.2 PDF 导出
 
@@ -427,7 +439,7 @@ ENCRYPTABLE_KEY     → DB 存储加密密钥，与传输密钥独立
 ### 8.1 推荐拓扑
 
 ```
-Nginx (:80/:443，TLS 终止 + 静态官网) → app (webman :8791) → MySQL + Redis
+Nginx (:80/:443，TLS 终止 + 静态官网，等待 app 健康检查后启动) → app (webman :8791) → MySQL + Redis
 init（一次性）：建表 + 创建管理员；backup（每日）：mysqldump + upload tar 到 deploy/data/backups，清理 180 天前操作日志
 数据持久化到 deploy/data/，日志写 stdout/stderr 由 Docker 轮转
 ```
@@ -459,7 +471,8 @@ docker compose up -d --build
 - 真实域名证书替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`；管理员密码见 `deploy/secrets/admin_password.txt`；HSTS 默认关闭，配置真实证书后再启用。
 - 持久化目录：`deploy/data/{mysql,redis,runtime,upload,backups}`；日志由 Docker 按 `10m × 3` 轮转。
 - 各服务设置 CPU/内存/pids 上限：app 1.0/512M/256、init 0.5/256M/128、mysql 1.5/768M/512、redis 0.5/384M/128、nginx 0.5/128M/128、backup 0.5/256M/128；Redis 容器 384M 与 `--maxmemory 256mb` 配套，预留 128M 给 AOF 重写/fork 与内存碎片。
-- 应用内 `log-cleanup` 进程（不监听端口，`count=1`）启动时先尽力清理一次，之后每日删除 180 天前的 `operation_log`，每批 10000 行；与 backup 服务的清理互为兜底。
+- `nginx` 通过 `depends_on.app.condition: service_healthy` 等待应用 `/health` 通过后再启动，避免容器启动瞬间返回 502。
+- 应用内 `log-cleanup` 进程（不监听端口，`count=1`）启动时先尽力清理一次，之后每日删除 180 天前的 `operation_log`，每批 10000 行、最多 10 批（单轮 100000 行）；与 backup 服务的清理互为兜底。
 - Nginx 在静态资源 location 内重复注入 `X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy` 与 `Cache-Control`；`deploy/nginx/default.conf` 与 `docs/nginx-security.conf` 均由 CI 执行 `nginx -t`。
 - `backup` 使用最小权限用户 `backup_reader`（数据表 `SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` + `erik_operation_log` 的 `DELETE`）；备份默认与 MySQL 同机同盘，异地副本由宿主机 cron 调用 `deploy/offsite-sync.sh`（读取 `deploy/.env` 的 `OFFSITE_TARGET`，支持 rsync 与 rclone）。
 
@@ -475,7 +488,7 @@ GitHub Actions 持续集成定义在 `.github/workflows/ci.yml`：
 
 ### 8.4 数据库备份
 
-生产编排的 `backup` 服务每日自动备份数据库与上传文件到 `deploy/data/backups`（保留 30 天），并清理 180 天前的操作日志；应用内 `log-cleanup` 进程同样每日清理。异地副本由宿主机 cron 调用 `deploy/offsite-sync.sh`（读取 `OFFSITE_TARGET`）同步。
+生产编排的 `backup` 服务每日自动备份数据库与上传文件到 `deploy/data/backups`（保留 30 天），并清理 180 天前的操作日志；应用内 `log-cleanup` 进程同样每日清理（单轮最多 10 批 × 10000 行）。异地副本由宿主机 cron 调用 `deploy/offsite-sync.sh`（读取 `OFFSITE_TARGET`）同步。
 `database/backup/backup.sh` — mysqldump + gzip 备份，自动清理 30 天前旧备份（宿主机直连数据库）。
 `database/backup/restore.sh` — 交互式选择并恢复备份。
 

@@ -15,6 +15,7 @@ sequenceDiagram
 
     C->>CTL: POST /admin/export/excel
     Note right of C: {table,columns,conditions,title}
+    CTL->>CTL: Validate conditions (object/known columns/scalar), HTTP 422 if invalid
     CTL->>DB: SELECT ... LIMIT 5001
     DB-->>CTL: Query Results
     alt More than 5000 rows
@@ -23,7 +24,7 @@ sequenceDiagram
         CTL->>CTL: Decrypt Sensitive Fields
         CTL->>CTL: Mask (maskPhone/maskEmail)
         CTL->>CTL: PhpSpreadsheet Build
-        Note right of CTL: Blue header with white text<br/>Thin borders on data rows<br/>Frozen first row<br/>Auto filter
+        Note right of CTL: TYPE_STRING cells block formula injection<br/>Blue header with white text<br/>Borders written once<br/>Frozen first row<br/>Auto filter
         CTL->>FS: Write runtime/tmp/export_*.xlsx
         CTL-->>C: File Download
     end

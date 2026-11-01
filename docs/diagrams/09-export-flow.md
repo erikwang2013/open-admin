@@ -11,6 +11,7 @@ sequenceDiagram
 
     C->>CTL: POST /admin/export/excel
     Note right of C: {table,columns,conditions,title}
+    CTL->>CTL: 校验 conditions（对象/已知列/标量值），非法 HTTP 422
     CTL->>DB: SELECT ... LIMIT 5001
     DB-->>CTL: 查询结果
     alt 行数 > 5000
@@ -19,7 +20,7 @@ sequenceDiagram
         CTL->>CTL: 解密敏感字段
         CTL->>CTL: 脱敏(maskPhone/maskEmail)
         CTL->>CTL: PhpSpreadsheet构建
-        Note right of CTL: 表头蓝底白字<br/>数据行细边框<br/>冻结首行<br/>自动筛选
+        Note right of CTL: 单元格 TYPE_STRING 防公式注入<br/>表头蓝底白字<br/>边框只写一次<br/>冻结首行<br/>自动筛选
         CTL->>FS: 写入runtime/tmp/export_*.xlsx
         CTL-->>C: 文件下载
     end

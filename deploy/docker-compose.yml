@@ -250,7 +250,7 @@ services:
       - ../public:/app/public:ro
     depends_on:
       app:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/nginx-health"]
       interval: 15s

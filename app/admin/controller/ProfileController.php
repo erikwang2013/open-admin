@@ -8,12 +8,14 @@ declare(strict_types=1);
 namespace app\admin\controller;
 
 use app\common\EncryptionService;
+use app\common\SessionService;
 use app\model\AdminUser;
 use support\Request;
 use support\Response;
 use support\Redis;
 use Erikwang2013\Jwt\JWT;
 use Erikwang2013\Jwt\JWTFactory;
+use Webman\Validation\Validator;
 
 /**
  * @Apidoc\Title("个人中心")
@@ -70,14 +72,31 @@ class ProfileController extends BaseController
             return $this->fail(trans('messages.user_not_found'), 404);
         }
 
+        // 解密后再校验，防止超长或非字符串内容写入
+        $data = [];
         if ($request->input('real_name') !== null) {
-            $user->real_name = $request->input('real_name');
+            $data['real_name'] = $request->input('real_name');
         }
         if ($request->input('phone') !== null) {
-            $user->phone = EncryptionService::decryptTransmission($request->input('phone', ''));
+            $phone = $request->input('phone');
+            $data['phone'] = is_string($phone) ? EncryptionService::decryptTransmission($phone) : $phone;
         }
         if ($request->input('email') !== null) {
-            $user->email = EncryptionService::decryptTransmission($request->input('email', ''));
+            $email = $request->input('email');
+            $data['email'] = is_string($email) ? EncryptionService::decryptTransmission($email) : $email;
+        }
+
+        $validator = Validator::make($data, [
+            'real_name' => 'string|max:50',
+            'phone'     => 'string|max:20',
+            'email'     => 'string|max:254',
+        ]);
+        if ($validator->fails()) {
+            return $this->fail($validator->errors()->first(), 422);
+        }
+
+        foreach ($data as $field => $value) {
+            $user->{$field} = $value;
         }
 
         $user->save();
@@ -125,24 +144,7 @@ class ProfileController extends BaseController
         $user->save();
 
         // 密码已变更：吊销该用户所有在线 access/refresh token
-        try {
-            // 水位线让未登记过的旧 refresh token 也失效（iat 早于改密时间的一律拒绝）
-            $refreshExpire = (int)(config('plugin.erikwang2013.jwt.jwt.refresh_expire') ?: 1209600);
-            Redis::setex("user_pwd_changed:{$adminId}", $refreshExpire + 60, (string) time());
-
-            foreach (['user_tokens', 'user_refresh_tokens'] as $set) {
-                $key = "{$set}:{$adminId}";
-                foreach (Redis::zrange($key, 0, -1, true) as $member => $exp) {
-                    Redis::setex('jwt_blacklist:' . $member, max((int) $exp - time(), 1), '1');
-                }
-                Redis::del($key);
-            }
-
-            // 轮换缓存中的令牌一并吊销，防止旧 refresh token 经 60 秒宽限换回已吊销的新令牌
-            $this->revokeRotationCaches($adminId);
-        } catch (\Throwable $e) {
-            // Redis 故障不影响密码修改
-        }
+        SessionService::revokeUser($adminId);
 
         return $this->success([], trans('messages.password_changed'));
     }
@@ -195,55 +197,9 @@ class ProfileController extends BaseController
         }
 
         // 吊销该用户所有轮换缓存中的新令牌对，防止旧 refresh token 重放换回有效令牌
-        try {
-            $rotationKey = $refreshToken !== '' ? 'refresh_rotation:' . md5($refreshToken) : null;
-            $this->revokeRotationCaches((int) ($request->adminId ?? 0), $rotationKey);
-        } catch (\Throwable $e) {
-            // Redis 故障时忽略
-        }
+        $rotationKey = $refreshToken !== '' ? 'refresh_rotation:' . md5($refreshToken) : null;
+        SessionService::revokeRotationCaches((int) ($request->adminId ?? 0), $rotationKey);
 
         return $this->success([], trans('messages.logout_success'));
-    }
-
-    /**
-     * 吊销用户所有轮换缓存中的令牌并删除缓存（登出/改密时调用）
-     *
-     * @param int $userId 用户 ID；0 表示仅处理 $extraKey
-     * @param string|null $extraKey 额外的轮换缓存键（本次登出的 refresh token）
-     */
-    private function revokeRotationCaches(int $userId, ?string $extraKey = null): void
-    {
-        $jwt    = self::getJWT();
-        $setKey = "user_refresh_rotations:{$userId}";
-        $keys   = $userId > 0 ? (Redis::smembers($setKey) ?: []) : [];
-        if ($extraKey !== null) {
-            $keys[] = $extraKey;
-        }
-
-        foreach (array_unique($keys) as $rotationKey) {
-            $cached = Redis::get($rotationKey);
-            if ($cached) {
-                $pair = json_decode((string) $cached, true);
-                if (is_array($pair)) {
-                    foreach (['access_token' => false, 'refresh_token' => true] as $field => $allowRefresh) {
-                        if (empty($pair[$field]) || !is_string($pair[$field])) {
-                            continue;
-                        }
-                        try {
-                            $pairPayload = $jwt->decode($pair[$field], $allowRefresh);
-                            $pairTtl     = max((int) ($pairPayload['exp'] ?? 0) - time(), 1);
-                        } catch (\Throwable $e) {
-                            $pairTtl = 60; // 无法解析时按最短窗口吊销，避免漏网
-                        }
-                        Redis::setex('jwt_blacklist:' . md5($pair[$field]), $pairTtl, '1');
-                    }
-                }
-            }
-            Redis::del($rotationKey);
-        }
-
-        if ($userId > 0) {
-            Redis::del($setKey);
-        }
     }
 }

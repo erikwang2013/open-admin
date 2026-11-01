@@ -15,7 +15,7 @@ flowchart LR
     end
 
     subgraph roles["Roles"]
-        r1["super_admin<br/>Permission Identifier: *"]
+        r1["super_admin<br/>Returns wildcard * when enabled"]
         r2["editor<br/>Permission Identifiers: get.* post.*"]
         r3["viewer<br/>Permission Identifier: get.*"]
     end
@@ -51,13 +51,15 @@ flowchart TD
     extract --> findRoles["Query User Roles"]
     findRoles --> collectSlug["Collect All permission.slug"]
     collectSlug --> buildKey["Construct method.path"]
-    buildKey --> check{"slug==* or<br/>slug Matches?"}
+    buildKey --> check{"Enabled super_admin?<br/>or permission matches?"}
     check -->|"Yes"| allow["200 Allow"]
     check -->|"No"| deny["403 Forbidden"]
 
     style allow fill:#52C41A,color:#fff
     style deny fill:#FF4D4F,color:#fff
 ```
+
+Grant boundaries: a non-super-admin can only assign roles whose permissions (disabled roles included) are a subset of their own, and cannot assign `super_admin`; `GET /admin/role/options` returns only the enabled roles the current admin can assign.
 
 ## Permission Types
 

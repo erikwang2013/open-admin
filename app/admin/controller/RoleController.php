@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace app\admin\controller;
 
+use app\common\RbacService;
 use app\model\AdminRole;
 use support\Request;
 use support\Response;
@@ -58,6 +59,28 @@ class RoleController extends BaseController
             'page' => $page,
             'limit' => $limit,
         ]);
+    }
+
+    /**
+     * @Apidoc\Title("角色选项")
+     * @Apidoc\Group("角色管理")
+     * @Apidoc\Method("GET")
+     * @Apidoc\Url("/admin/role/options")
+     * @Apidoc\Desc("获取启用角色列表，供用户表单选择")
+     */
+    public function options(Request $request): Response
+    {
+        // 只返回当前管理员可分配的角色，避免暴露无权授予的角色
+        $assignable = RbacService::assignableRoleIds((int) ($request->adminId ?? 0));
+        $roles = AdminRole::where('status', 1)->whereIn('id', $assignable)->orderBy('id', 'asc')->get(['id', 'name', 'slug']);
+
+        return $this->success(
+            $roles->map(fn ($role) => [
+                'id'   => $this->encodeId((int) $role->id),
+                'name' => $role->name,
+                'slug' => $role->slug,
+            ])->values()->all()
+        );
     }
 
     /**

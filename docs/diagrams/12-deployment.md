@@ -7,7 +7,7 @@ flowchart TB
     end
 
     subgraph host["单机 Docker Compose（deploy/）"]
-        nginx["Nginx :80/:443<br/>TLS 终止 · 静态官网<br/>反向代理"]
+        nginx["Nginx :80/:443<br/>TLS 终止 · 静态官网<br/>反向代理 · 等待 app healthy"]
         bootstrap["init（一次性）<br/>建表 + 创建管理员"]
         wm["webman app :8791<br/>容器内网"]
         mysql[("MySQL 8.0<br/>deploy/data/mysql")]

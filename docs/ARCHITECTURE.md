@@ -95,6 +95,8 @@ flowchart TD
         S1["HashidsService<br/>ID 编解码"]
         S2["SnowflakeService<br/>全局唯一 ID 生成"]
         S3["EncryptionService<br/>加解密 + 脱敏"]
+        S4["SessionService<br/>会话吊销<br/>黑名单/水位线/缓存清理"]
+        S5["RbacService<br/>授权边界<br/>可授予角色/目标管理"]
     end
 
     subgraph "模型层 Model Layer"
@@ -117,9 +119,11 @@ flowchart TD
     M2 --> CT2 & CT3 & CT4 & CT5 & CT6
     CT1 -.->|extends| CT2 & CT3 & CT4 & CT5 & CT6
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> S1 & S2 & S3
+    CT2 & CT3 & CT6 --> S4 & S5
     CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 --> MD1 & MD2 & MD3 & MD4 & MD5
     MD1 & MD2 & MD3 & MD4 & MD5 --> D1
     CT7 --> D3
+    S4 --> D3
 
     style R1 fill:#722ED1,color:#fff
     style M_SF fill:#FF4D4F,color:#fff
@@ -236,24 +240,31 @@ sequenceDiagram
     U->>CL: 依次点击图中文字位置
     CL->>CL: 收集 clicks: [{x,y}, {x,y}, {x,y}]
 
-    Note over U,CAP: === 第三步: 登录 ===
-    CL->>SV: POST /api/v1/auth/login { username, password, captcha_key, clicks }
+    Note over U,CAP: === 第三步: 校验验证码 ===
+    CL->>SV: POST /api/v1/captcha/verify { key, type, clicks }
     SV->>CAP: captcha_verify(key, 'click', clicks)
     alt 验证码错误
         CAP-->>SV: false
         SV-->>CL: 422 验证码错误
     else 验证码正确
         CAP-->>SV: true
-        SV->>SV: password_verify()
-        alt 凭证错误
-            SV-->>CL: 401 用户名或密码错误
-        else 凭证正确
-            SV->>JWT: jwt()->create({sub, username})
-            JWT-->>SV: access_token (2h)
-            SV->>JWT: jwt()->refresh()
-            JWT-->>SV: refresh_token (14d)
-            SV-->>CL: 200 { access_token, refresh_token, user }
-        end
+        SV->>SV: SET captcha_verified:{key} = 1<br/>TTL 300s
+        SV-->>CL: 200 { valid: true }
+    end
+
+    Note over U,CAP: === 第四步: 登录 ===
+    CL->>SV: POST /api/v1/auth/login { username, password, captcha_key }
+    SV->>SV: 原子 DEL captcha_verified:{key}<br/>返回 1 才继续，否则 422
+    SV->>SV: 解密密码 + 长度校验
+    SV->>SV: password_verify(真实哈希 / 固定 cost-10 占位哈希)
+    alt 凭证错误
+        SV-->>CL: 401 用户名或密码错误
+    else 凭证正确
+        SV->>JWT: jwt()->create({sub, username})
+        JWT-->>SV: access_token (2h)
+        SV->>JWT: jwt()->refresh()
+        JWT-->>SV: refresh_token (14d)
+        SV-->>CL: 200 { access_token, refresh_token, user }
     end
 
     Note over U,CAP: === 后续请求 ===
@@ -263,7 +274,7 @@ sequenceDiagram
     SV-->>CL: 200 { dashboard data }
 ```
 
-刷新令牌：`POST /api/v1/auth/refresh` 每次成功刷新都轮换 access/refresh 令牌；旧 refresh_token 立即加入黑名单，同时以 `refresh_rotation:<md5(旧令牌)>` 缓存新令牌对 60 秒，宽限期内再次提交同一旧令牌返回同一对令牌。并发轮换由 `refresh_lock:<md5>`（`SET NX EX 5` + Lua 释放）串行化，未命中缓存的并发请求返回 409；缓存令牌被拉黑时删除缓存并返回 401。密码修改会清除轮换缓存，登出会拉黑缓存中的令牌，并按 `user_refresh_rotations:<userId>` 清理；HarmonyOS 客户端对并发 401 使用单飞刷新。
+刷新令牌：`POST /api/v1/auth/refresh` 每次成功刷新都轮换 access/refresh 令牌；旧 refresh_token 立即加入黑名单，同时以 `refresh_rotation:<md5(旧令牌)>` 缓存新令牌对 60 秒，宽限期内再次提交同一旧令牌返回同一对令牌。并发轮换由 `refresh_lock:<md5>`（`SET NX EX 5` + Lua 释放）串行化，未命中缓存的并发请求返回 409；缓存令牌被拉黑时删除缓存并返回 401。刷新前校验密码变更水位 `user_pwd_changed:<userId>`，令牌签发早于水位时返回 401。密码修改、禁用、删除、批量禁用/删除由 `SessionService::revokeUser()` 统一写入水位、按 `user_tokens` / `user_refresh_tokens` 拉黑访问与刷新令牌、清理 `user_refresh_rotations` 与 `perm:<id>`；角色变化只清权限缓存。登出会拉黑缓存中的令牌，并按 `user_refresh_rotations:<userId>` 清理；HarmonyOS 客户端对并发 401 使用单飞刷新。
 
 ---
 
@@ -322,8 +333,8 @@ flowchart TD
 
     subgraph "判定流程"
         J1["提取 Token → adminId"]
-        J2["查找用户角色"]
-        J3["收集所有权限 slug"]
+        J2["查找用户启用角色"]
+        J3["收集权限 slug<br/>perm:&lt;id&gt; 缓存 60s"]
         J4["构造 method.path"]
         J5{"匹配?"}
         J6["放行"]
@@ -333,13 +344,15 @@ flowchart TD
         J2 --> J3
         J3 --> J4
         J4 --> J5
-        J5 -->|"是 / slug=*"| J6
+        J5 -->|"是 / 持有启用 super_admin（*）"| J6
         J5 -->|否| J7
     end
 
     style J6 fill:#52C41A,color:#fff
     style J7 fill:#FF4D4F,color:#fff
 ```
+
+`super_admin` 的放行不是按 `slug` 通配符匹配，而是 `RbacService::permissionsOf()` 在用户持有**启用**的 `super_admin` 角色时返回 `['*']`，中间件直接放行。角色分配与用户管理另有边界：非超管所授角色（含禁用角色）的权限必须是自身权限子集，不能分配 `super_admin`；编辑/删除/批量操作的目标用户所持角色（含禁用）都必须可授予，否则 403。`GET /admin/role/options` 仅返回当前管理员可分配的启用角色。
 
 ---
 
@@ -515,12 +528,13 @@ sequenceDiagram
 
     Note over C,FS: === Excel 导出 ===
     C->>CTL: POST /admin/export/excel<br/>{ table, columns, conditions }
+    CTL->>CTL: 校验 conditions：对象、已知列、标量值<br/>否则 HTTP 422
     CTL->>DB: SELECT ... LIMIT 5001
     DB-->>CTL: 数据
     CTL->>CTL: 超过 5000 行 → 返回 HTTP 422
     CTL->>CTL: 解密敏感字段
     CTL->>CTL: 脱敏处理 (maskPhone/maskEmail)
-    CTL->>CTL: PhpSpreadsheet 构建<br/>表头蓝底白字<br/>数据行细边框<br/>冻结首行<br/>自动筛选
+    CTL->>CTL: PhpSpreadsheet 构建<br/>setValueExplicit TYPE_STRING 防公式注入<br/>表头蓝底白字 / 边框只写一次<br/>冻结首行 / 自动筛选
     CTL->>FS: 写入 runtime/tmp/export_*.xlsx
     CTL-->>C: 文件下载
 
@@ -532,7 +546,9 @@ sequenceDiagram
     CTL-->>C: 文件下载
 ```
 
-导入用户时，`ImportController` 在 `IOFactory::load()` 之前先读取工作表元数据（`listWorksheetInfo`），任一工作表超过 2001 行立即返回 HTTP 422；加载后再用 `getHighestDataRow()` 复核，文件上限 5MB、数据行上限 2000 行。
+导出 5000 行 × 9 列在 128M 工作进程下实测约占 65MiB，已接近安全上限，不要同时提高行数与列数。
+
+导入用户时，`ImportController` 先用 Redis 锁 `import_users_lock`（`SET NX EX 1800`）串行化整批任务，已有任务返回 409。`.xlsx` 在加载前做 ZIP 解压预检（`xl/**.xml` 超过 8MB 或单元格超过 32,000 个返回 422）；`.xls`/`.xlsx` 都在 `IOFactory::load()` 前读取工作表元数据（`listWorksheetInfo`），任一工作表超过 2001 行或行 × 列超过 32,000 单元格立即返回 422；加载后再用 `getHighestDataRow()` 复核，文件上限 5MB、数据行上限 2000 行。每行独立校验（用户名 3-50、密码 6-32、姓名 ≤50、手机 ≤20、邮箱 ≤254、状态 0/1），失败行记录行号与通用原因，用户与角色关联同事务写入并按行回滚；bcrypt 哈希 2000 行属 CPU 密集操作，锁 TTL 按最坏耗时设置。
 
 ---
 
@@ -598,27 +614,27 @@ flowchart TB
     end
 
     subgraph "第2层: 操作确认"
-        L2["密码二次确认<br/>confirmPassword()<br/>DELETE 操作必须"]
+        L2["密码二次确认<br/>confirmPassword()<br/>删除/配置等敏感操作<br/>5 次/300 秒节流"]
     end
 
     subgraph "第3层: 传输安全"
-        L3["HTTPS<br/>JWT Bearer Token<br/>AES-256-CBC"]
+        L3["HTTPS<br/>JWT Bearer Token<br/>RSA-2048 登录密码<br/>AES 兼容回退"]
     end
 
     subgraph "第4层: 身份认证"
-        L4["JWT HS256<br/>access_token 2h<br/>refresh_token 14d"]
+        L4["JWT HS256<br/>access_token 2h<br/>refresh_token 14d<br/>轮换 60s 宽限 + 会话吊销"]
     end
 
     subgraph "第5层: 权限鉴权"
-        L5["RBAC<br/>method.path 粒度<br/>超级管理员 * "]
+        L5["RBAC method.path<br/>启用 super_admin → *<br/>授予/管理边界（含禁用角色）"]
     end
 
     subgraph "第6层: 数据保护"
-        L6["接口 ID: Hashids 加密<br/>请求体: Encryption 加密<br/>存储层: Encryptable 加密<br/>导出: 脱敏+版权"]
+        L6["接口 ID: Hashids 加密<br/>请求体: Encryption 加密<br/>存储层: Encryptable 加密<br/>导出: 脱敏 + TYPE_STRING 防公式注入"]
     end
 
     subgraph "第7层: 审计追溯"
-        L7["OperationLog<br/>记录所有操作<br/>用户/IP/时间/来源端/参数"]
+        L7["OperationLog<br/>用户/IP/时间/来源端/参数<br/>手机号/邮箱/身份证等 PII 脱敏"]
     end
 
     L1 --> L2 --> L3 --> L4 --> L5 --> L6 --> L7
@@ -632,7 +648,7 @@ flowchart TB
     style L7 fill:#FF4D4F,color:#fff
 ```
 
-补充：`AdminAuth` 黑名单与 `RateLimit` 在 Redis 故障时对 `/api/`、`/admin/` 返回 503（失败关闭），`/health`、`/metrics` 等非 API 路径放行；删除/禁用操作不能移除最后一名启用的超级管理员，内置 `super_admin` 角色禁止编辑/删除。
+补充：`AdminAuth` 黑名单与 `RateLimit` 在 Redis 故障时对 `/api/`、`/admin/` 返回 503（失败关闭），`/health`、`/metrics` 等非 API 路径放行；登录验证码标记原子消费、未知用户执行占位 bcrypt 抹平时间差；改密/禁用/删除会吊销目标全部会话；删除/禁用/角色变更不能移除最后一名启用的超级管理员，非超管不能分配或操作超管，内置 `super_admin` 角色禁止编辑/删除。
 
 ---
 
@@ -662,7 +678,7 @@ flowchart TB
     end
 
     DNS --> NGX
-    NGX --> WM
+    NGX -->|"depends_on: service_healthy"| WM
     WM --> MYSQL
     WM --> REDIS
     INIT --> MYSQL
@@ -681,7 +697,7 @@ flowchart TB
     style DATA fill:#F6F8FC,color:#1677FF
 ```
 
-> 环境变量按服务隔离在 `deploy/env/{app,init,mysql,redis,backup}.env`（`600`，目录 `700`），master `deploy/.env` 只保存 compose 插值；应用与 init 以宿主机 `APP_UID`/`APP_GID` 运行。`backup` 使用最小权限用户 `backup_reader`，备份数据库、上传文件并清理 180 天前的操作日志；应用内 `log-cleanup` 进程每日清理同一张表作为兜底。各服务设置 CPU/内存/pids 上限（app 1.0/512M/256、init 0.5/256M/128、mysql 1.5/768M/512、redis 0.5/384M/128、nginx 0.5/128M/128、backup 0.5/256M/128）；Redis 容器 384M 与 `--maxmemory 256mb` 配套，预留 128M 给 AOF 重写/fork 与内存碎片。异地备份由宿主机 cron 调用 `deploy/offsite-sync.sh`（读取 `OFFSITE_TARGET`）。Nginx/MySQL 日志写 stdout/stderr，由 Docker 按 `10m × 3` 轮转；HSTS 默认关闭，配置真实域名证书后再启用。
+> 环境变量按服务隔离在 `deploy/env/{app,init,mysql,redis,backup}.env`（`600`，目录 `700`），master `deploy/.env` 只保存 compose 插值；应用与 init 以宿主机 `APP_UID`/`APP_GID` 运行。`backup` 使用最小权限用户 `backup_reader`，备份数据库、上传文件并清理 180 天前的操作日志；应用内 `log-cleanup` 进程每日清理同一张表作为兜底（每批 10000 行、最多 10 批）。`nginx` 通过 `depends_on.app.condition: service_healthy` 等待应用 `/health` 通过后再启动，避免上线瞬间 502。各服务设置 CPU/内存/pids 上限（app 1.0/512M/256、init 0.5/256M/128、mysql 1.5/768M/512、redis 0.5/384M/128、nginx 0.5/128M/128、backup 0.5/256M/128）；Redis 容器 384M 与 `--maxmemory 256mb` 配套，预留 128M 给 AOF 重写/fork 与内存碎片。异地备份由宿主机 cron 调用 `deploy/offsite-sync.sh`（读取 `OFFSITE_TARGET`）。Nginx/MySQL 日志写 stdout/stderr，由 Docker 按 `10m × 3` 轮转；HSTS 默认关闭，配置真实域名证书后再启用。
 
 ---
 

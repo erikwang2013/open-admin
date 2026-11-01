@@ -24,8 +24,8 @@ sequenceDiagram
     end
 
     rect rgb(255, 240, 230)
-    Note over U,CAP: 第三步: 登录验证
-    CL->>SV: POST /api/v1/auth/login {username,password,captcha_key,clicks}
+    Note over U,CAP: 第三步: 验证码校验
+    CL->>SV: POST /api/v1/captcha/verify {key,type,clicks}
     SV->>CAP: captcha_verify(key,'click',clicks)
 
     alt 验证码错误
@@ -33,7 +33,19 @@ sequenceDiagram
         SV-->>CL: 422 验证码错误
     else 验证码正确
         CAP-->>SV: true
-        SV->>SV: password_verify()
+        SV->>SV: SET captcha_verified:{key} TTL 300s
+        SV-->>CL: 200 {valid:true}
+    end
+    end
+
+    rect rgb(240, 230, 255)
+    Note over U,CAP: 第四步: 登录
+    CL->>SV: POST /api/v1/auth/login {username,password,captcha_key}
+    SV->>SV: 原子 DEL captcha_verified:{key}（并发仅一次成功）
+    alt 标记不存在或已消费
+        SV-->>CL: 422 验证码已失效
+    else 标记存在
+        SV->>SV: 长度合法后 password_verify()（未知用户用固定 cost-10 占位哈希）
         alt 凭证错误
             SV-->>CL: 401 用户名或密码错误
         else 凭证正确
@@ -47,7 +59,7 @@ sequenceDiagram
     end
 
     rect rgb(245, 245, 255)
-    Note over U,CL: 第四步: 后续请求
+    Note over U,CL: 第五步: 后续请求
     CL->>SV: GET /admin/dashboard
     Note right of CL: Authorization: Bearer token
     SV->>JWT: jwt()->verify()

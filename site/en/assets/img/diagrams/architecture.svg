@@ -111,10 +111,10 @@
   <text class="chipS" x="64" y="516" font-size="11">/admin auth chain</text>
   <rect class="node" x="64" y="524" width="261" height="46" rx="10" fill="#FFF2E8" stroke="#FFBB96"/>
   <text class="chipT ctr" x="194" y="544" fill="#AD4E00">AdminAuth</text>
-  <text class="chipS ctr" x="194" y="560">JWT verify + token blacklist</text>
+  <text class="chipS ctr" x="194" y="560">JWT verify · blacklist · revocation</text>
   <rect class="node" x="341" y="524" width="261" height="46" rx="10" fill="#FFF2E8" stroke="#FFBB96"/>
   <text class="chipT ctr" x="471" y="544" fill="#AD4E00">AdminPermission</text>
-  <text class="chipS ctr" x="471" y="560">RBAC method.path · Redis 60s cache</text>
+  <text class="chipS ctr" x="471" y="560">RBAC boundary · Redis 60s</text>
   <rect class="node" x="618" y="524" width="262" height="46" rx="10" fill="#FFF2E8" stroke="#FFBB96"/>
   <text class="chipT ctr" x="749" y="544" fill="#AD4E00">OperationLog</text>
   <text class="chipS ctr" x="749" y="560">auto-detect 8 client platforms</text>
@@ -142,10 +142,10 @@
   <text class="chipS ctr" x="368" y="735">distributed BIGINT primary key</text>
   <rect class="node" x="480" y="710" width="192" height="30" rx="8" fill="#F7F9FC" stroke="#DCE4EF"/>
   <text class="chipS ctr" x="576" y="722" font-size="11.5" fill="#16233A" font-weight="600">EncryptionService</text>
-  <text class="chipS ctr" x="576" y="735">transport encryption + masking</text>
+  <text class="chipS ctr" x="576" y="735">transport + field encryption</text>
   <rect class="node" x="688" y="710" width="192" height="30" rx="8" fill="#F7F9FC" stroke="#DCE4EF"/>
-  <text class="chipS ctr" x="784" y="722" font-size="11.5" fill="#16233A" font-weight="600">encryptable · scout</text>
-  <text class="chipS ctr" x="784" y="735">field encryption · ES sync</text>
+  <text class="chipS ctr" x="784" y="722" font-size="11.5" fill="#16233A" font-weight="600">SessionService · RbacService</text>
+  <text class="chipS ctr" x="784" y="735">revocation · RBAC boundary</text>
 
   <!-- 箭头：应用 → 存储 -->
   <path d="M 480 740 L 480 770" stroke="#1677FF" stroke-width="2" fill="none" marker-end="url(#arwBlue)"/>
@@ -162,7 +162,7 @@
   <text class="chipS" x="84" y="869">erik_ prefix · non-auto BIGINT · soft delete</text>
   <rect class="node" x="344" y="830" width="256" height="52" rx="12" fill="#E6F4FF" stroke="#91CAFF"/>
   <text class="chipT" x="364" y="851">Redis 7 · cache &amp; sessions</text>
-  <text class="chipS" x="364" y="869">rate limits · captcha · permissions · blacklist</text>
+  <text class="chipS" x="364" y="869">limits · captcha · permissions · revocation</text>
   <rect class="node" x="624" y="830" width="256" height="52" rx="12" fill="#E6F4FF" stroke="#91CAFF"/>
   <text class="chipT" x="644" y="851">Single-machine deploy · persistence</text>
   <text class="chipS" x="644" y="869">backup + offsite sync · 30d</text>
@@ -174,7 +174,7 @@
     <text x="968" y="170">· 31 detectors (XSS / SQLi / SSRF...)</text>
     <text x="968" y="192">· CSP + security headers</text>
     <text x="968" y="214">· lockout: 5 failures / 15 min</text>
-    <text x="968" y="236">· max 3 sessions, evict oldest</text>
+    <text x="968" y="236">· max 3 sessions · revoke on change</text>
     <text x="968" y="258">· rate limit 60/min/IP/route</text>
     <text x="968" y="280">· security.txt (RFC 9116)</text>
   </g>
@@ -186,8 +186,8 @@
     <text x="968" y="398">· GET /metrics 5 Prometheus gauges</text>
     <text x="968" y="420">· GET /api/docs OpenAPI docs</text>
     <text x="968" y="442">· Docker Compose: 6 services</text>
-    <text x="968" y="464">· CI: PHPUnit / Flutter / Docker</text>
-    <text x="968" y="486">· backup + offsite sync · logs 180d</text>
+    <text x="968" y="464">· CI: 37/81 · Flutter · Docker</text>
+    <text x="968" y="486">· log cleanup 10×10k · offsite</text>
   </g>
 
   <!-- 项目宠物 -->

@@ -11,6 +11,7 @@ use app\common\HashidsService;
 use app\common\SnowflakeService;
 use app\common\EncryptionService;
 use app\model\AdminUser;
+use support\Redis;
 use support\Request;
 use support\Response;
 
@@ -90,11 +91,26 @@ class BaseController
             return trans('messages.password_confirm_required');
         }
 
+        // 失败计数 5 次 / 300 秒，防止已登录会话被用于反复猜测密码；Redis 故障时不阻断本次确认
+        $throttleKey = "pwd_confirm_fail:{$adminId}";
+        try {
+            if ((int) Redis::get($throttleKey) >= 5) {
+                return '密码验证失败次数过多，请 5 分钟后再试';
+            }
+        } catch (\Throwable) {}
+
         $decrypted = EncryptionService::decryptTransmission($password);
         $admin = AdminUser::find($adminId);
         if (!$admin || !password_verify($decrypted, $admin->password)) {
+            try {
+                if (Redis::incr($throttleKey) === 1) {
+                    Redis::expire($throttleKey, 300);
+                }
+            } catch (\Throwable) {}
             return trans('messages.password_confirm_failed');
         }
+
+        try { Redis::del($throttleKey); } catch (\Throwable) {}
 
         return null; // 验证通过
     }

@@ -25,6 +25,12 @@ class AuthController
 {
     private static ?JWT $jwt = null;
 
+    /**
+     * 固定 cost-10 占位哈希 — 用户不存在时仍执行一次 password_verify，
+     * 使失败路径耗时与真实用户一致，避免响应时间泄漏用户名是否存在
+     */
+    private const DUMMY_PASSWORD_HASH = '$2y$10$vbWyLxn4TqPtlgtAeRJ7IuwxCFqtocDRECtrpqhlCXG8JKWHWtBlG';
+
     private static function getJWT(): JWT
     {
         if (self::$jwt === null) {
@@ -75,13 +81,12 @@ class AuthController
             return json(['code' => 422, 'message' => '验证码参数缺失', 'data' => []]);
         }
 
-        // 检查验证码是否已通过 /api/v1/captcha/verify 校验（Redis 故障时拒绝登录，不降级放行）
+        // 原子消费验证码标记：DEL 返回 1 才视为首次通过，并发复用同一标记时只有一个请求成功
+        // （Redis 故障时拒绝登录，不降级放行）
         try {
-            $verified = Redis::get("captcha_verified:{$captchaKey}");
-            if (!$verified) {
+            if ((int) Redis::del("captcha_verified:{$captchaKey}") !== 1) {
                 return json(['code' => 422, 'message' => '请先完成验证码校验', 'data' => []]);
             }
-            Redis::del("captcha_verified:{$captchaKey}");
         } catch (Throwable) {
             return json(['code' => 503, 'message' => '服务暂时不可用，请稍后再试', 'data' => []])->withStatus(503);
         }
@@ -101,7 +106,13 @@ class AuthController
         $rawPassword = (string) $request->input('password', '');
         $password = EncryptionService::decryptTransmission($rawPassword);
 
-        if ($password === '' || strlen($password) < 6 || strlen($password) > 32 || !$user || !password_verify($password, $user->password)) {
+        // 长度校验通过后始终执行 password_verify：用户不存在时用固定占位哈希，抹平时间差
+        // （先算 $passwordOk，避免 !$user 短路掉校验）
+        $lengthOk = $password !== '' && strlen($password) >= 6 && strlen($password) <= 32;
+        $hash = ($user && (string) $user->password !== '') ? (string) $user->password : self::DUMMY_PASSWORD_HASH;
+        $passwordOk = $lengthOk && password_verify($password, $hash);
+
+        if (!$lengthOk || !$user || !$passwordOk) {
             // 登录失败：计数 + 锁定
             try {
                 $fails = Redis::incr($failKey);
