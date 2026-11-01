@@ -311,6 +311,12 @@ class UserController extends BaseController
                 return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
             }
 
+            // 密码/禁用必须在写库前吊销会话；吊销失败则中止，避免旧会话在数据库变更后仍然有效
+            $revokeSessions = $plainPassword !== null || ($statusInput !== null && $status === 0);
+            if ($revokeSessions && !SessionService::revokeUser($id)) {
+                return $this->sessionRevokeFailure();
+            }
+
             $user->real_name = $request->input('real_name', $user->real_name);
             $user->status = $status;
             if ($plainPassword !== null) {
@@ -336,10 +342,9 @@ class UserController extends BaseController
                 }
             });
 
-            // 密码/禁用吊销会话；仅角色变更时清理权限缓存即可
-            if ($plainPassword !== null || ($statusInput !== null && $status === 0)) {
-                SessionService::revokeUser($id);
-            } elseif ($roleIds !== null) {
+            // 角色写入后整体失效权限缓存：仅删除目标缓存时，并发请求可能把旧权限重新写回
+            if ($roleIds !== null) {
+                RbacService::invalidatePermissionCaches();
                 SessionService::clearPermissionCache($id);
             }
 
@@ -404,12 +409,16 @@ class UserController extends BaseController
                 return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
             }
 
+            // 删除前先吊销会话；失败则中止，不留下已删除但仍可访问的账号
+            if (!SessionService::revokeUser($id)) {
+                return $this->sessionRevokeFailure();
+            }
+
             // 软删除前腾出用户名，释放唯一索引；截断以适配 username varchar(50)
             $suffix = '#deleted' . $user->id;
             $user->username = mb_substr($user->username, 0, max(0, 50 - mb_strlen($suffix))) . $suffix;
             $user->save();
             $user->delete();
-            SessionService::revokeUser($id);
             return $this->success([], trans('messages.delete_success'));
         }) ?? $this->serviceBusyResponse();
     }
@@ -476,12 +485,20 @@ class UserController extends BaseController
                 return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
             }
 
-            foreach (AdminUser::whereIn('id', $decodedIds)->get() as $user) {
+            $users = AdminUser::whereIn('id', $decodedIds)->get();
+
+            // 批量操作先吊销全部目标会话，任一失败即中止写库
+            foreach ($users as $target) {
+                if (!SessionService::revokeUser((int) $target->id)) {
+                    return $this->sessionRevokeFailure();
+                }
+            }
+
+            foreach ($users as $user) {
                 $suffix = '#deleted' . $user->id;
                 $user->username = mb_substr($user->username, 0, max(0, 50 - mb_strlen($suffix))) . $suffix;
                 $user->save();
                 $user->delete();
-                SessionService::revokeUser((int) $user->id);
             }
 
             return $this->success(['count' => count($decodedIds)], '删除成功');
@@ -551,10 +568,13 @@ class UserController extends BaseController
                 if ($this->leavesNoSuperAdmin($decodedIds)) {
                     return $this->fail('系统必须保留至少一名启用的超级管理员', 422);
                 }
-                AdminUser::whereIn('id', $decodedIds)->update(['status' => 0]);
+                // 禁用前先吊销全部目标会话，任一失败即中止写库
                 foreach ($decodedIds as $uid) {
-                    SessionService::revokeUser((int) $uid);
+                    if (!SessionService::revokeUser((int) $uid)) {
+                        return $this->sessionRevokeFailure();
+                    }
                 }
+                AdminUser::whereIn('id', $decodedIds)->update(['status' => 0]);
             } else {
                 AdminUser::whereIn('id', $decodedIds)->update(['status' => 1]);
             }
@@ -669,7 +689,7 @@ class UserController extends BaseController
      */
     private static function maskPhone(string $phone): string
     {
-        return preg_replace('/^(\d{3})\d+(\d{4})$/', '$1****$2', $phone) ?? $phone;
+        return EncryptionService::maskPhone($phone);
     }
 
     /**
@@ -686,7 +706,8 @@ class UserController extends BaseController
      */
     private static function looksMaskedPhone(string $phone): bool
     {
-        return preg_match('/^\d{3}\*{4}\d{4}$/', $phone) === 1;
+        // 11 位及以上保留前 3/后 4；短号码也至少保持连续星号，任何掩码都视为未修改
+        return preg_match('/\*{2,}/u', $phone) === 1;
     }
 
     /**

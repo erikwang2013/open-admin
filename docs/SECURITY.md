@@ -17,8 +17,8 @@
 | 1 | SecurityMiddleware (erikwang2013/security-php) | 31 种攻击检测 + HTTP 方法校验 + 请求体大小限制 + Content-Type 校验 + CSRF + IP 攻击升级黑名单 |
 | 2 | Cors | 跨域安全 + 响应安全头注入 |
 | 3 | RateLimit | Redis 滑动窗口限流，防暴力破解 |
-| 4 | AdminAuth | JWT 认证 + 黑名单登出 |
-| 5 | AdminPermission | RBAC method.path 粒度鉴权 |
+| 4 | AdminAuth | JWT 认证 + 黑名单登出 + 账号状态/改密水位校验（故障关闭） |
+| 5 | AdminPermission | RBAC method.path 粒度鉴权 + 版本化权限缓存 |
 | 6 | OperationLog | 操作审计 + 来源端追踪 |
 | 7 | 数据加密 | Hashids ID 混淆 + Encryptable DB 加密 + EncryptionService 传输加密 |
 
@@ -215,17 +215,21 @@ AdminAuth 中间件实现，挂载在需要认证的路由组上。
 
 **认证流程**：
 1. 空 token → 直接 401 `{"code": 401, "message": "未登录"}`
-2. 检查 Redis 黑名单 `jwt_blacklist:{md5(token)}` → 命中 → 401 `Token已失效，请重新登录`
-3. JWT decode → 失败（过期/签名不匹配） → 401 `Token已过期或无效`
-4. 成功 → 注入 `$request->adminId` 和 `$request->adminUsername`
+2. 检查 Redis 黑名单 `jwt_blacklist:{md5(token)}` → 命中 → 401 `Token已失效，请重新登录`；Redis 读取异常 → 503
+3. JWT decode → 失败（过期/签名不匹配） → 401 `Token已过期或无效`；只接受 `token_type=access`（无该字段的旧令牌按 access 处理）
+4. 从数据库加载 `AdminUser` → 用户不存在或 `status != 1` → 401 `账号不存在或已被禁用`；数据库异常 → 503。已签发但用户被删除/禁用的 access token 因此立即失效
+5. 读取密码变更水位 `user_pwd_changed:{adminId}` → `iat_ms（旧令牌回退 iat）<= 水位` → 401 `Token已失效，请重新登录`；Redis 读取异常 → 503
+6. 成功 → 注入 `$request->adminId` 和 `$request->adminUsername`
 
-**黑名单机制**：用户登出时，将 `md5(token)` 写入 Redis，TTL 设为 JWT 剩余有效期。Redis 故障时黑名单读取失败，`AdminAuth` 返回 503（fail-closed），不会放行可能已登出的 Token。
+**黑名单机制**：用户登出时，将 `md5(token)` 写入 Redis，TTL 设为 JWT 剩余有效期。Redis 故障时黑名单读取失败，`AdminAuth` 返回 503（fail-closed），不会放行可能已登出的 Token。AdminAuth 的账号状态校验同样失败关闭：数据库或水位读取异常一律 503，不放行无法确认状态的令牌。
 
 **登录侧防护**：验证码标记 `captcha_verified:{key}` 由登录接口通过原子 `DEL` 消费，只有返回 1 的请求继续，并发复用同一标记时仅一个请求能登录。密码校验前统一做长度检查，长度合法时始终执行一次 `password_verify`；用户不存在或存储哈希为空时使用固定 cost-10 占位 bcrypt 哈希，抹平“用户存在/不存在”的响应时间差，防止账号枚举（长度非法时直接按凭证错误处理，不进入 bcrypt）。验证码消费时 Redis 故障直接返回 503，不降级放行。
 
 **刷新令牌轮换**：`/api/v1/auth/refresh` 每次成功刷新都会签发新的 access/refresh 令牌对，旧 refresh_token 立即加入黑名单。为容忍并发请求与客户端重试，服务端以旧令牌的 md5 为键缓存新令牌对 60 秒（`refresh_rotation:<md5>`）：宽限期内再次提交同一旧令牌返回同一对新令牌，不会重复轮换；超过 60 秒后按黑名单拒绝。刷新前校验密码变更水位 `user_pwd_changed:<userId>`，令牌签发早于水位（改密、禁用、删除等触发）时返回 401。
 
 并发轮换由 `refresh_lock:<md5>`（`SET NX EX 5` + Lua 比较后删除释放）串行化：未抢到锁的请求短暂等待缓存出现，命中则复用同一对令牌，未命中返回 409；持锁请求写缓存后再拉黑旧令牌。读取缓存时若缓存中的任一枚令牌已被拉黑，立即删除缓存并返回 401，防止登出或改密后经缓存换回有效令牌。每个用户用 `user_refresh_rotations:<userId>`（TTL 120 秒）记录自己的轮换键；登出与改密会拉黑缓存令牌并清空轮换缓存/集合。客户端应串行刷新；HarmonyOS 客户端对并发 401 使用单飞（single-flight）刷新，多个请求共享同一次刷新结果。
+
+**登出**：`POST /admin/profile/logout` 必须携带 `refresh_token`，并校验其 `token_type=refresh` 且 `sub` 与当前登录账号一致（缺失或校验失败返回 422）。服务端拉黑当前 access token 与 refresh token、从 `user_tokens` / `user_refresh_tokens` 集合移除，并清理该用户所有 `refresh_rotation:*` 轮换缓存，防止旧 refresh token 重放换回有效令牌。
 
 ### 6.2 并发会话限制
 
@@ -247,6 +251,8 @@ AdminAuth 中间件实现，挂载在需要认证的路由组上。
 ```
 
 refresh_token 同样登记到 `user_refresh_tokens:{userId}` ZSET（score 为过期时间戳），供登出与改密统一吊销。
+
+Redis 使用 `maxmemory-policy noeviction`：黑名单、水位线、权限缓存等安全键均带 TTL，若采用 LRU 淘汰策略，内存压力下可能被提前淘汰而削弱吊销效果。`noeviction` 下写入在内存满时直接失败，鉴权/限流/导入等路径按失败关闭处理并返回 503，由监控告警触发扩容或清理，而不是静默丢失安全状态。
 
 **配置常量**：
 
@@ -287,14 +293,16 @@ API 权限标识格式：`{method}.{path}`
 
 **鉴权流程**：
 1. `$request->adminId` 为空 → 放行（路由未配置认证前置）
-2. 获取用户 → 启用角色（跳过 `status=0` 的禁用角色）→ 权限列表（`perm:<id>` 缓存 60 秒）
+2. 获取用户 → 启用角色（跳过 `status=0` 的禁用角色）→ 权限列表（`perm:<perm_version>:<id>` 缓存 60 秒）
 3. 持有启用 `super_admin` 角色的用户 → 通配权限 `['*']`，直接放行
 4. 构造 `strtolower(method) . '.' . trim(path, '/')` → 对比权限列表
 5. 匹配失败 → 403 `{"code": 403, "message": "无权限访问"}`
 
+权限缓存键带全局版本号：角色、权限或用户-角色关联变更后，`RbacService::invalidatePermissionCaches()` 递增 `perm_version`，旧版本键不再被读取并在 60 秒内自然过期，避免权限收紧后仍命中旧缓存。
+
 **授权边界（RbacService）**：分配角色时，非超级管理员所授角色的**全部权限（含已禁用角色携带的权限）**必须在其自身权限集合内，且不能分配 `super_admin`；编辑/删除/批量删除/批量启禁用用户时，目标持有的所有角色（含已禁用）都必须可授予给操作者，否则返回 403 `无权管理该用户`。`GET /admin/role/options` 只返回当前管理员可分配的启用角色。禁用角色也参与边界判断，防止先分配禁用高权限角色、之后再启用绕过。
 
-**二次确认**：BaseController 提供 `confirmPassword()` 方法，删除用户/角色/权限/配置、批量删除等敏感操作在 Controller 层额外要求输入当前密码，防止会话劫持后被未授权操作。失败计数 `pwd_confirm_fail:<id>` 为 5 次/300 秒，超过后 5 分钟内拒绝确认（计数非原子，见 12.2）。
+**二次确认**：BaseController 提供 `confirmPassword()` 方法，删除用户/角色/权限/配置、批量删除等敏感操作在 Controller 层额外要求输入当前密码，防止会话劫持后被未授权操作。失败计数 `pwd_confirm_fail:<id>` 通过 Lua 原子执行 `INCR` + 首次 `EXPIRE`，上限 5 次/300 秒，超过后 5 分钟内拒绝确认；成功验证后清零。
 
 **超级管理员保护**：删除/批量删除/批量启禁用会拒绝当前登录账号（422），非超级管理员也不能修改、禁用、删除超级管理员目标或分配 `super_admin`（403）。写入前统计启用状态、`slug = super_admin` 的用户数，若操作后剩余为 0 则返回 422 `系统必须保留至少一名启用的超级管理员`。内置 `super_admin` 角色本身禁止编辑/删除（403）。
 
@@ -310,9 +318,9 @@ API 权限标识格式：`{method}.{path}`
 | `user_tokens:<userId>` / `user_refresh_tokens:<userId>` | access/refresh 有效期 | ZSET 登记该用户已签发的访问/刷新令牌，吊销时逐个写入黑名单后删除集合 |
 | `jwt_blacklist:<md5(token)>` | 令牌剩余有效期（至少 1 秒） | 访问与刷新令牌黑名单 |
 | `user_refresh_rotations:<userId>` | 120 秒 | 该用户 60 秒宽限期轮换缓存键集合，吊销时一并清理 |
-| `perm:<userId>` | 60 秒 | 权限缓存，角色变化或吊销时清除 |
+| `perm:<perm_version>:<userId>` | 60 秒 | 权限缓存；角色/权限/用户-角色变更后版本号递增，旧键自然过期 |
 
-角色变化但不改密码/状态时只清除 `perm:<id>`，不吊销会话。Redis 操作全部捕获并记录日志，数据库写入成功后不会因 Redis 故障回滚；但 Redis 故障期间吊销可能未完全生效，属于已知的提交后失败开放（见 12.2）。
+`revokeUser()` 返回 `bool` 并失败关闭：写水位线、拉黑令牌、清理轮换/权限缓存任一关键步骤失败即返回 `false`。修改密码、禁用、删除、批量删除/禁用等敏感写入在**写库前**调用吊销；失败时中止写操作并返回 503，避免数据库已变更而旧会话仍有效。角色变化但不改密码/状态时不吊销会话，只递增 `perm_version` 使权限缓存整体失效。非关键 Redis 操作仍捕获并记录日志，但关键吊销和权限失效不再降级放行。
 
 ---
 
@@ -414,13 +422,15 @@ OperationLog 中间件对 POST / PUT / DELETE 请求自动记录操作日志。G
 - BaseController 提供 `encodeId()`, `decodeId()`, `encodeIds()` 便捷方法
 
 **导出脱敏**：Excel/PDF 导出时（ExportController），敏感字段统一脱敏：
-- 手机号：`138****1234`
+- 手机号：`EncryptionService::maskPhone()` 按长度区分——7-10 位纯数字固定电话保留首位与末两位、中间全部替换为 `*`（如 `1****67`）；带国家码或其他格式按前 3 位 + `****` + 后 4 位处理（如 `138****1234`）；短于 7 位原样返回
 - 邮箱：`a***@example.com`
 - 身份证：完全遮盖为 `********`
 
 **Excel 导出防护**：导出筛选条件必须是对象，key 限于目标表可用列，值必须是标量，否则返回 422，防止任意列/数组条件进入查询。所有单元格通过 `setValueExplicit(..., TYPE_STRING)` 以文本写入，杜绝 `=`、`+`、`-`、`@` 开头的值被 Excel 当作公式执行（公式注入）；表头与数据区边框只写一次。单次最多 5000 行（查询 `LIMIT 5001` 探测，超出返回 HTTP 422）；5000 行 × 9 列在 128M 工作进程下实测约占 65MiB，已接近上限，不应同时提高行数与列数。
 
-**用户导入防护**：限制 5MB 文件、2000 行数据（含表头 2001 行）、32,000 个单元格。`.xlsx` 在加载前做 ZIP 解压体积预检（`xl/**.xml` 解压后超过 8MB 或单元格超过 32,000 个即返回 422），防止压缩炸弹；`.xls`/`.xlsx` 都先读取工作表元数据，任一工作表超过 2001 行或行 × 列超过 32,000 单元格即拒绝，避免整本工作簿进入内存；加载后再次校验实际行数。每行独立校验（用户名 3-50、密码 6-32、姓名 ≤50、手机号 ≤20、邮箱 ≤254、状态 0/1），已存在用户名一次性预取，失败行记录行号与通用原因，数据库异常仅写服务端日志。整批导入由 Redis 锁 `import_users_lock`（`SET NX EX 1800`）串行化，已有任务时返回 409，避免并发导入绕过重名检查；2000 行 bcrypt 属 CPU 密集操作，锁 TTL 按最坏耗时设置，进程异常退出由 TTL 兜底释放。每行用户与角色关联同事务，失败回滚该行。文件损坏、无法读取或无法解析时统一返回 422 与可读提示，不泄漏异常内部信息。
+**用户导入防护**：限制 5MB 文件、2000 行数据（含表头 2001 行）、32,000 个单元格。`.xlsx` 在加载前做 ZIP 解压体积预检（`xl/**.xml` 解压后超过 8MB 或单元格超过 32,000 个即返回 422），防止压缩炸弹；`.xls`/`.xlsx` 都先读取工作表元数据，任一工作表超过 2001 行或行 × 列超过 32,000 单元格即拒绝，避免整本工作簿进入内存；加载后再次校验实际行数。每行独立校验（用户名 3-50、密码 6-32、姓名 ≤50、手机号 ≤20、邮箱 ≤254、状态 0/1），已存在用户名一次性预取，失败行记录行号与通用原因，数据库异常仅写服务端日志。每行用户与角色关联同事务，失败回滚该行。文件损坏、无法读取或无法解析时统一返回 422 与可读提示，不泄漏异常内部信息。
+
+导入采用异步队列：`POST /admin/import/users` 完成校验后获取 Redis 锁 `import_users_lock`（`SET NX EX 1800`，避免并发导入绕过重名检查），将文件以 `0600` 存入 `runtime/imports/`、写入任务元数据并入队，返回 HTTP 202 与 `job_id`；已有任务时返回 409。单进程 `import-worker`（`count=1`）串行消费 Redis 队列，2000 行 bcrypt 的 CPU 开销不再占用 HTTP worker；任务状态通过 `GET /admin/import/status/{job}` 轮询（仅创建者可见），状态为 `queued`/`processing`/`completed`/`failed`。Redis 不可用时导入失败关闭（获取锁返回 503，入队失败返回 500 并清理文件/元数据/锁），不降级执行导入。worker 重启时从 processing 列表恢复未完成任务，`processing_at` 60 秒宽限期避免滚动重启时重复消费，锁 TTL 1800 秒兜底释放。
 
 ---
 
@@ -557,8 +567,8 @@ Policy: https://erik.xyz/security-policy
 | JWT 无状态无法主动失效 | Token 未过期前无法从服务端主动吊销（除黑名单外） | 黑名单 + 密码变更水位 + 短期 2h TTL 降低风险窗口 |
 | 管理员端点无特殊限流 | 管理员接口与普通接口共用 60/min 默认限制 | 管理员操作频率天然低，暂无需区分 |
 | PCRE 回溯限制 | 包内置 1,000,000 回溯上限+finally恢复，极端复杂输入仍有性能风险 | 请求体大小限制 (10MB) 兜底 |
-| 二次确认失败计数非原子 | `pwd_confirm_fail:<id>` 的 `INCR` 与首次 `EXPIRE` 分两步执行，极端并发下计数窗口可能略长 | 仅影响猜密码速率限制，不影响密码校验正确性；Redis 故障时不阻断本次确认 |
-| 会话吊销在数据库提交后执行 | Redis 故障时，用户/角色已写入但黑名单与水位未写入，旧令牌可能继续有效至自然过期 | Redis 操作均记录日志；管理端可用时监控告警，必要时手工拉黑；令牌 TTL 最长为 access 2h / refresh 14d |
-| 导入锁故障开放 | Redis 不可用时 `import_users_lock` 降级为无锁导入 | 管理员低并发场景风险有限；Redis 恢复后锁立即生效 |
+| 二次确认节流依赖 Redis | Redis 故障时跳过失败计数，仍执行密码校验 | 仅影响猜密码速率限制，不影响密码校验正确性；敏感写入的会话吊销另行失败关闭 |
+| 敏感写入依赖 Redis 吊销 | Redis 故障时修改密码、禁用、删除等写入在写库前中止并返回 503 | 调用方可重试；不会出现数据库已变更但旧会话仍有效 |
+| 导入依赖 Redis 队列 | Redis 故障时导入返回 503/500，不会在未持锁时执行 | 监控 Redis 并告警；恢复后重新发起导入，已落盘文件由失败清理逻辑删除 |
 | PHP ≥ 8.4 的 bcrypt 默认 cost 变化 | 8.4 起 `PASSWORD_BCRYPT` 默认 cost 由 10 升至 12，新用户哈希更慢；登录占位哈希固定 cost 10，时间差可能重新出现；2000 行导入耗时与 1800 秒锁 TTL 余量下降 | 生产固定 PHP 8.3（见 Dockerfile）；升级 8.4 前评估登录耗时与导入锁 TTL，并把占位哈希 cost 调整到与存储哈希一致 |
-| 角色权限编辑不主动清缓存 | `RoleController` 修改 `permission_ids` 后，受影响用户的 `perm:<id>` 缓存最长 60 秒才过期 | 权限收紧有最长 60 秒延迟；敏感操作可等待缓存过期或手工删除 `perm:<id>` |
+| 权限缓存版本依赖 Redis | `perm_version` 递增失败时，旧版本缓存可能继续被读取 | 鉴权在 Redis 不可用时降级查库；旧缓存最长 60 秒自然过期，敏感权限变更后建议等待一个 TTL |

@@ -20,7 +20,7 @@ Copyright (c) 2026 erik <erik@erik.xyz> — https://erik.xyz
 |----|------|
 | Authentication | Login/Refresh/Logout + click CAPTCHA (marker consumed atomically) + account lockout + session limit + refresh rotation with 60s grace and rotation lock; placeholder bcrypt for unknown users at valid password lengths |
 | Dashboard | Real-time stats/trends/distribution/logs (Redis 5m cache) |
-| Users | CRUD + batch delete/enable-disable + role assignment + Excel import (5MB/2000-row/32,000-cell guards, HTTP 409 when an import is running) |
+| Users | CRUD + batch delete/enable-disable + role assignment + async Excel import (202 + `job_id`, `import-worker` queue consumer, status polling; 5MB/2000-row/32,000-cell guards, HTTP 409 when an import is running, fail-closed when Redis is down) |
 | Roles & Permissions | CRUD + permission tree + RBAC method.path authorization + assignable-role options + permission-subset boundary |
 | System Config | Key-value CRUD |
 | Operation Audit | Log query + automatic detection of 8 platform client sources + recursive PII masking of request bodies |
@@ -73,7 +73,7 @@ open-admin/
 │   │   ├── LogController.php       # Operation log query
 │   │   ├── ProfileController.php   # Profile + logout
 │   │   ├── ExportController.php    # Excel/PDF export
-│   │   ├── ImportController.php    # Excel user import
+│   │   ├── ImportController.php    # Excel user import (async enqueue/status)
 │   │   ├── UploadController.php    # File upload
 │   │   ├── HealthController.php    # Health check
 │   │   ├── DocsController.php      # OpenAPI docs
@@ -86,19 +86,20 @@ open-admin/
 │   │   ├── SnowflakeService.php
 │   │   ├── EncryptionService.php
 │   │   ├── SessionService.php  # Session revocation + permission-cache clearing
-│   │   └── RbacService.php     # RBAC authorization boundaries
+│   │   ├── RbacService.php     # RBAC authorization boundaries + permission-cache version invalidation
+│   │   └── ImportJobService.php# Import lock/queue/job metadata
 │   ├── common/                 # Common definitions (incl. Apidoc Definitions)
 │   ├── middleware/             # Middleware (7)
 │   │   ├── Cors.php            # CORS (global)
 │   │   └── (migrated to erikwang2013/security-php package)  # 31 attack detectors
 │   │   ├── RateLimit.php       # Redis rate limiting (global, Lua atomic, fail-closed)
-│   │   ├── AdminAuth.php       # JWT auth + blacklist (Redis fail-closed)
-│   │   ├── AdminPermission.php # RBAC permission check (Redis 60s cache)
+│   │   ├── AdminAuth.php       # JWT auth + blacklist + account status/password watermark (fail-closed)
+│   │   ├── AdminPermission.php # RBAC permission check (versioned Redis 60s cache)
 │   │   └── OperationLog.php    # Automatic operation logging (incl. client source detection)
 │   ├── model/                  # Data models
 │   ├── view/index/view.html    # Site home page template (GET /, project pet + entry navigation)
 │   ├── queue/                  # Queue tasks
-│   └── process/                # Processes (Http, Monitor, LogCleanup)
+│   └── process/                # Processes (Http, Monitor, LogCleanup, ImportWorker)
 ├── apps/
 │   ├── flutter/                # Flutter Web admin
 │   │   └── lib/app/
@@ -178,12 +179,14 @@ open-admin/
 - **Account lockout**: after 5 consecutive failed logins the account is locked for 15 minutes; existing users use `account_lock:u:<userId>` / `login_fail:u:<userId>`, unknown usernames use `account_lock:n:<md5(lower(trim(username)))>` / `login_fail:n:<same>`, all keys have a 900-second TTL, and case/whitespace variants share the counter; `AuthController::lockKeys()` is the single source
 - **Login timing and CAPTCHA**: the verified marker is consumed atomically with `Redis::del("captcha_verified:<key>") === 1`, so only one concurrent/replayed login succeeds; when the password length is valid, `password_verify` always runs, against a fixed cost-10 dummy bcrypt hash for unknown users or empty hashes, removing the timing oracle
 - **Concurrent session limit**: at most 3 valid tokens per user (`user_tokens:<userId>` ZSET, member md5(token), score expiry time); the oldest token is blacklisted when exceeded
-- **Session revocation**: `SessionService::revokeUser()` writes the `user_pwd_changed:<id>` watermark (TTL = refresh TTL + 60), blacklists every member of the `user_tokens` / `user_refresh_tokens` ZSETs with its remaining TTL under `jwt_blacklist:<md5>`, deletes both ZSETs, and clears `user_refresh_rotations:<id>` rotation caches and the `perm:<id>` permission cache. It runs on self-service password change, admin password reset, disable, delete, batch delete and batch disable; enable and ordinary edits do not revoke
-- **Refresh rotation**: after a refresh token is exchanged, the old token is blacklisted; replaying the old token within a 60-second grace window returns the same token pair. Rotation is serialized by `refresh_lock:<md5>` (`SET NX EX 5` + Lua release); a blacklisted cached token deletes the cache and returns 401, and a concurrent cache miss returns 409. Logout blacklists cached pairs and clears `user_refresh_rotations:<userId>`; the refresh endpoint rejects tokens whose `iat` predates the `user_pwd_changed` watermark; HarmonyOS issues only one refresh for concurrent 401s
+- **AdminAuth state checks**: every request loads `AdminUser`; a missing user or `status != 1` returns 401, an access token with `iat <= user_pwd_changed:<id>` returns 401, and any blacklist/account-query/watermark read failure returns 503 (fail closed)
+- **Session revocation**: `SessionService::revokeUser()` returns `bool`, writes the `user_pwd_changed:<id>` watermark (TTL = refresh TTL + 60), blacklists every member of the `user_tokens` / `user_refresh_tokens` ZSETs with its remaining TTL under `jwt_blacklist:<md5>`, deletes both ZSETs, and clears `user_refresh_rotations:<id>` rotation caches and the permission cache; any failed step returns `false`. It runs **before the database write** on self-service password change, admin password reset, disable, delete, batch delete and batch disable; a revocation failure aborts the write with 503. Enable and ordinary edits do not revoke
+- **Refresh rotation**: after a refresh token is exchanged, the old token is blacklisted; replaying the old token within a 60-second grace window returns the same token pair. Rotation is serialized by `refresh_lock:<md5>` (`SET NX EX 5` + Lua release); a blacklisted cached token deletes the cache and returns 401, and a concurrent cache miss returns 409. Logout requires a `refresh_token` and validates `token_type=refresh` with `sub` matching the current account, then blacklists the access/refresh tokens, removes the ZSET members and clears rotation caches under `user_refresh_rotations:<userId>`; the refresh endpoint rejects tokens whose `iat` predates the `user_pwd_changed` watermark; HarmonyOS issues only one refresh for concurrent 401s
 - **Super admin protection**: cannot delete the current account or change its status; at least one enabled super admin must remain; the `super_admin` role cannot be edited/deleted; an enabled `super_admin` role yields the wildcard permission `['*']` in `AdminPermission`/`RbacService`. The last-super-admin check and write are serialized by the MySQL named lock `open_admin:last_super_admin` (`GET_LOCK` 3s / released in `finally`), covering delete, batch delete, update-disable, batch enable/disable and role changes; a timeout or database error returns 503
 - **Role assignment boundary**: non-super admins may grant only roles whose permissions are a subset of their own (`RbacService::canGrant`; disabled roles' permission rows are evaluated too) and may manage only accounts whose permissions do not exceed theirs (`canManageUser`); they cannot assign `super_admin` or operate on super-admin targets. Authorization is re-checked inside the named lock against freshly read roles
-- **Confirmation throttle**: `BaseController::confirmPassword` tracks `pwd_confirm_fail:<adminId>` per admin; 5 failures in 300 seconds block further confirmation until the window passes, and success clears the counter. Redis errors do not break the confirmation flow
-- **Redis fail-closed**: authentication and rate limiting for `/api/` and `/admin/` return 503 when Redis is unavailable (health checks, metrics and other non-API routes pass through)
+- **Permission cache versioning**: `AdminPermission` uses `perm:<perm_version>:<adminId>` with a 60-second TTL; `RbacService::invalidatePermissionCaches()` increments `perm_version` after role, permission or user-role changes, so old keys are no longer read and expire naturally
+- **Confirmation throttle**: `BaseController::confirmPassword` tracks `pwd_confirm_fail:<adminId>` per admin with an atomic Lua `INCR` + first-time `EXPIRE`; 5 failures in 300 seconds block further confirmation until the window passes, and success clears the counter. Redis errors do not break the current password check
+- **Redis fail-closed**: authentication and rate limiting for `/api/` and `/admin/` return 503 when Redis is unavailable (health checks, metrics and other non-API routes pass through); a database failure while AdminAuth loads the account also returns 503
 - **security.txt**: `/.well-known/security.txt` RFC 9116 endpoint
 - **Nginx security config**: `docs/nginx-security.conf` reverse-proxy hardening reference; static assets repeat security headers in their own location, and CI validates with `nginx -t`
 
@@ -219,7 +222,7 @@ Redis sliding window (Lua atomic), default 60 req/min/IP/route:
 - **Super admin protection**: the `update`/`destroy` methods of `RoleController` are forbidden from operating on roles with `slug == 'super_admin'`; `UserController` forbids deleting the current account or changing its status, and at least one enabled super admin must remain; non-super admins cannot assign `super_admin`, operate on super-admin targets, or manage users with higher permissions; the last-super-admin check and role-grant authorization must run through `withSuperAdminLock()` so they share the MySQL named lock with the write and re-read roles inside it
 - **User update validation**: `UserController` / `ProfileController` decrypt the transport password, phone and email before validating; passwords are 6-32 plaintext characters, `real_name` at most 50, `phone` at most 20, `email` at most 254, and `status` exactly 0 or 1. Masked list values (`138****1234`, `a***@domain`) submitted by clients are treated as unchanged, and mask-shaped values are always skipped so they cannot overwrite stored data
 - **Import protection**: `ImportController` caps files at 5MB and data at 2,000 rows; every row is validated (username 3-50, password 6-32, required real_name ≤50, phone ≤20, email ≤254, status ∈ {0,1}) with generic failure reasons and server-side exception logging; before loading the workbook it checks that `.xlsx` entries under `xl/**.xml` expand to no more than 8MB and stream-counts all worksheet cells to at most 32,000; for both `.xls` and `.xlsx`, `listWorksheetInfo` pre-checks every sheet and rejects any sheet over 2,001 rows or with `totalRows * totalColumns` above 32,000, and corrupt/unparseable workbooks return 422 without leaking exception internals
-- **Import lock and roles**: the Redis `import_users_lock` (`SET NX EX 1800`, Lua compare-and-delete release) serializes the whole import, returning 409 when busy and degrading to an unlocked import when Redis is down; optional `role_ids` pass through `RbacService::canGrant`, and each user row plus role sync run in one transaction that rolls back on failure. Imports still hash every row with bcrypt, so the lock prevents concurrent imports from stacking CPU load
+- **Import queue and roles**: `POST /admin/import/users` validates, takes the Redis `import_users_lock` (`SET NX EX 1800`, Lua compare-and-delete release) and returns 409 when busy; the file is stored under `runtime/imports/` with mode `0600`, job metadata is written to Redis and the job enqueued, then the endpoint returns HTTP 202 `{job_id,status:'queued'}`. A single `import-worker` process (`config/process.php`, `count=1`) consumes the queue serially; `GET /admin/import/status/{job}` (`AdminAuth` only, creator only) returns `queued/processing/completed/failed` plus the result, with metadata retained for 24 hours. On restart the worker recovers jobs from the processing list, and a 60-second grace period prevents duplicate consumption. Redis failures are fail-closed: 503 while taking the lock, 500 on metadata/enqueue failure with the file, metadata and lock cleaned up, and imports are never run without the lock. Optional `role_ids` pass through `RbacService::canGrant`, and each user row plus role sync run in one transaction that rolls back on failure
 - **Export protection**: `ExportController` writes data cells with `setValueExplicit(..., DataType::TYPE_STRING)` to block `= + - @` formula injection; `conditions` must be an array whose keys belong to the export columns and whose values are scalar, otherwise 422; the border style is applied once to the data range, and 5000 rows × 9 columns peak around 65MiB under a 128M limit
 - **Log masking**: `OperationLog::filterSensitive` recursively masks request bodies; `password`/`token`/`secret` and similar keys become `***`, and `phone`/`email`/`id_card`/`mobile`/`address` are masked as well
 - webman converts PHP warnings into exceptions; undefined properties/variables cause 500 errors
@@ -276,7 +279,8 @@ docker compose up -d --build
 - TLS defaults to a self-signed certificate for `DOMAIN` (`localhost` by default). Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; existing certificates are not overwritten unless `--rotate-tls` is used. HSTS is commented out by default; enable it after a real domain certificate is configured.
 - Ports: Nginx `80/443` (port 80 only keeps `/.well-known/acme-challenge/`, everything else 301 to HTTPS); webman listens on `8791` inside the container only.
 - Logs: Nginx and MySQL write to stdout/stderr and Docker rotates at `10m × 3`; use `docker compose logs -f app`. Host persistent directories: `deploy/data/{mysql,redis,runtime,upload,backups}`.
-- Resource limits: `deploy/docker-compose.yml` sets CPU/memory/pids limits per service (app 1.0/512M/256, init 0.5/256M/128, mysql 1.5/768M/512, redis 0.5/384M/128, nginx 0.5/128M/128, backup 0.5/256M/128). The Redis container's 384M pairs with `redis-server --maxmemory 256mb`, leaving 128M for AOF rewrite/fork, client buffers and fragmentation; change both values together.
+- Resource limits: `deploy/docker-compose.yml` sets CPU/memory/pids limits per service (app 1.0/512M/256, init 0.5/256M/128, mysql 1.5/768M/512, redis 0.5/384M/128, nginx 0.5/128M/128, backup 0.5/256M/128). The Redis container's 384M pairs with `redis-server --maxmemory 256mb --maxmemory-policy noeviction`, leaving 128M for AOF rewrite/fork, client buffers and fragmentation; change both values together. `noeviction` keeps security keys (blacklist, watermark, permission cache) from being evicted; when memory is full, dependent requests fail closed and alerting fires.
+- Import worker: `config/process.php` registers a non-listening `import-worker` process (`count=1`) that consumes the Redis import queue serially, recovers unfinished jobs from the processing list on startup and removes expired job files; do not raise `count`, because recovery is designed for a single worker.
 - Automatic backup: the `backup` service runs `mysqldump` daily as the least-privilege `backup_reader` user (read-only on the application database plus `DELETE` on `erik_operation_log`) into `deploy/data/backups`, and archives `deploy/data/upload` as tar; backups are retained for 30 days and operation logs older than 180 days are purged daily.
 - Log cleanup: `config/process.php` registers a non-listening `log-cleanup` process (`count=1`) that performs a best-effort cleanup on startup and then daily deletes `operation_log` rows older than 180 days in 10,000-row batches, up to 10 batches (100,000 rows) per run; it and the backup-service cleanup are fallbacks for each other.
 - Startup order: in `deploy/docker-compose.yml`, `nginx` waits for the app health check via `depends_on.app.condition: service_healthy`, avoiding 502s during startup.
@@ -288,7 +292,7 @@ docker compose up -d --build
 `.github/workflows/ci.yml` defines the GitHub Actions pipeline:
 
 - PHP syntax check (`php -l`)
-- PHPUnit unit tests (37 tests / 81 assertions, including `LockKeyTest`, `RefreshRotationCacheTest`, `ProcessConfigTest`, `SessionServiceTest`, `OperationLogFilterTest`, `UserMaskHelperTest` and `ImportSizeGuardTest`)
+- PHPUnit unit tests (65 tests / 226 assertions, including `LockKeyTest`, `RefreshRotationCacheTest`, `ProcessConfigTest`, `SessionServiceTest`, `OperationLogFilterTest`, `UserMaskHelperTest`, `ImportSizeGuardTest`, `RbacBoundaryTest`, `ConfirmThrottleTest`, `PdfExportLimitTest` and `ImportAsyncTest`; the CI PHP job runs MySQL 8.0 and Redis 7 services, installs the `zip` extension and sets `DB_PASSWORD=root`, so DB/Redis-dependent cases execute in CI; they skip automatically locally when services are unavailable)
 - Flutter static analysis (`flutter analyze`)
 - Docker image build and runtime dependency checks (`php -m` for redis/zip/gd, `gd_info` for FreeType/JPEG)
 - Compose/Nginx config validation: root compose, a temporary `deploy/` compose, and `nginx -t` for both Nginx configs

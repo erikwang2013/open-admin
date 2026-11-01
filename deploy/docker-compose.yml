@@ -63,7 +63,9 @@ services:
     command:
       - sh
       - -c
-      - exec redis-server --requirepass "$$REDIS_PASSWORD" --appendonly yes --maxmemory 256mb --maxmemory-policy volatile-lru
+      # noeviction：安全键（jwt_blacklist/account_lock/perm）带 TTL，volatile-lru 在内存压力下可能淘汰它们；
+      # 宁可写入失败让鉴权/限流 fail-closed，也不静默丢失吊销状态。maxmemory 到顶时应用返回 503。
+      - exec redis-server --requirepass "$$REDIS_PASSWORD" --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction
     env_file: ./env/redis.env
     volumes:
       - ./data/redis:/data

@@ -88,6 +88,19 @@ export interface User {
 export interface UserListResult extends PageResult<User> {}
 
 /**
+ * 创建用户请求体（role_ids 为角色 hashid 数组）
+ */
+export interface UserCreatePayload {
+  username: string;
+  real_name: string;
+  password: string;
+  phone?: string;
+  email?: string;
+  status?: number;
+  role_ids: string[];
+}
+
+/**
  * 角色模型
  */
 export interface Role {
@@ -96,6 +109,15 @@ export interface Role {
   slug: string;
   description: string;
   status: number;
+}
+
+/**
+ * 角色选项（GET /admin/role/options，仅可分配角色）
+ */
+export interface RoleOption {
+  id: string;
+  name: string;
+  slug: string;
 }
 
 /**
@@ -116,6 +138,20 @@ export interface OperationLogItem {
  */
 export interface LoginRequest {
   username: string;
+  password: string;
+}
+
+/**
+ * refresh_token 请求体（刷新令牌 / 登出）
+ */
+export interface RefreshTokenRequest {
+  refresh_token: string;
+}
+
+/**
+ * 密码二次确认请求体（删除用户等敏感操作）
+ */
+export interface PasswordConfirmRequest {
   password: string;
 }
 

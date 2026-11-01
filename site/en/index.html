@@ -163,7 +163,7 @@
           <p class="card-label">Auth</p>
           <h3>Sign-in &amp; tokens</h3>
           <p>Click captcha (consumed atomically), JWT issue and verify, token blacklist. access_token lasts 2 hours; refresh_token lasts 14 days. Refresh rotation has a 60-second grace window and a rotation lock; HarmonyOS refreshes concurrent 401s only once.</p>
-          <p class="feature-foot">Lockout after 5 failures for 15 minutes (counted by normalized account); at most 3 active tokens per user; password changes, disables and deletes revoke all sessions; password confirmation is throttled at 5 failures per 5 minutes; deleting the current account or removing the last enabled super admin is blocked.</p>
+          <p class="feature-foot">Lockout after 5 failures for 15 minutes (counted by normalized account); at most 3 active tokens per user; password changes, disables and deletes revoke every session before the DB write and return 503 if revocation fails; AdminAuth rejects disabled accounts and tokens issued before the millisecond password watermark; logout requires and validates refresh_token; password confirmation uses an atomic 5-per-5-minute throttle; deleting the current account or removing the last enabled super admin is blocked.</p>
         </article>
 
         <article class="feature-card span-3" data-reveal>
@@ -175,13 +175,13 @@
         <article class="feature-card span-4" data-reveal>
           <p class="card-label">Users</p>
           <h3>User management</h3>
-          <p>CRUD, batch delete and status changes, soft delete, role assignment (role_ids / GET /admin/role/options); Excel import caps at 5MB / 2000 rows / 8MB expanded / 32,000 cells, holds a single-instance lock and validates each row before assigning roles.</p>
+          <p>CRUD, batch delete and status changes, soft delete, role assignment (role_ids / GET /admin/role/options); Excel import caps at 5MB / 2000 rows / 8MB expanded / 32,000 cells, returns 202 + job_id after validation, and a single import-worker serializes the Redis queue; GET /admin/import/status/{job} is owner-only; the import lock lasts 1800s, files are stored 0600, and Redis outages fail closed.</p>
         </article>
 
         <article class="feature-card span-4" data-reveal>
           <p class="card-label">Permissions</p>
           <h3>Roles &amp; permission tree</h3>
-          <p>RBAC checks method.path with a 60-second permission cache; role grants must stay within the actor's permissions and the target must be manageable (disabled roles included); the super_admin role cannot be edited/deleted, and at least one enabled super admin must remain.</p>
+          <p>RBAC checks method.path with a versioned 60-second permission cache (perm:&lt;version&gt;:&lt;id&gt;) invalidated on role, permission and user-role changes; role grants must stay within the actor's permissions and the target must be manageable (disabled roles included); role and permission inputs are type, length and enum validated; the super_admin role cannot be edited/deleted, and at least one enabled super admin must remain.</p>
         </article>
 
         <article class="feature-card span-4" data-reveal>
@@ -200,14 +200,14 @@
         <article class="feature-card span-5" data-reveal>
           <p class="card-label">Files</p>
           <h3>Files &amp; export</h3>
-          <p>Upload checks, Excel/PDF exports, automatic sensitive-data masking; Excel cells are written as plain text to block formula injection, and exports above 5000 rows or with unknown filters return 422.</p>
+          <p>Upload checks, Excel/PDF exports, automatic sensitive-data masking; Excel cells are written as plain text to block formula injection, and exports above 5000 rows or with unknown filters return 422; PDF accepts scalar columns and cells only, with columns + cells ≤ 30,000, rows ≤ 5,000 and stats ≤ 200.</p>
         </article>
 
         <article class="feature-card span-7 feature-card-pet" data-reveal>
           <div>
             <p class="card-label">Clients</p>
             <h3>Multi-client</h3>
-            <p>Flutter Web uses a desktop admin layout; HarmonyOS covers phone, tablet and 2in1.</p>
+            <p>Flutter Web uses a desktop admin layout; HarmonyOS covers phone, tablet and 2in1; HarmonyOS logs out through the server, selects roles when creating users and requires the admin password to delete.</p>
           </div>
           <img src="./assets/img/pet-expressions/cute.svg" data-lightbox width="82" height="109" alt="Xiao An, cute expression" loading="lazy" decoding="async">
         </article>
@@ -224,7 +224,7 @@
           <ul class="platform-list">
             <li>CSP and security headers; the static site and /apidoc/ each get a dedicated CSP, and static assets repeat the headers in their own Nginx location</li>
             <li>Rate limit 60/min/IP/route via Redis Lua sliding window</li>
-            <li>Redis outages fail closed with 503 for /api/ and /admin/ auth and rate limiting</li>
+            <li>Redis outages fail closed with 503 for /api/ and /admin/ auth, rate limiting and imports</li>
             <li>Role grants check the permission-subset and target-management boundaries, including disabled roles</li>
             <li>security.txt follows RFC 9116</li>
           </ul>
@@ -233,7 +233,7 @@
         <article class="platform-card" data-reveal>
           <p class="card-label">Observability</p>
           <h3>See it after deploy</h3>
-          <p>Health checks, 5 Prometheus gauges, OpenAPI docs plus the same-origin /apidoc/ explorer; a single-machine Docker Compose stack (deploy/) sets CPU/memory/pids limits per service, with the Redis container at 384M paired with 256MB maxmemory, and Nginx waits for the app to become healthy; least-privilege database/upload backups with offsite-sync.sh, and an in-app log-cleanup process (up to 10 × 10k rows per run, 180-day retention). CI runs PHPUnit (37 tests / 81 assertions) and Flutter analyze, and validates PHP extensions, Compose and both Nginx configs.</p>
+          <p>Health checks, 5 Prometheus gauges, OpenAPI docs plus the same-origin /apidoc/ explorer; a single-machine Docker Compose stack (deploy/) sets CPU/memory/pids limits per service, with the Redis container at 384M paired with 256MB maxmemory and noeviction (security keys are never evicted; auth and rate limits fail closed when full), and Nginx waits for the app to become healthy; least-privilege database/upload backups with offsite-sync.sh, and an in-app log-cleanup process (up to 10 × 10k rows per run, 180-day retention). CI runs PHPUnit (65 tests / 226 assertions, MySQL 8.0 + Redis 7 services, zip extension) and Flutter analyze, and validates PHP extensions, Compose and both Nginx configs.</p>
           <a class="text-link" href="https://github.com/erikwang2013/open-admin/blob/main/docs/API.md" target="_blank" rel="noopener">API docs</a>
         </article>
 
@@ -455,6 +455,7 @@ docker compose up -d --build
             <tr><td><code>POST</code></td><td><code>/api/v1/auth/login</code></td><td>Sign in and issue tokens</td></tr>
             <tr><td><code>GET</code></td><td><code>/api/v1/auth/public-key</code></td><td>Get the login password encryption key</td></tr>
             <tr><td><code>POST</code></td><td><code>/api/v1/auth/refresh</code></td><td>Refresh access_token</td></tr>
+            <tr><td><code>GET</code></td><td><code>/admin/import/status/{job}</code></td><td>Poll an async import job (owner only)</td></tr>
             <tr><td><code>GET</code></td><td><code>/health</code></td><td>Health check</td></tr>
             <tr><td><code>GET</code></td><td><code>/metrics</code></td><td>Prometheus metrics</td></tr>
             <tr><td><code>GET</code></td><td><code>/api/docs</code></td><td>OpenAPI interactive docs</td></tr>
@@ -492,8 +493,12 @@ docker compose up -d --build
 
       <ol class="timeline">
         <li data-reveal>
+          <div class="timeline-meta"><span class="version-tag">v2.1.12</span><time datetime="2026-11-01">2026-11-01</time></div>
+          <div class="timeline-body"><h3>Residual hardening and async import</h3><p>Session revocation now fails closed: password changes, disables and deletes revoke sessions before the DB write and return 503 when Redis fails; AdminAuth checks account status and the millisecond password watermark; logout requires and validates refresh_token; password confirmation uses an atomic Lua throttle. The permission cache is versioned (perm:&lt;version&gt;:&lt;id&gt;) and invalidated on role, permission and user-role changes, with role and permission input validation. Phone masking covers country codes, formatted values and 7–10 digit numbers; PDF export accepts scalar columns and cells only, with columns + cells ≤ 30,000, rows ≤ 5,000 and stats ≤ 200. HarmonyOS logs out through the server, can select roles when creating users and sends the admin password on delete. Import is asynchronous: POST returns 202 + job_id, a single import-worker consumes the Redis queue, GET /admin/import/status/{job} is owner-only polling, the lock lasts 1800s, files are stored 0600 and Redis outages fail closed. Redis now uses noeviction to protect security keys; PHPUnit covers 65 tests / 226 assertions, and CI adds the zip extension plus MySQL 8.0 / Redis 7 services.</p></div>
+        </li>
+        <li data-reveal>
           <div class="timeline-meta"><span class="version-tag">v2.1.11</span><time datetime="2026-11-01">2026-11-01</time></div>
-          <div class="timeline-body"><h3>RBAC boundaries and session safety</h3><p>Resetting an admin password, disabling or deleting an account now revokes every session immediately; captcha markers are consumed atomically, and login runs an equal-cost password check even for unknown accounts; password confirmation for sensitive operations is throttled at 5 failures per 5 minutes; user role assignment adds role_ids and GET /admin/role/options with permission-subset and target-management boundaries (disabled roles included) and transactional user/import writes; masked phone/email list values are no longer written back on edit; imports validate each row, return generic errors, drop the N+1 lookup, hold a single-instance lock, bound xls cells and accept role_ids; Excel exports write every cell as a string (no formula injection) and use range styling, with unknown filter fields returning 422; log cleanup handles up to 10 × 10k rows per run; Nginx waits for application health; operation logs mask phone/email PII.</p></div>
+          <div class="timeline-body"><h3>RBAC boundaries and session safety</h3><p>Resetting an admin password, disabling or deleting an account now revokes every session immediately; captcha markers are consumed atomically, and login runs an equal-cost password check even for unknown accounts; password confirmation for sensitive operations is throttled at 5 failures per 5 minutes; user role assignment adds role_ids and GET /admin/role/options with permission-subset and target-management boundaries (disabled roles included) and transactional user/import writes; masked phone/email list values are no longer written back on edit; imports validate each row, return generic errors, drop the N+1 lookup, hold an import lock, bound xls cells and accept role_ids; Excel exports write every cell as a string (no formula injection) and use range styling, with unknown filter fields returning 422; log cleanup handles up to 10 × 10k rows per run; Nginx waits for application health; operation logs mask phone/email PII.</p></div>
         </li>
         <li data-reveal>
           <div class="timeline-meta"><span class="version-tag">v2.1.10</span><time datetime="2026-11-01">2026-11-01</time></div>

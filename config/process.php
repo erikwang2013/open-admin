@@ -67,5 +67,10 @@ return [
     'log-cleanup' => [
         'handler' => app\process\LogCleanup::class,
         'count' => 1,
+    ],
+    // 用户导入后台 worker：串行消费 Redis 导入队列（单进程）
+    'import-worker' => [
+        'handler' => app\process\ImportWorker::class,
+        'count' => 1,
     ]
 ];

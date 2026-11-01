@@ -140,11 +140,13 @@ class ProfileController extends BaseController
             return $this->fail(trans('messages.password_too_short'), 422);
         }
 
+        // 写库前吊销会话；失败则中止，避免密码已改但旧会话仍有效
+        if (!SessionService::revokeUser((int) $adminId)) {
+            return $this->sessionRevokeFailure();
+        }
+
         $user->password = password_hash($newPassword, PASSWORD_BCRYPT);
         $user->save();
-
-        // 密码已变更：吊销该用户所有在线 access/refresh token
-        SessionService::revokeUser($adminId);
 
         return $this->success([], trans('messages.password_changed'));
     }
@@ -154,51 +156,59 @@ class ProfileController extends BaseController
      * @Apidoc\Group("个人中心")
      * @Apidoc\Method("POST")
      * @Apidoc\Url("/admin/profile/logout")
-     * @Apidoc\Desc("当前管理员登出，Token加入黑名单")
+     * @Apidoc\Desc("当前管理员登出，access/refresh token 加入黑名单")
+     * @Apidoc\Param("refresh_token", type="string", require=true, desc="当前登录管理员的刷新令牌")
      */
     public function logout(Request $request): Response
     {
         $header = $request->header('Authorization', '');
         $token  = preg_replace('/^Bearer\s+/i', '', trim($header));
-        $refreshToken = (string) $request->input('refresh_token', '');
+        $refreshToken = $request->input('refresh_token', '');
+        $adminId = (int) ($request->adminId ?? 0);
 
         if (empty($token)) {
             return $this->fail(trans('messages.not_logged_in'), 401);
         }
+        if (!is_string($refreshToken) || $refreshToken === '') {
+            return $this->fail(trans('messages.refresh_missing'), 422);
+        }
 
         $jwt = self::getJWT();
 
+        // 先校验 refresh token，避免请求失败时已经把 access token 拉黑
+        // 只接受当前管理员签发的 refresh token：避免登出接口被用来吊销他人令牌
         try {
-            $payload = $jwt->decode($token);
-            $ttl     = max((int)($payload['exp'] ?? 0) - time(), 1);
+            $payload = $jwt->decode($refreshToken, true);
+        } catch (\Throwable $e) {
+            return $this->fail(trans('messages.refresh_invalid'), 422);
+        }
+        if (($payload['token_type'] ?? '') !== 'refresh' || (int) ($payload['sub'] ?? 0) !== $adminId) {
+            return $this->fail(trans('messages.refresh_invalid'), 422);
+        }
+
+        try {
+            $accessPayload = $jwt->decode($token);
+            $ttl           = max((int)($accessPayload['exp'] ?? 0) - time(), 1);
             Redis::setex('jwt_blacklist:' . md5($token), $ttl, '1');
             // 已登出的 access token 不再占用会话名额
-            $adminId = (int) ($request->adminId ?? 0);
             if ($adminId > 0) {
                 Redis::zrem("user_tokens:{$adminId}", md5($token));
             }
         } catch (\Throwable $e) {
-            // token 无效也视为登出成功
+            // access token 无效也视为登出成功
         }
 
-        // 同时吊销 refresh token，防止登出后继续刷新
-        if ($refreshToken !== '') {
-            try {
-                $payload = $jwt->decode($refreshToken, true);
-                $ttl     = max((int)($payload['exp'] ?? 0) - time(), 1);
-                Redis::setex('jwt_blacklist:' . md5($refreshToken), $ttl, '1');
-                $userId = (int) ($request->adminId ?? 0);
-                if ($userId) {
-                    Redis::zrem("user_refresh_tokens:{$userId}", md5($refreshToken));
-                }
-            } catch (\Throwable $e) {
-                // refresh token 无效时忽略
-            }
+        // 吊销 refresh token，防止登出后继续刷新
+        try {
+            $ttl = max((int)($payload['exp'] ?? 0) - time(), 1);
+            Redis::setex('jwt_blacklist:' . md5($refreshToken), $ttl, '1');
+            Redis::zrem("user_refresh_tokens:{$adminId}", md5($refreshToken));
+        } catch (\Throwable $e) {
+            // Redis 故障时刷新端点本身会失败关闭
         }
 
         // 吊销该用户所有轮换缓存中的新令牌对，防止旧 refresh token 重放换回有效令牌
-        $rotationKey = $refreshToken !== '' ? 'refresh_rotation:' . md5($refreshToken) : null;
-        SessionService::revokeRotationCaches((int) ($request->adminId ?? 0), $rotationKey);
+        SessionService::revokeRotationCaches($adminId, 'refresh_rotation:' . md5($refreshToken));
 
         return $this->success([], trans('messages.logout_success'));
     }

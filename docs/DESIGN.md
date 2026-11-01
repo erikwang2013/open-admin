@@ -8,7 +8,7 @@
 
 ## 1. 系统架构
 
-> **功能清单**：认证(login/refresh/logout + 账号锁定 + 会话限制) | 仪表盘(Redis缓存) | 用户CRUD+批量+导入 | 角色权限(RBAC) | 系统配置 | 操作审计(8平台来源端) | 文件(上传+导出+脱敏) | 安全(18层防御) | 运维(health/metrics/docs/Docker/CI)
+> **功能清单**：认证(login/refresh/logout + 账号锁定 + 会话限制) | 仪表盘(Redis缓存) | 用户CRUD+批量+异步导入(队列/worker/状态轮询) | 角色权限(RBAC) | 系统配置 | 操作审计(8平台来源端) | 文件(上传+导出+脱敏) | 安全(18层防御) | 运维(health/metrics/docs/Docker/CI)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -191,7 +191,8 @@ erik_system_config (系统配置) — 独立表
 系统配置:  /admin/config[/{hashid}]
 操作日志:  /admin/log
 个人中心:  /admin/profile[/password|/logout]
-导入:     /admin/import/users
+导入:     POST /admin/import/users（异步，202 + job_id）
+状态:     GET  /admin/import/status/{job}（仅任务创建者）
 上传:     /admin/upload
 批量:     /admin/user/batch/{destroy|status}
 文档:     /api/docs     (OpenAPI 3.0)
@@ -368,12 +369,12 @@ curl http://localhost:8791/api/v2/auth/login
 | 账号锁定 | 连续 5 次登录失败锁定账号 15 分钟，锁定期间返回 429 |
 | 登录计时 | 密码长度合法时始终执行 bcrypt；未知用户/空哈希使用固定 cost-10 占位哈希，抹平账号枚举时间差 |
 | 会话限制 | 同一用户最多 3 个并发 Token，超出时最旧 Token 自动黑名单 |
-| 会话吊销 | 改密/禁用/删除/批量禁用删除：水位线 + 访问/刷新令牌黑名单 + 轮换缓存/权限缓存清理 |
+| 会话吊销 | 改密/禁用/删除/批量禁用删除：写库前吊销，水位线 + 访问/刷新令牌黑名单 + 轮换缓存/权限缓存清理；吊销失败中止并返回 503 |
 | 限流 | RateLimit 中间件，Redis 滑动窗口，Lua 原子化；Redis 故障时 `/api/`、`/admin/` 失败关闭（503） |
-| 鉴权降级 | AdminAuth 黑名单读取失败返回 503，不放行可能已登出的 Token |
+| 鉴权状态 | AdminAuth 校验账号存在且 `status=1`，并拒绝签发时间早于/等于改密水位的 Token；黑名单、账号查询或水位读取任一失败返回 503，不放行无法确认状态的 Token |
 | 超管保护 | 不能操作当前账号；非超管不能分配/操作超管；删除/禁用/角色变更保留至少一名启用的超级管理员；内置超管角色禁改删 |
 | 授权边界 | 角色授予与目标管理按权限子集校验，禁用角色同样参与；`/admin/role/options` 只返回可分配角色 |
-| 导入导出 | 导入 5MB / 2000 行 / 32000 单元格 / ZIP 8MB 预检 / Redis 锁 409 / 逐行事务；导出 5000 行，条件标量校验，单元格统一文本写入防公式注入 |
+| 导入导出 | 导入 5MB / 2000 行 / 32000 单元格 / ZIP 8MB 预检 / Redis 锁 409 / 异步队列 + 单 worker / 状态轮询 / 逐行事务，Redis 故障失败关闭；导出 5000 行、PDF 30000 单元格/5000 行/200 卡片上限，条件标量校验，单元格统一文本写入防公式注入 |
 | CSP | Content-Security-Policy 头限制资源来源，防 XSS 与数据注入 |
 | 操作确认 | 删除等敏感操作需输入当前用户密码二次确认，失败 5 次/300 秒限速 |
 | 传输 | HTTPS + JWT Bearer Token；登录密码 RSA-2048（AES/明文兼容回退） |
@@ -399,7 +400,7 @@ RSA_PRIVATE_KEY     → 登录密码传输公钥对应的私钥（deploy 脚本�
 
 | 场景 | 字段 | 措施 |
 |------|------|------|
-| 列表展示 | phone | 脱敏: 138****1234 |
+| 列表展示 | phone | 脱敏: 138****1234；7-10 位纯数字固话保留首位/末两位（如 1****67） |
 | 列表展示 | email | 脱敏: a***@example.com |
 | 详情查看 | phone/email | 需解密接口 |
 | 导出Excel | phone/email | 脱敏后导出 |
@@ -423,7 +424,7 @@ RSA_PRIVATE_KEY     → 登录密码传输公钥对应的私钥（deploy 脚本�
 
 5000 行 × 9 列在 128M 工作进程下实测约占 65MiB，已接近安全上限，行数与列数上限不应同时提高。
 
-导入：`POST /admin/import/users` 限制 5MB、2000 行、32000 单元格，可统一分配 `role_ids`。整批任务由 Redis 锁 `import_users_lock`（`SET NX EX 1800`）串行化，已有任务返回 409。`.xlsx` 先做 ZIP 解压预检（`xl/**.xml` > 8MB 或单元格 > 32000 返回 422）；`ImportController` 在 `IOFactory::load()` 前用 `createReaderForFile` + `setReadDataOnly(true)` + `listWorksheetInfo()` 检查所有工作表，任一工作表超过 2001 行或行 × 列超过 32000 单元格立即返回 422；加载后再用 `getHighestDataRow()` 复核。每行校验用户名 3-50、密码 6-32、姓名 ≤50、手机 ≤20、邮箱 ≤254、状态 0/1，失败行记录行号与通用原因；用户与角色关联同事务写入并按行回滚。2000 行 bcrypt 属 CPU 密集操作，锁 TTL 按最坏耗时设置。
+导入：`POST /admin/import/users` 限制 5MB、2000 行、32000 单元格，可统一分配 `role_ids`。接口完成校验后获取 Redis 锁 `import_users_lock`（`SET NX EX 1800`），将文件以 `0600` 存入 `runtime/imports/`、写入任务元数据并入队，返回 HTTP 202 `{job_id, status:'queued'}`；已有任务返回 409。单进程 `import-worker`（`count=1`）串行消费队列，`GET /admin/import/status/{job}`（仅任务创建者）返回 `queued`/`processing`/`completed`/`failed` 及导入结果。Redis 故障时获取锁返回 503、入队失败返回 500 并清理文件/元数据/锁，不降级执行导入；worker 重启时按 processing 列表恢复未完成任务，60 秒宽限期避免重复消费，锁 TTL 兜底释放。`.xlsx` 先做 ZIP 解压预检（`xl/**.xml` > 8MB 或单元格 > 32000 返回 422）；`ImportController` 在 `IOFactory::load()` 前用 `createReaderForFile` + `setReadDataOnly(true)` + `listWorksheetInfo()` 检查所有工作表，任一工作表超过 2001 行或行 × 列超过 32000 单元格立即返回 422；加载后再用 `getHighestDataRow()` 复核。每行校验用户名 3-50、密码 6-32、姓名 ≤50、手机 ≤20、邮箱 ≤254、状态 0/1，失败行记录行号与通用原因；用户与角色关联同事务写入并按行回滚。2000 行 bcrypt 属 CPU 密集操作，锁 TTL 按最坏耗时设置。
 
 ### 7.2 PDF 导出
 
@@ -433,6 +434,8 @@ RSA_PRIVATE_KEY     → 登录密码传输公钥对应的私钥（deploy 脚本�
   → Dompdf 渲染 A4 横向
   → 写入 runtime/tmp/ → download 响应
 ```
+
+PDF 在渲染前校验负载形状：`columns`/`rows`/`stats` 必须是数组，`rows` 元素必须是数组，`columns` 与单元格必须是标量（`null` 按空字符串），并限制 `columns` ≤ 30000、表头+单元格 ≤ 30000、`rows` ≤ 5000、`stats` ≤ 200，超限返回 422，防止 128M 工作进程被大负载撑爆。
 
 ## 8. 部署架构
 
@@ -470,9 +473,9 @@ docker compose up -d --build
 - `app`/`init` 以 `${APP_UID:-1000}:${APP_GID:-1000}` 运行，脚本用 `id -u`/`id -g` 写入 master `.env`，保证 `deploy/data/{runtime,upload}` 可写。
 - 真实域名证书替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`；管理员密码见 `deploy/secrets/admin_password.txt`；HSTS 默认关闭，配置真实证书后再启用。
 - 持久化目录：`deploy/data/{mysql,redis,runtime,upload,backups}`；日志由 Docker 按 `10m × 3` 轮转。
-- 各服务设置 CPU/内存/pids 上限：app 1.0/512M/256、init 0.5/256M/128、mysql 1.5/768M/512、redis 0.5/384M/128、nginx 0.5/128M/128、backup 0.5/256M/128；Redis 容器 384M 与 `--maxmemory 256mb` 配套，预留 128M 给 AOF 重写/fork 与内存碎片。
+- 各服务设置 CPU/内存/pids 上限：app 1.0/512M/256、init 0.5/256M/128、mysql 1.5/768M/512、redis 0.5/384M/128、nginx 0.5/128M/128、backup 0.5/256M/128；Redis 容器 384M 与 `--maxmemory 256mb --maxmemory-policy noeviction` 配套，预留 128M 给 AOF 重写/fork 与内存碎片。`noeviction` 防止黑名单、水位线、权限缓存等安全键在内存压力下被淘汰，写满时依赖失败关闭并告警。
 - `nginx` 通过 `depends_on.app.condition: service_healthy` 等待应用 `/health` 通过后再启动，避免容器启动瞬间返回 502。
-- 应用内 `log-cleanup` 进程（不监听端口，`count=1`）启动时先尽力清理一次，之后每日删除 180 天前的 `operation_log`，每批 10000 行、最多 10 批（单轮 100000 行）；与 backup 服务的清理互为兜底。
+- 应用内 `log-cleanup` 进程（不监听端口，`count=1`）启动时先尽力清理一次，之后每日删除 180 天前的 `operation_log`，每批 10000 行、最多 10 批（单轮 100000 行）；与 backup 服务的清理互为兜底。`import-worker` 进程（不监听端口，`count=1`）串行消费 Redis 导入队列，启动时恢复未完成任务并清理过期任务文件。
 - Nginx 在静态资源 location 内重复注入 `X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy` 与 `Cache-Control`；`deploy/nginx/default.conf` 与 `docs/nginx-security.conf` 均由 CI 执行 `nginx -t`。
 - `backup` 使用最小权限用户 `backup_reader`（数据表 `SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` + `erik_operation_log` 的 `DELETE`）；备份默认与 MySQL 同机同盘，异地副本由宿主机 cron 调用 `deploy/offsite-sync.sh`（读取 `deploy/.env` 的 `OFFSITE_TARGET`，支持 rsync 与 rclone）。
 

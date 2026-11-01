@@ -89,7 +89,12 @@ class EncryptionService
      */
     public static function maskPhone(string $phone): string
     {
-        if (mb_strlen($phone) < 7) return $phone;
+        $length = mb_strlen($phone);
+        if ($length < 7) return $phone;
+        // 短号码（座机等）保留首尾各 1-2 位，避免 7 位号码被完整还原
+        if ($length <= 10) {
+            return mb_substr($phone, 0, 1) . str_repeat('*', max(1, $length - 3)) . mb_substr($phone, -2);
+        }
         return mb_substr($phone, 0, 3) . '****' . mb_substr($phone, -4);
     }
 

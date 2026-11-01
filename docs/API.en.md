@@ -12,7 +12,7 @@ open-admin is built on webman v2 and provides a RESTful JSON API. All admin endp
 - **API version**: embedded in the URL prefix (`/api/v1/...`, `/api/v2/...`); no request header is used
 - **Language**: switched via the `Accept-Language` header or the `?lang=zh_CN|en` parameter (default zh_CN), auto-detected by the Locale middleware
 
-> **Endpoint overview**: Auth (4) | Dashboard (1) | Users (7) | Roles (5) | Permissions (4) | Config (4) | Logs (1) | Profile (3) | Import/Export (3) | Upload (1) | Ops (4: health/metrics/docs/security.txt) | 37 endpoints in total
+> **Endpoint overview**: Auth (4) | Dashboard (1) | Users (7) | Roles (5) | Permissions (4) | Config (4) | Logs (1) | Profile (3) | Import/Export (4) | Upload (1) | Ops (4: health/metrics/docs/security.txt) | 38 endpoints in total
 - **Authentication**: `Authorization: Bearer <token>` (JWT)
 - **Response format**: `{ "code": 0, "message": "success", "data": {...} }`
 - **Docs endpoint**: `GET /api/docs` returns the OpenAPI 3.0 JSON specification; `/apidoc/` provides a lightweight same-origin debug UI (a single HTML file with no external assets)
@@ -32,7 +32,8 @@ open-admin is built on webman v2 and provides a RESTful JSON API. All admin endp
 |------|---------|---------|
 | 0 | Success | |
 | 400 | Bad request | Incorrect request format |
-| 401 | Unauthenticated | Token missing / expired / blacklisted |
+| 202 | Accepted | Async import job queued; the response carries a `job_id` that must be polled |
+| 401 | Unauthenticated | Token missing / expired / blacklisted / account deleted or disabled / token issued at or before the password-change watermark |
 | 403 | No permission / security block | Insufficient RBAC permission / beyond grantable or manageable role boundaries / non-super-admin acting on a super-admin account / SecurityFilter hit |
 | 404 | Resource not found | Target of query/update/delete does not exist |
 | 405 | Method not allowed | Only GET/POST/PUT/DELETE/OPTIONS/HEAD allowed; non-standard methods rejected outright |
@@ -42,7 +43,7 @@ open-admin is built on webman v2 and provides a RESTful JSON API. All admin endp
 | 422 | Validation failed | Required fields missing, invalid format, length exceeded, invalid role_ids, invalid export conditions, business validation failed |
 | 429 | Too many requests | RateLimit triggered / account locked (5 failed logins lock for 15 min) |
 | 500 | Internal server error | |
-| 503 | Service unavailable | Redis unavailable, so auth/rate limiting for `/api/` and `/admin/` or login captcha consumption fails closed; super-admin named-lock wait timeout or database error |
+| 503 | Service unavailable | Redis unavailable, so auth/rate limiting for `/api/` and `/admin/`, login captcha consumption, import enqueue/status or session revocation fails closed; super-admin named-lock wait timeout, or a database error in AdminAuth/import |
 
 ## 3. Public Endpoints
 
@@ -1492,7 +1493,16 @@ POST /admin/profile/logout
 
 - **Authentication**: JWT
 
-**Request body**: none (no requestBody; the token is read from the Authorization header)
+**Request body**:
+```json
+{
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+| Field | Type | Required | Description |
+|------|------|------|------|
+| refresh_token | string | Yes | Refresh token issued to the current admin; `token_type` must be `refresh` and `sub` must match the logged-in account |
 
 **Example response**:
 ```json
@@ -1503,9 +1513,13 @@ POST /admin/profile/logout
 }
 ```
 
-Logout logic: decode the JWT to get the remaining validity (exp - now), write the token's md5 hash to the Redis blacklist `jwt_blacklist:{md5}` with TTL = remaining validity. If the supplied refresh_token has a rotation cache entry, the cached access_token and refresh_token are blacklisted too and the cache key is removed. Blacklisted tokens are blocked in the `AdminAuth` middleware with a 401 response; if Redis cannot be read, the request returns 503 (fail closed).
+Logout logic: validate `refresh_token` first (type `refresh`, `sub` equal to the current account); an invalid token returns 422 so the endpoint cannot be used to revoke someone else's token. Then decode the access token for its remaining validity (exp - now), write its md5 hash to the Redis blacklist `jwt_blacklist:{md5}` with TTL = remaining validity, and remove it from `user_tokens:{adminId}`; the refresh token is blacklisted the same way and removed from `user_refresh_tokens:{adminId}`. Finally, all rotation-cache keys of that user (`refresh_rotation:<md5>`) are cleaned up so an old refresh token cannot be replayed into a cached valid pair. Blacklisted tokens are blocked in the `AdminAuth` middleware with a 401 response; if Redis cannot be read, the request returns 503 (fail closed).
 
-Returns 401 when no token is provided. An expired/invalid token (decode throws an exception) is still treated as a successful logout.
+Returns 401 when no access token is provided; a missing `refresh_token` returns 422. An expired/invalid access token (decode throws) is still treated as a successful logout, but refresh-token validation runs first.
+
+**Possible errors**:
+- 401: Not logged in
+- 422: Missing refresh_token / wrong refresh_token type or owner
 
 ## 11. Import & Export
 
@@ -1601,7 +1615,13 @@ Or table mode:
 
 With `type=dashboard`, `data` must contain a `stats` array (rendered as cards); with `type=table`, `data` must contain `columns` and `rows` arrays.
 
+Before rendering, `data` is validated: `columns`/`rows`/`stats` must be arrays, every element of `rows` must be an array, and `columns` and cells must be scalar (a `null` cell renders as an empty string), otherwise 422 is returned. Caps: at most 30,000 `columns` entries, 30,000 header + cell values in total, 5,000 `rows`, and 200 `stats` entries; exceeding any cap returns 422 so a large payload cannot exhaust the 128M worker.
+
 The PDF template includes copyright information and an export timestamp.
+
+**Possible errors**:
+- 422: Export data must be an object / columns, rows and stats must be arrays / every row must be an array / columns or cells must be scalar
+- 422: Export exceeds 30,000 cells / 5,000 rows / 200 stat cards
 
 ### 11.3 Import Users (Excel)
 
@@ -1611,6 +1631,7 @@ POST /admin/import/users
 
 - **Authentication**: JWT + RBAC
 - **Request type**: `multipart/form-data` (file upload)
+- **Response**: after validation the request returns HTTP 202 with a job ID; the actual import runs in the background `import-worker` process and must be polled via 11.4
 
 **Form fields**:
 
@@ -1634,7 +1655,26 @@ Row 1 contains column headers (case-insensitive); data starts at row 2. Files ar
 
 Before loading the workbook the server runs size guards: for `.xlsx` (a ZIP container), if the uncompressed total of `xl/**.xml` entries exceeds 8MB or the worksheet cell count exceeds 32,000 it returns 422, blocking zip bombs and OOM in the 128M worker. For both `.xls` and `.xlsx` it reads worksheet metadata before `load()` and rejects any sheet over 2,001 rows or with rows × columns above 32,000 cells, keeping the whole workbook out of memory; the actual data-row count is checked again after loading. Corrupt, unreadable or unparseable files return 422 with a readable message and never expose exception internals.
 
-The whole import is serialized by the Redis lock `import_users_lock` (`SET NX EX 1800`, released by a Lua compare-and-delete). If an import is already running the request returns 409. Hashing 2,000 passwords with bcrypt is CPU-intensive and can take minutes in the worst case, hence the lock TTL; an abnormally terminated process releases it via TTL. If Redis is unavailable the import degrades to lock-free (fail-open).
+Importing is **asynchronous**: the endpoint first validates parameters, file size/format and role boundaries, then takes the Redis lock `import_users_lock` (`SET NX EX 1800`, released by a Lua compare-and-delete), stores the upload under `runtime/imports/` with mode `0600`, writes job metadata, pushes the job onto the Redis queue and immediately returns 202. If an import is already running the request returns 409. Hashing 2,000 passwords with bcrypt is CPU-intensive and can take minutes, so a single `import-worker` process (`count=1`) consumes the queue serially and the lock TTL covers the worst case; on restart the worker recovers unfinished jobs from the processing list with a 60-second grace period, and an abnormally terminated process releases the lock via TTL.
+
+Redis is a hard dependency of the import queue: if Redis is unavailable while taking the lock the request returns 503; a metadata write or queue-push failure returns 500 and cleans up the stored file, job metadata and lock, leaving no orphan job. Clients should poll the status endpoint in 11.4 about once per second.
+
+**Example response (HTTP 202)**:
+```json
+{
+  "code": 0,
+  "message": "已加入导入队列",
+  "data": {
+    "job_id": "9f2c86b0d1e3470a8b5c6d7e8f901234",
+    "status": "queued"
+  }
+}
+```
+
+| Field | Type | Description |
+|------|------|------|
+| job_id | string | 32-character hex job ID used for status polling |
+| status | string | Initial status is always `queued` |
 
 **Possible errors**:
 - 403: Cannot assign the super admin role / cannot assign the selected roles
@@ -1645,30 +1685,58 @@ The whole import is serialized by the Redis lock `import_users_lock` (`SET NX EX
 - 422: Excel file cannot be read/parsed; confirm it is not corrupt and has the right format
 - 422: Data rows must not exceed 2,000 (excluding the header)
 - 422: Invalid role parameter format / role does not exist
+- 500: Import job creation failed (metadata write or queue push failed)
+- 503: Import service unavailable (the Redis instance backing the lock or queue is unavailable)
+
+### 11.4 Import Job Status
+
+```
+GET /admin/import/status/{job}
+```
+
+- **Authentication**: JWT only (`AdminAuth`, no RBAC permission needed)
+- **Path parameter**: `job` — the 32-character hex job ID returned by 11.3
+- **Visibility**: only the job creator can query it; a missing job, malformed ID or a job owned by another admin all return 404 so the existence of job IDs is not leaked
 
 **Example response**:
 ```json
 {
   "code": 0,
-  "message": "导入完成",
+  "message": "success",
   "data": {
-    "total": 10,
-    "success": 8,
-    "failed": 2,
-    "errors": [
-      { "row": 3, "reason": "用户名为空" },
-      { "row": 7, "reason": "用户名 zhangsan 已存在" }
-    ]
+    "job_id": "9f2c86b0d1e3470a8b5c6d7e8f901234",
+    "status": "completed",
+    "result": {
+      "total": 10,
+      "success": 8,
+      "failed": 2,
+      "errors": [
+        { "row": 3, "reason": "用户名为空" },
+        { "row": 7, "reason": "用户名 zhangsan 已存在" }
+      ]
+    },
+    "error": null
   }
 }
 ```
 
 | Field | Type | Description |
 |------|------|------|
-| total | int | Total rows (excluding the header row) |
-| success | int | Successfully imported count |
-| failed | int | Failed count |
-| errors | array | Failure details; each entry contains row (Excel row number) and reason (failure reason) |
+| job_id | string | Job ID |
+| status | string | `queued` / `processing` / `completed` / `failed` |
+| result | object/null | Import result after completion; `null` while the job is unfinished or failed (see `error`) |
+| result.total | int | Total rows (excluding the header row) |
+| result.success | int | Successfully imported count |
+| result.failed | int | Failed count |
+| result.errors | array | Failure details; each entry contains row (Excel row number) and reason |
+| error | string/null | Failure reason, only present when `failed` |
+
+Job metadata is retained for 24 hours; after expiry the query returns 404. Clients should poll about once per second and stop on `completed`/`failed`.
+
+**Possible errors**:
+- 401: Not logged in
+- 404: Job not found or not owned by the current admin
+- 503: Import service unavailable (Redis failure, fail closed)
 
 ## 12. File Upload
 
@@ -1778,7 +1846,7 @@ The complete authentication sequence:
     ↓
    AdminPermission middleware:
    a. Resolves the permission identifier for resource routes
-   b. Queries the user's enabled roles → role permissions (cache key `perm:<id>`, 60 seconds), performs matching
+   b. Queries the user's enabled roles → role permissions (cache key `perm:<perm_version>:<id>`, 60 seconds), performs matching
    c. An enabled super_admin role holder has wildcard permission `*` and is allowed through
    d. No permission → 403
     ↓
@@ -1826,7 +1894,7 @@ The complete authentication sequence:
 - API-layer IDs are encrypted in transit with `erikwang2013/hashids` to avoid exposing the raw snowflake ID sequence
 - SecurityFilter globally scans for XSS, SQL injection, path traversal, and command injection; 5 hits per IP in 60 seconds trigger a 15-minute temporary blacklist
 - Sensitive operations (deleting users/roles/permissions/configs, batch delete, etc.) require password confirmation from the currently logged-in user; failed confirmations are counted under `pwd_confirm_fail:<id>` (5 per 300 seconds), after which confirmation is rejected for 5 minutes
-- Session revocation (`SessionService`): password change, disable, delete, batch disable/delete write the `user_pwd_changed:<id>` watermark (TTL = refresh lifetime + 60 seconds), blacklist access/refresh tokens registered in `user_tokens:<id>` / `user_refresh_tokens:<id>` via `jwt_blacklist:<md5>`, and clear `user_refresh_rotations:<id>`, rotation caches and `perm:<id>`; the refresh endpoint checks the watermark so old refresh_tokens stop working after a password change
+- Session revocation (`SessionService`): password change, disable, delete, batch disable/delete write the `user_pwd_changed:<id>` watermark (TTL = refresh lifetime + 60 seconds), blacklist access/refresh tokens registered in `user_tokens:<id>` / `user_refresh_tokens:<id>` via `jwt_blacklist:<md5>`, and clear `user_refresh_rotations:<id>`, rotation caches and the versioned permission cache; the refresh endpoint checks the watermark so old refresh_tokens stop working after a password change
 - Concurrent session limit: at most 3 valid tokens per user; when a 4th device logs in, the oldest token is forcibly blacklisted
 - Account lockout: 5 consecutive login failures trigger a 15-minute lock; 429 is returned while locked. Existing users are counted under `account_lock:u:<userId>` / `login_fail:u:<userId>`; unknown usernames under `account_lock:n:<md5(lower(trim(username)))>` / `login_fail:n:<same>`; every key has a 900-second TTL
 - Refresh rotation: replaying the old refresh_token within the 60-second grace returns the same pair; rotation is serialized by `refresh_lock:<md5>`, a blacklisted cached token deletes the cache and returns 401, and a concurrent cache miss returns 409; logout and password changes blacklist cached pairs and clear `user_refresh_rotations:<userId>`
@@ -1904,7 +1972,7 @@ docker compose up -d --build
 - `generate-secrets.sh` creates the RSA keypair, a self-signed TLS certificate and the admin password file `deploy/secrets/admin_password.txt`; the RSA private key goes into `app.env`. It is idempotent by default; `--regenerate` archives the old `.env`, `env/` and `secrets/` to `deploy/secrets/archive/<timestamp>/` and rotates application secrets only, preserving `ENCRYPTABLE_KEY`, the Hashids salt, the existing TLS certificate, database and admin passwords. Rotate the Hashids salt explicitly with `--rotate-hashids` (IDs in old links stop resolving); rotate the field-encryption key, TLS, database passwords and admin password explicitly with `--rotate-encryptable` (the old key is appended to `ENCRYPTION_PREVIOUS_KEYS`, so existing data remains readable; remove the old key only after re-encrypting the data), `--rotate-tls`, `--rotate-db` and `--reset-admin`.
 - Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; port 80 only serves the ACME challenge path and redirects everything else to HTTPS; HSTS is commented out by default and should be enabled after a real certificate is configured.
 - Logs: Nginx/MySQL write to stdout/stderr and Docker rotates at `10m × 3`; persistent directories: `deploy/data/{mysql,redis,runtime,upload,backups}`.
-- Resource limits: `deploy/docker-compose.yml` sets `deploy.resources.limits` CPU, memory and pids per service (app 1.0/512M/256, init 0.5/256M/128, mysql 1.5/768M/512, redis 0.5/384M/128, nginx 0.5/128M/128, backup 0.5/256M/128); adjust for the host capacity. The Redis container's 384M pairs with `redis-server --maxmemory 256mb`, leaving 128M of headroom for AOF rewrite/fork, client buffers and fragmentation; change both values together (e.g. `--maxmemory 512mb` with a 640M container).
+- Resource limits: `deploy/docker-compose.yml` sets `deploy.resources.limits` CPU, memory and pids per service (app 1.0/512M/256, init 0.5/256M/128, mysql 1.5/768M/512, redis 0.5/384M/128, nginx 0.5/128M/128, backup 0.5/256M/128); adjust for the host capacity. The Redis container's 384M pairs with `redis-server --maxmemory 256mb --maxmemory-policy noeviction`, leaving 128M of headroom for AOF rewrite/fork, client buffers and fragmentation; change both values together (e.g. `--maxmemory 512mb` with a 640M container). `noeviction` keeps security keys such as blacklists, watermarks and permission caches from being evicted; when memory fills, affected requests fail closed.
 - The `backup` service uses the least-privilege `backup_reader` user (`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` plus `DELETE` on `erik_operation_log`) to run `mysqldump --single-transaction --no-tablespaces` daily into `deploy/data/backups`, and archives `deploy/data/upload` as `upload_<timestamp>.tar.gz`; both are kept for 30 days, and operation logs older than 180 days are deleted daily (at most 10,000 rows per run).
 - Log cleanup: the app also registers a non-listening `log-cleanup` webman process (`count=1`) that performs a best-effort cleanup at startup and then daily deletes `operation_log` rows older than 180 days in batches of 10,000; failures are logged and do not conflict with the backup service.
 - Offsite backup: backups stay on the DB host disk by default. `deploy/offsite-sync.sh` reads `OFFSITE_TARGET` from `deploy/.env` and supports rsync (`user@host:/path/`) and rclone (`rclone:remote:path`); it refuses an unset target, an empty backup directory or an unrecognized target, and excludes in-progress temp files. Host cron schedules it; no container calls it automatically.

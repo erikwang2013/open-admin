@@ -39,7 +39,7 @@
   <text class="fItem" x="50" y="205">· 登录 / 刷新 / 登出</text>
   <text class="fItem" x="50" y="224">· 点击验证码（poster-php）</text>
   <text class="fItem" x="50" y="243">· 账号锁定 5 次 × 15 分钟</text>
-  <text class="fItem" x="50" y="262">· 会话上限 3 · 变更即撤销</text>
+  <text class="fItem" x="50" y="262">· 会话上限 3 · 吊销失败关闭</text>
 
   <!-- 仪表盘 -->
   <rect class="card" x="330" y="112" width="280" height="152" rx="14"/>
@@ -67,8 +67,8 @@
   <line x1="650" y1="184" x2="890" y2="184" stroke="#EEF2F7"/>
   <text class="fItem" x="650" y="205">· CRUD + 批量删除 / 启禁用</text>
   <text class="fItem" x="650" y="224">· 角色分配 role_ids + 事务</text>
-  <text class="fItem" x="650" y="243">· 导入 5MB/2000 行/32000 格</text>
-  <text class="fItem" x="650" y="262">· 逐行校验 + 单实例导入锁</text>
+  <text class="fItem" x="650" y="243">· 导入 5MB/2000 行/32000 格 · 202</text>
+  <text class="fItem" x="650" y="262">· import-worker · 状态轮询 · 0600</text>
 
   <!-- 角色权限 -->
   <rect class="card" x="930" y="112" width="280" height="152" rx="14"/>
@@ -83,7 +83,7 @@
   <text class="fItem" x="950" y="205">· 角色 CRUD + 权限树</text>
   <text class="fItem" x="950" y="224">· RBAC 权限子集边界</text>
   <text class="fItem" x="950" y="243">· 目标可管理 · 禁用角色校验</text>
-  <text class="fItem" x="950" y="262">· super_admin · options 接口</text>
+  <text class="fItem" x="950" y="262">· perm_version 缓存失效</text>
 
   <!-- ===== 第 2 行 ===== -->
   <!-- 系统配置 -->
@@ -130,8 +130,8 @@
   <line x1="650" y1="356" x2="890" y2="356" stroke="#EEF2F7"/>
   <text class="fItem" x="650" y="377">· 文件上传（类型 + 大小校验）</text>
   <text class="fItem" x="650" y="396">· Excel 纯文本单元格防注入</text>
-  <text class="fItem" x="650" y="415">· PDF 导出（dompdf，含版权页脚）</text>
-  <text class="fItem" x="650" y="434">· 5000 行上限 · 未知筛选 422</text>
+  <text class="fItem" x="650" y="415">· PDF 仅标量 · 统计 ≤ 200</text>
+  <text class="fItem" x="650" y="434">· 30000 格 · 行 ≤ 5000 · 422</text>
 
   <!-- 安全防御 -->
   <rect class="card" x="930" y="284" width="280" height="152" rx="14" stroke="#FFCCC7"/>
@@ -145,7 +145,7 @@
   <line x1="950" y1="356" x2="1190" y2="356" stroke="#EEF2F7"/>
   <text class="fItem" x="950" y="377">· 31 种攻击检测器 + IP 升级黑名单</text>
   <text class="fItem" x="950" y="396">· CSP / 安全响应头注入</text>
-  <text class="fItem" x="950" y="415">· 限流 60 次/分/IP/路由（Lua）</text>
+  <text class="fItem" x="950" y="415">· 限流 60 次/分 · Redis noeviction</text>
   <text class="fItem" x="950" y="434">· security.txt（RFC 9116）</text>
 
   <!-- ===== 第 3 行 ===== -->
@@ -178,7 +178,7 @@
   <text class="fItem" x="350" y="549">· /health + /metrics（5 项指标）</text>
   <text class="fItem" x="350" y="568">· /api/docs OpenAPI 文档</text>
   <text class="fItem" x="350" y="587">· 日志清理 10×10k · 180 天</text>
-  <text class="fItem" x="350" y="606">· PHPUnit 37/81 · 异地备份</text>
+  <text class="fItem" x="350" y="606">· PHPUnit 65/226 · 异地备份</text>
 
   <!-- 安装向导 -->
   <rect class="card" x="630" y="456" width="280" height="152" rx="14"/>
@@ -209,7 +209,7 @@
   <text class="fItem" x="950" y="549">· Flutter Web：PC 管理后台风格</text>
   <text class="fItem" x="950" y="568">· GetX + ApiService 单例（Dio）</text>
   <text class="fItem" x="950" y="587">· HarmonyOS ArkTS 手机/平板/2in1</text>
-  <text class="fItem" x="950" y="606">· 401 无感刷新 Token</text>
+  <text class="fItem" x="950" y="606">· 401 刷新 · 登出调用服务端</text>
 
   <!-- ===== 底部：横切能力 ===== -->
   <rect class="card" x="30" y="628" width="580" height="200" rx="14"/>

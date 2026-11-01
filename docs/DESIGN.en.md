@@ -10,7 +10,7 @@
 
 ## 1. System Architecture
 
-> **Feature list**: auth (login/refresh/logout + account lockout + session limit) | dashboard (Redis cached) | user CRUD + batch + import | roles & permissions (RBAC) | system config | operation audit (8 platform sources) | files (upload + export + masking) | security (18 layers of defense) | ops (health/metrics/docs/Docker/CI)
+> **Feature list**: auth (login/refresh/logout + account lockout + session limit) | dashboard (Redis cached) | user CRUD + batch + async import (queue/worker/status polling) | roles & permissions (RBAC) | system config | operation audit (8 platform sources) | files (upload + export + masking) | security (18 layers of defense) | ops (health/metrics/docs/Docker/CI)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -193,8 +193,9 @@ erik_system_config (系统配置) — 独立表
 系统配置:  /admin/config[/{hashid}]
 操作日志:  /admin/log
 个人中心:  /admin/profile[/password|/logout]
-导入:     /admin/import/users
-上传:     /admin/upload
+Import:   POST /admin/import/users (async, 202 + job_id)
+Status:   GET  /admin/import/status/{job} (job creator only)
+Upload:   /admin/upload
 批量:     /admin/user/batch/{destroy|status}
 文档:     /api/docs     (OpenAPI 3.0)
 调试页:   /apidoc/      (单文件同源调试界面，读取 /api/docs)
@@ -370,12 +371,12 @@ Data flow: Page ← DataService ← ApiService (JWT Bearer) ← HTTP ← webman
 | Account lockout | 5 consecutive login failures lock the account for 15 min; 429 returned while locked |
 | Login timing | When the password length is valid, bcrypt always runs; a fixed cost-10 placeholder hash is used for unknown users or empty hashes, flattening the account-enumeration timing difference |
 | Session limit | Max 3 concurrent tokens per user; oldest token auto-blacklisted when exceeded |
-| Session revocation | Password change/disable/delete/batch disable-delete: watermark + access/refresh token blacklist + rotation and permission cache cleanup |
+| Session revocation | Password change/disable/delete/batch disable-delete: revoke before the database write — watermark + access/refresh token blacklist + rotation and permission cache cleanup; a revocation failure aborts the write with 503 |
 | Rate limiting | RateLimit middleware, Redis sliding window, atomic Lua; `/api/` and `/admin/` fail closed (503) when Redis fails |
-| Auth degradation | AdminAuth returns 503 when the blacklist read fails, never allowing possibly logged-out tokens |
+| Auth state | AdminAuth verifies that the account exists with `status=1` and rejects tokens issued at or before the password-change watermark; any blacklist, account-query or watermark read failure returns 503, never allowing a token whose state cannot be confirmed |
 | Super-admin protection | The current account cannot be targeted; non-super-admins cannot assign/target super admins; delete/disable/role changes keep at least one enabled super admin; the built-in role cannot be edited or deleted |
 | Grant boundaries | Role grants and target management are checked against the permission subset, disabled roles included; `/admin/role/options` returns only assignable roles |
-| Import/export | Import 5MB / 2,000 rows / 32,000 cells / ZIP 8MB precheck / Redis lock 409 / per-row transaction; export 5,000 rows, scalar condition validation, all cells written as strings against formula injection |
+| Import/export | Import 5MB / 2,000 rows / 32,000 cells / ZIP 8MB precheck / Redis lock 409 / async queue + single worker / status polling / per-row transaction, fail-closed when Redis is down; export 5,000 rows, PDF caps of 30,000 cells / 5,000 rows / 200 cards, scalar condition validation, all cells written as strings against formula injection |
 | CSP | Content-Security-Policy header restricts resource origins, prevents XSS and data injection |
 | Operation confirmation | Sensitive ops such as delete require the current user's password, throttled at 5 failures per 300 seconds |
 | Transport | HTTPS + JWT Bearer Token; login password over RSA-2048 (AES/plaintext legacy fallback) |
@@ -401,7 +402,7 @@ RSA_PRIVATE_KEY     → private key for the login-password transport public key 
 
 | Scenario | Field | Measure |
 |------|------|------|
-| List display | phone | Masked: 138****1234 |
+| List display | phone | Masked: 138****1234; 7-10 digit all-numeric landlines keep first/last two (e.g. 1****67) |
 | List display | email | Masked: a***@example.com |
 | Detail view | phone/email | Requires decryption endpoint |
 | Excel export | phone/email | Exported masked |
@@ -425,7 +426,7 @@ RSA_PRIVATE_KEY     → private key for the login-password transport public key 
 
 5,000 rows × 9 columns take about 65MiB under the 128M worker limit, already close to the safe ceiling; the row and column caps must not both be raised.
 
-Import: `POST /admin/import/users` is limited to 5MB, 2,000 rows and 32,000 cells, with optional uniform `role_ids` assignment. The whole batch is serialized by the Redis lock `import_users_lock` (`SET NX EX 1800`); a running import returns 409. `.xlsx` files get a ZIP decompression precheck first (`xl/**.xml` > 8MB or more than 32,000 cells returns 422); before `IOFactory::load()`, `ImportController` checks every sheet with `createReaderForFile` + `setReadDataOnly(true)` + `listWorksheetInfo()` and returns 422 immediately if any sheet exceeds 2,001 rows or row × column exceeds 32,000 cells; after loading it re-checks with `getHighestDataRow()`. Each row validates username 3-50, password 6-32, real_name ≤50, phone ≤20, email ≤254 and status 0/1, with the row number and a generic reason recorded on failure; user and role links are written in one transaction and rolled back per row. Bcrypt over 2,000 rows is CPU-intensive, so the lock TTL is sized for the worst case.
+Import: `POST /admin/import/users` is limited to 5MB, 2,000 rows and 32,000 cells, with optional uniform `role_ids` assignment. After validation the endpoint takes the Redis lock `import_users_lock` (`SET NX EX 1800`), stores the file under `runtime/imports/` with mode `0600`, writes job metadata and enqueues the job, returning HTTP 202 `{job_id, status:'queued'}`; a running import returns 409. A single `import-worker` process (`count=1`) consumes the Redis queue serially; `GET /admin/import/status/{job}` (job creator only) returns `queued`/`processing`/`completed`/`failed` plus the result. A Redis failure returns 503 while taking the lock and 500 on enqueue failure, cleaning up the file/metadata/lock — imports are never run without the lock; on restart the worker recovers unfinished jobs from the processing list, a 60-second grace period prevents duplicate consumption, and the lock TTL is the final backstop. `.xlsx` files get a ZIP decompression precheck first (`xl/**.xml` > 8MB or more than 32,000 cells returns 422); before `IOFactory::load()`, `ImportController` checks every sheet with `createReaderForFile` + `setReadDataOnly(true)` + `listWorksheetInfo()` and returns 422 immediately if any sheet exceeds 2,001 rows or row × column exceeds 32,000 cells; after loading it re-checks with `getHighestDataRow()`. Each row validates username 3-50, password 6-32, real_name ≤50, phone ≤20, email ≤254 and status 0/1, with the row number and a generic reason recorded on failure; user and role links are written in one transaction and rolled back per row. Bcrypt over 2,000 rows is CPU-intensive, so the lock TTL is sized for the worst case.
 
 ### 7.2 PDF Export
 
@@ -435,6 +436,8 @@ Import: `POST /admin/import/users` is limited to 5MB, 2,000 rows and 32,000 cell
   → Dompdf 渲染 A4 横向
   → 写入 runtime/tmp/ → download 响应
 ```
+
+Before rendering, the PDF payload is validated: `columns`/`rows`/`stats` must be arrays, every row must be an array, and columns/cells must be scalar (`null` renders as empty), with caps of 30,000 columns, 30,000 header + cell values, 5,000 rows and 200 stats entries; exceeding any cap returns 422 so a large payload cannot exhaust the 128M worker.
 
 ## 8. Deployment Architecture
 
@@ -472,9 +475,9 @@ docker compose up -d --build
 - `app`/`init` run as `${APP_UID:-1000}:${APP_GID:-1000}`; the script writes `id -u`/`id -g` into the master `.env`, keeping `deploy/data/{runtime,upload}` writable.
 - Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; the admin password is in `deploy/secrets/admin_password.txt`; HSTS is off by default and should be enabled after a real certificate is configured.
 - Persistent directories: `deploy/data/{mysql,redis,runtime,upload,backups}`; Docker rotates logs at `10m × 3`.
-- Per-service CPU/memory/pids limits: app 1.0/512M/256, init 0.5/256M/128, mysql 1.5/768M/512, redis 0.5/384M/128, nginx 0.5/128M/128, backup 0.5/256M/128; the Redis container's 384M pairs with `--maxmemory 256mb`, leaving 128M for AOF rewrite/fork and fragmentation.
+- Per-service CPU/memory/pids limits: app 1.0/512M/256, init 0.5/256M/128, mysql 1.5/768M/512, redis 0.5/384M/128, nginx 0.5/128M/128, backup 0.5/256M/128; the Redis container's 384M pairs with `--maxmemory 256mb --maxmemory-policy noeviction`, leaving 128M for AOF rewrite/fork and fragmentation. `noeviction` keeps security keys (blacklist, watermark, permission cache) from being evicted under memory pressure; when memory is full, dependent paths fail closed and alerting fires.
 - `nginx` waits for the app `/health` check via `depends_on.app.condition: service_healthy` before starting, avoiding 502s during container startup.
-- An in-app `log-cleanup` process (no listening port, `count=1`) performs a best-effort cleanup at startup and then daily deletes `operation_log` rows older than 180 days, 10,000 rows per batch and at most 10 batches (100,000 rows) per run; it and the backup-service cleanup are fallbacks for each other.
+- An in-app `log-cleanup` process (no listening port, `count=1`) performs a best-effort cleanup at startup and then daily deletes `operation_log` rows older than 180 days, 10,000 rows per batch and at most 10 batches (100,000 rows) per run; it and the backup-service cleanup are fallbacks for each other. The `import-worker` process (no listening port, `count=1`) consumes the Redis import queue serially, recovers unfinished jobs on startup and removes expired job files.
 - Nginx repeats `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` and `Cache-Control` inside the static asset locations; CI runs `nginx -t` on both `deploy/nginx/default.conf` and `docs/nginx-security.conf`.
 - `backup` uses the least-privilege `backup_reader` user (`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` on the database plus `DELETE` on `erik_operation_log`). Backups default to the MySQL host/disk; offsite copies are run by host cron via `deploy/offsite-sync.sh` (reads `OFFSITE_TARGET` in `deploy/.env`, supports rsync and rclone).
 

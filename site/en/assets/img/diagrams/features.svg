@@ -39,7 +39,7 @@
   <text class="fItem" x="50" y="205">· Login / refresh / logout</text>
   <text class="fItem" x="50" y="224">· Click captcha (poster-php)</text>
   <text class="fItem" x="50" y="243">· Lockout: 5 failures × 15 min</text>
-  <text class="fItem" x="50" y="262">· Max 3 sessions · revoke on change</text>
+  <text class="fItem" x="50" y="262">· Max 3 sessions · fail-closed revoke</text>
 
   <!-- 仪表盘 -->
   <rect class="card" x="330" y="112" width="280" height="152" rx="14"/>
@@ -67,8 +67,8 @@
   <line x1="650" y1="184" x2="890" y2="184" stroke="#EEF2F7"/>
   <text class="fItem" x="650" y="205">· CRUD + batch delete / status</text>
   <text class="fItem" x="650" y="224">· role_ids + transactional writes</text>
-  <text class="fItem" x="650" y="243">· Import 5MB / 2000 rows / 32k cells</text>
-  <text class="fItem" x="650" y="262">· Row checks + single import lock</text>
+  <text class="fItem" x="650" y="243">· Import 5MB/2000 rows/32k · 202</text>
+  <text class="fItem" x="650" y="262">· import-worker · status poll · 0600</text>
 
   <!-- 角色权限 -->
   <rect class="card" x="930" y="112" width="280" height="152" rx="14"/>
@@ -83,7 +83,7 @@
   <text class="fItem" x="950" y="205">· Role CRUD + permission tree</text>
   <text class="fItem" x="950" y="224">· RBAC permission-subset boundary</text>
   <text class="fItem" x="950" y="243">· Manageable target · disabled roles</text>
-  <text class="fItem" x="950" y="262">· super_admin · options endpoint</text>
+  <text class="fItem" x="950" y="262">· perm_version cache invalidation</text>
 
   <!-- ===== 第 2 行 ===== -->
   <!-- 系统配置 -->
@@ -130,8 +130,8 @@
   <line x1="650" y1="356" x2="890" y2="356" stroke="#EEF2F7"/>
   <text class="fItem" x="650" y="377">· Upload type + size checks</text>
   <text class="fItem" x="650" y="396">· Excel text-only cells, no formulas</text>
-  <text class="fItem" x="650" y="415">· PDF export (dompdf footer)</text>
-  <text class="fItem" x="650" y="434">· 5000-row cap · unknown filter 422</text>
+  <text class="fItem" x="650" y="415">· PDF scalar-only · stats ≤ 200</text>
+  <text class="fItem" x="650" y="434">· 30000 cells · rows ≤ 5000 · 422</text>
 
   <!-- 安全防御 -->
   <rect class="card" x="930" y="284" width="280" height="152" rx="14" stroke="#FFCCC7"/>
@@ -145,7 +145,7 @@
   <line x1="950" y1="356" x2="1190" y2="356" stroke="#EEF2F7"/>
   <text class="fItem" x="950" y="377">· 31 detectors + IP blacklist</text>
   <text class="fItem" x="950" y="396">· CSP / security headers</text>
-  <text class="fItem" x="950" y="415">· Rate limit 60/min/IP/route</text>
+  <text class="fItem" x="950" y="415">· Rate limit 60/min · noeviction</text>
   <text class="fItem" x="950" y="434">· security.txt (RFC 9116)</text>
 
   <!-- ===== 第 3 行 ===== -->
@@ -178,7 +178,7 @@
   <text class="fItem" x="350" y="549">· /health + /metrics (5 gauges)</text>
   <text class="fItem" x="350" y="568">· /api/docs OpenAPI docs</text>
   <text class="fItem" x="350" y="587">· Log cleanup 10×10k · 180 days</text>
-  <text class="fItem" x="350" y="606">· PHPUnit 37/81 · offsite backup</text>
+  <text class="fItem" x="350" y="606">· PHPUnit 65/226 · offsite backup</text>
 
   <!-- 安装向导 -->
   <rect class="card" x="630" y="456" width="280" height="152" rx="14"/>
@@ -209,7 +209,7 @@
   <text class="fItem" x="950" y="549">· Flutter Web: desktop admin UI</text>
   <text class="fItem" x="950" y="568">· GetX + ApiService singleton (Dio)</text>
   <text class="fItem" x="950" y="587">· HarmonyOS phone/tablet/2in1</text>
-  <text class="fItem" x="950" y="606">· 401 silent token refresh</text>
+  <text class="fItem" x="950" y="606">· 401 refresh · server-side logout</text>
 
   <!-- ===== 底部：横切能力 ===== -->
   <rect class="card" x="30" y="628" width="580" height="200" rx="14"/>

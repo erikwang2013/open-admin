@@ -156,10 +156,10 @@ class ExportController extends BaseController
      * @Apidoc\Group("数据导出")
      * @Apidoc\Method("POST")
      * @Apidoc\Url("/admin/export/pdf")
-     * @Apidoc\Desc("导出数据为PDF文件")
+     * @Apidoc\Desc("导出数据为PDF文件；rows 最多 5000 行、表头+单元格总数最多 30000、stats 最多 200 项，超出返回 422")
      * @Apidoc\Param("type", type="string", require=true, desc="导出类型(table/dashboard)")
      * @Apidoc\Param("title", type="string", require=false, desc="导出标题", default="数据导出")
-     * @Apidoc\Param("data", type="object", require=false, desc="导出数据")
+     * @Apidoc\Param("data", type="object", require=false, desc="导出数据（data/rows/stats/columns 必须是对象或数组，rows 每个元素必须是数组，columns 与单元格必须是标量，超出行数、单元格或卡片上限返回 422）")
      */
     public function pdf(Request $request): Response
     {
@@ -168,7 +168,13 @@ class ExportController extends BaseController
         $type = $request->input('type', 'table');
         $title = $request->input('title', '数据导出');
         $data = $request->input('data', []);
-        $data = is_array($data) ? $data : [];
+        if (!is_array($data)) {
+            return $this->fail('导出数据必须是对象', 422)->withStatus(422);
+        }
+        $error = $this->pdfDataError($data);
+        if ($error !== null) {
+            return $this->fail($error, 422)->withStatus(422);
+        }
 
         $html = $this->buildPdfHtml($type, $title, $data);
 
@@ -188,6 +194,63 @@ class ExportController extends BaseController
         file_put_contents($tmpFile, $dompdf->output());
 
         return response()->download($tmpFile, $filename);
+    }
+
+    /**
+     * PDF 导出负载校验：data 内 columns/rows/stats 的形状、标量元素与行数、表头+单元格、卡片上限，返回错误消息，null 表示通过
+     */
+    private function pdfDataError(array $data): ?string
+    {
+        $cellCount = 0;
+        if (isset($data['columns'])) {
+            if (!is_array($data['columns'])) {
+                return '导出数据的 columns 必须是数组';
+            }
+            if (count($data['columns']) > 30000) {
+                return '导出数据单元格超过 30000 个，请减少行数或列数';
+            }
+            foreach ($data['columns'] as $col) {
+                if (!is_scalar($col)) {
+                    return '导出数据的 columns 中每个元素必须是标量';
+                }
+            }
+            $cellCount = count($data['columns']);
+        }
+
+        if (isset($data['rows'])) {
+            if (!is_array($data['rows'])) {
+                return '导出数据的 rows 必须是数组';
+            }
+            if (count($data['rows']) > 5000) {
+                return '导出数据超过 5000 行，请缩小筛选范围';
+            }
+            foreach ($data['rows'] as $row) {
+                if (!is_array($row)) {
+                    return '导出数据的 rows 中每个元素必须是数组';
+                }
+                foreach ($row as $cell) {
+                    // null 视为空单元格，保持既有导出行为
+                    if ($cell !== null && !is_scalar($cell)) {
+                        return '导出数据的单元格必须是标量';
+                    }
+                }
+                $cellCount += count($row);
+            }
+            if ($cellCount > 30000) {
+                return '导出数据单元格超过 30000 个，请减少行数或列数';
+            }
+        }
+
+        if (isset($data['stats'])) {
+            if (!is_array($data['stats'])) {
+                return '导出数据的 stats 必须是数组';
+            }
+            if (count($data['stats']) > 200) {
+                return '导出统计卡片超过 200 项';
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -235,7 +298,7 @@ class ExportController extends BaseController
         } elseif (is_array($data['columns'] ?? null) && is_array($data['rows'] ?? null) && !empty($data['rows'])) {
             $html .= '<table><thead><tr>';
             foreach ($data['columns'] as $col) {
-                $html .= '<th>' . htmlspecialchars($col) . '</th>';
+                $html .= '<th>' . htmlspecialchars((string) $col) . '</th>';
             }
             $html .= '</tr></thead><tbody>';
             foreach ($data['rows'] as $row) {

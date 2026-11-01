@@ -141,8 +141,8 @@ export class ApiService {
     return this.request<T>(http.RequestMethod.PUT, path, body);
   }
 
-  async delete<T>(path: string): Promise<ApiResponse<T>> {
-    return this.request<T>(http.RequestMethod.DELETE, path);
+  async delete<T>(path: string, body?: object): Promise<ApiResponse<T>> {
+    return this.request<T>(http.RequestMethod.DELETE, path, body);
   }
 }
 

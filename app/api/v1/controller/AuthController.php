@@ -10,6 +10,7 @@ namespace app\api\v1\controller;
 use app\model\AdminUser;
 use app\common\SnowflakeService;
 use app\common\EncryptionService;
+use app\common\SessionService;
 use support\Container;
 use support\Redis;
 use support\Request;
@@ -137,8 +138,9 @@ class AuthController
         $jwt = self::getJWT();
         $tokenExpire   = (int)(config('plugin.erikwang2013.jwt.jwt.default_expire') ?: 7200);
         $refreshExpire = (int)(config('plugin.erikwang2013.jwt.jwt.refresh_expire') ?: 1209600);
-        $token = $jwt->encode(['sub' => $user->id, 'username' => $user->username, 'token_type' => 'access']);
-        $refreshToken = $jwt->encode(['sub' => $user->id, 'token_type' => 'refresh'], $refreshExpire);
+        $issuedAt = (int) floor(microtime(true) * 1000);
+        $token = $jwt->encode(['sub' => $user->id, 'username' => $user->username, 'token_type' => 'access', 'iat_ms' => $issuedAt]);
+        $refreshToken = $jwt->encode(['sub' => $user->id, 'token_type' => 'refresh', 'iat_ms' => $issuedAt], $refreshExpire);
 
         // 并发会话限制
         $this->trackSession($user->id, $token, $tokenExpire);
@@ -200,14 +202,13 @@ class AuthController
                 return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
             }
 
-            // 密码修改后签发的旧 refresh token 一律失效（覆盖未登记的旧令牌）
+            // 密码修改后签发的旧 refresh token 一律失效（覆盖未登记的旧令牌；毫秒级水位）
             try {
-                $changedAt = Redis::get("user_pwd_changed:{$userId}");
-                if ($changedAt !== null && $changedAt !== false && (int) ($payload['iat'] ?? 0) < (int) $changedAt) {
+                if (SessionService::isTokenRevoked($payload, $userId)) {
                     return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
                 }
             } catch (Throwable) {
-                // Redis 故障时 fail-open
+                return json(['code' => 503, 'message' => '服务暂时不可用，请稍后再试', 'data' => []])->withStatus(503);
             }
         } catch (Throwable $e) {
             return json(['code' => 401, 'message' => trans('messages.refresh_invalid'), 'data' => []]);
@@ -286,8 +287,9 @@ class AuthController
 
             $tokenExpire   = (int)(config('plugin.erikwang2013.jwt.jwt.default_expire') ?: 7200);
             $refreshExpire = (int)(config('plugin.erikwang2013.jwt.jwt.refresh_expire') ?: 1209600);
-            $token = $jwt->encode(['sub' => $user->id, 'username' => $user->username, 'token_type' => 'access']);
-            $newRefresh = $jwt->encode(['sub' => $user->id, 'token_type' => 'refresh'], $refreshExpire);
+            $issuedAt = (int) floor(microtime(true) * 1000);
+            $token = $jwt->encode(['sub' => $user->id, 'username' => $user->username, 'token_type' => 'access', 'iat_ms' => $issuedAt]);
+            $newRefresh = $jwt->encode(['sub' => $user->id, 'token_type' => 'refresh', 'iat_ms' => $issuedAt], $refreshExpire);
 
             // 并发会话限制
             $this->trackSession($userId, $token, $tokenExpire);

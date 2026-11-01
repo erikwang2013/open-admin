@@ -39,8 +39,14 @@ final class UserMaskHelperTest extends TestCase
 
     public function testNonMatchingPhoneIsUnchanged(): void
     {
-        foreach (['12345', 'abc', '+8613812345678'] as $phone) {
+        foreach (['12345', 'abc'] as $phone) {
             self::assertSame($phone, self::call('maskPhone', $phone));
         }
+        // 国家码/格式化号码也必须脱敏，避免列表泄露完整手机号
+        self::assertSame('+86****5678', self::call('maskPhone', '+8613812345678'));
+        self::assertSame('+86****5678', self::call('maskPhone', '+86 13812345678'));
+        // 7-10 位座机也不能被完整还原
+        self::assertSame('1****67', self::call('maskPhone', '1234567'));
+        self::assertSame('1*****78', self::call('maskPhone', '12345678'));
     }
 }

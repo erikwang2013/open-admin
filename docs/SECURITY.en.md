@@ -19,8 +19,8 @@ The full middleware chain executes in the following order (see `config/middlewar
 | 1 | SecurityMiddleware (erikwang2013/security-php) | 31 attack detectors + HTTP method validation + request body size limit + Content-Type validation + CSRF + IP attack-escalation blacklist |
 | 2 | Cors | Cross-origin security + security response header injection |
 | 3 | RateLimit | Redis sliding window rate limiting, prevents brute force |
-| 4 | AdminAuth | JWT authentication + blacklist logout |
-| 5 | AdminPermission | RBAC method.path granularity authorization |
+| 4 | AdminAuth | JWT authentication + blacklist logout + account status/password-watermark checks (fail closed) |
+| 5 | AdminPermission | RBAC method.path granularity authorization + versioned permission cache |
 | 6 | OperationLog | Operation audit + client source tracking |
 | 7 | Data encryption | Hashids ID obfuscation + Encryptable DB encryption + EncryptionService transport encryption |
 
@@ -217,17 +217,21 @@ Implemented by the AdminAuth middleware, mounted on route groups that require au
 
 **Authentication flow**:
 1. Empty token → 401 immediately `{"code": 401, "message": "未登录"}`
-2. Check the Redis blacklist `jwt_blacklist:{md5(token)}` → hit → 401 `Token已失效，请重新登录`
-3. JWT decode → failure (expired/signature mismatch) → 401 `Token已过期或无效`
-4. Success → inject `$request->adminId` and `$request->adminUsername`
+2. Check the Redis blacklist `jwt_blacklist:{md5(token)}` → hit → 401 `Token已失效，请重新登录`; Redis error → 503
+3. JWT decode → failure (expired/signature mismatch) → 401 `Token已过期或无效`; only `token_type=access` is accepted (legacy tokens without the field are treated as access)
+4. Load `AdminUser` from the database → missing user or `status != 1` → 401 `账号不存在或已被禁用`; database error → 503. Access tokens already issued for a deleted/disabled user therefore stop working immediately
+5. Read the password-change watermark `user_pwd_changed:{adminId}` → `iat_ms (old tokens fall back to iat) <= watermark` → 401 `Token已失效，请重新登录`; Redis error → 503
+6. Success → inject `$request->adminId` and `$request->adminUsername`
 
-**Blacklist mechanism**: on logout, `md5(token)` is written to Redis with the TTL set to the JWT's remaining validity. When Redis fails, `AdminAuth` cannot read the blacklist and returns 503 (fail closed) instead of allowing tokens that may have been logged out.
+**Blacklist mechanism**: on logout, `md5(token)` is written to Redis with the TTL set to the JWT's remaining validity. When Redis fails, `AdminAuth` cannot read the blacklist and returns 503 (fail closed) instead of allowing tokens that may have been logged out. The account-status check fails closed too: any database or watermark read error returns 503, never passes through a token whose state cannot be confirmed.
 
-**Login-side protection**: the captcha marker `captcha_verified:{key}` is consumed by the login endpoint with an atomic `DEL`; only a request receiving 1 proceeds, so concurrent reuse of the same marker lets exactly one login through. Before password verification the password length is checked once; when it is valid, `password_verify` always runs, against a fixed cost-10 dummy bcrypt hash when the user does not exist or the stored hash is empty, flattening the timing difference between existing and nonexistent accounts to prevent enumeration (invalid lengths are rejected as bad credentials without bcrypt). If Redis is unavailable while consuming the marker, login returns 503 instead of degrading to fail-open.
+**Login-side protection**: the captcha marker `captcha_verified:{key}` is consumed by the login endpoint with an atomic `DEL`; only a request receiving 1 proceeds, so concurrent reuse of the same marker lets exactly one login through. Before password verification the password length is checked once; when it is valid, `password_verify` always runs, against a fixed cost-10 dummy bcrypt hash when the user does not exist or the stored hash is empty, flattening the timing difference between existing and nonexistent accounts to prevent enumeration (invalid lengths are rejected as bad credentials without bcrypt). If Redis is unavailable while consuming the marker, login returns 503 rather than proceeding without the marker.
 
 **Refresh token rotation**: every successful `/api/v1/auth/refresh` issues a new access/refresh pair and immediately blacklists the old refresh_token. To tolerate concurrent requests and client retries, the server caches the new pair for 60 seconds under the md5 of the old token (`refresh_rotation:<md5>`): resubmitting the same old token within the grace period returns the same pair instead of rotating again, and after 60 seconds it is rejected as blacklisted. Before refreshing, the server checks the password-change watermark `user_pwd_changed:<userId>`; a token issued before the watermark (set by password change, disable, delete, etc.) returns 401.
 
 Concurrent rotation is serialized by `refresh_lock:<md5>` (`SET NX EX 5`, released with a Lua compare-and-delete). A request that fails to take the lock waits briefly for the cache; if it appears it reuses the same pair, otherwise it returns 409. The lock holder writes the cache before blacklisting the old token. When reading the cache, if either cached token is blacklisted the server deletes the cache and returns 401, so logout or a password change cannot be undone through the cache. Each user tracks their own rotation keys in `user_refresh_rotations:<userId>` (TTL 120 seconds); logout and password changes blacklist cached pairs and clear the rotation caches/set. Clients should refresh serially; the HarmonyOS client uses single-flight refresh for concurrent 401s so all requests share one result.
+
+**Logout**: `POST /admin/profile/logout` requires a `refresh_token` and validates that its `token_type` is `refresh` and its `sub` matches the current account (missing or invalid returns 422). The server blacklists the current access and refresh tokens, removes them from the `user_tokens` / `user_refresh_tokens` sets, and clears all `refresh_rotation:*` cache keys of that user so an old refresh token cannot be replayed into a valid cached pair.
 
 ### 6.2 Concurrent Session Limit
 
@@ -249,6 +253,8 @@ Login success → issue new token
 ```
 
 refresh_tokens are also tracked in the `user_refresh_tokens:{userId}` ZSET (score = expiry timestamp) so logout and password changes can revoke them together.
+
+Redis runs with `maxmemory-policy noeviction`: security keys such as the blacklist, watermark and permission cache all carry TTLs, and an LRU eviction policy could evict them under memory pressure and weaken revocation. With `noeviction`, writes fail once memory is full, and auth/rate-limiting/import paths fail closed with 503 so monitoring can trigger capacity or cleanup work instead of silently losing security state.
 
 **Config constants**:
 
@@ -289,14 +295,16 @@ For example:
 
 **Authorization flow**:
 1. `$request->adminId` empty → allow (route has no auth prerequisite configured)
-2. Get user → enabled roles (skip disabled roles with `status=0`) → permission list (`perm:<id>` cache for 60 seconds)
+2. Get user → enabled roles (skip disabled roles with `status=0`) → permission list (`perm:<perm_version>:<id>` cache for 60 seconds)
 3. A user holding the enabled `super_admin` role → wildcard permission `['*']`, allow directly
 4. Build `strtolower(method) . '.' . trim(path, '/')` → compare against the permission list
 5. No match → 403 `{"code": 403, "message": "无权限访问"}`
 
+The permission cache key carries a global version: after a role, permission or user-role change, `RbacService::invalidatePermissionCaches()` increments `perm_version`, so old-version keys are no longer read and expire naturally within 60 seconds. Permission tightening therefore cannot keep hitting a stale cache.
+
 **Grant boundaries (RbacService)**: when assigning roles, every permission of the proposed roles (including permissions carried by disabled roles) must be in the non-super-admin actor's own permission set, and `super_admin` cannot be assigned; editing/deleting/batch-deleting/batch-enabling/disabling a user requires all of the target's roles (including disabled ones) to be grantable, otherwise 403 `无权管理该用户`. `GET /admin/role/options` only returns enabled roles the current admin can assign. Disabled roles participate in boundary checks so a disabled high-permission role cannot be planted and later enabled to escalate.
 
-**Password re-confirmation**: BaseController provides `confirmPassword()`. Deleting users/roles/permissions/configs, batch delete and similar sensitive operations additionally require the current password at the controller layer, preventing unauthorized actions after session hijacking. Failed confirmations are counted under `pwd_confirm_fail:<id>` at 5 per 300 seconds; after that, confirmation is rejected for 5 minutes (the counter is non-atomic; see 12.2).
+**Password re-confirmation**: BaseController provides `confirmPassword()`. Deleting users/roles/permissions/configs, batch delete and similar sensitive operations additionally require the current password at the controller layer, preventing unauthorized actions after session hijacking. Failed confirmations are counted under `pwd_confirm_fail:<id>` with an atomic Lua `INCR` + first-time `EXPIRE`, capped at 5 per 300 seconds; after that, confirmation is rejected for 5 minutes, and a successful confirmation clears the counter.
 
 **Super-admin protection**: delete, batch delete and batch enable/disable reject the currently logged-in account (422), and a non-super-admin cannot modify, disable or delete a super-admin target or assign `super_admin` (403). Before writing, the system counts enabled users with `slug = super_admin`; if the operation would leave zero, the request returns 422 `系统必须保留至少一名启用的超级管理员`. The built-in `super_admin` role itself cannot be edited or deleted (403).
 
@@ -312,9 +320,9 @@ On password change, user disable, delete, or batch disable/delete, `SessionServi
 | `user_tokens:<userId>` / `user_refresh_tokens:<userId>` | access/refresh lifetime | ZSETs tracking issued access/refresh tokens; revocation blacklists each member, then deletes the sets |
 | `jwt_blacklist:<md5(token)>` | remaining token lifetime (at least 1 second) | Access and refresh token blacklist |
 | `user_refresh_rotations:<userId>` | 120 seconds | The user's 60-second rotation-cache keys, cleared on revocation |
-| `perm:<userId>` | 60 seconds | Permission cache, cleared on role change or revocation |
+| `perm:<perm_version>:<userId>` | 60 seconds | Permission cache; the version increments on role/permission/user-role changes, so old keys expire naturally |
 
-A role change without password/status change only clears `perm:<id>` and does not revoke sessions. All Redis work is caught and logged, so a successful database write is never rolled back because Redis failed; however, revocation may be incomplete while Redis is down, which is a known post-commit fail-open (see 12.2).
+`revokeUser()` returns `bool` and fails closed: if writing the watermark, blacklisting tokens or clearing rotation/permission caches fails, it returns `false`. Sensitive writes (password change, disable, delete, batch delete/disable) call revocation **before** the database write; on failure they abort and return 503, so the database can never change while old sessions remain valid. A role change without a password/status change does not revoke sessions; it only increments `perm_version`, invalidating permission caches as a whole. Non-critical Redis work is still caught and logged, but critical revocation and cache invalidation no longer degrade to best effort.
 
 ---
 
@@ -416,13 +424,15 @@ Key rotation: the `ENCRYPTION_PREVIOUS_KEYS` environment variable supports a com
 - BaseController provides the convenience methods `encodeId()`, `decodeId()`, `encodeIds()`
 
 **Export masking**: when exporting Excel/PDF (ExportController), sensitive fields are uniformly masked:
-- Phone: `138****1234`
+- Phone: `EncryptionService::maskPhone()` is length-aware — a 7-10 digit all-numeric landline keeps the first digit and last two, with everything between replaced by `*` (e.g. `1****67`); country-code or other formats use first 3 + `****` + last 4 (e.g. `138****1234`); values shorter than 7 digits are returned unchanged
 - Email: `a***@example.com`
 - ID card: fully masked as `********`
 
 **Excel export protection**: export conditions must be an object whose keys are available columns of the target table and whose values are scalar, otherwise 422, preventing arbitrary columns/array conditions from reaching the query. Every cell is written as text via `setValueExplicit(..., TYPE_STRING)`, so values starting with `=`, `+`, `-` or `@` are never executed as Excel formulas (formula injection); header and data borders are written once. A single export is capped at 5,000 rows (query uses `LIMIT 5001` as a probe; over the cap returns HTTP 422); 5,000 rows × 9 columns uses about 65MiB in a 128M worker, close to the ceiling, so row and column limits should not be raised together.
 
-**User import protection**: limited to a 5MB file, 2,000 data rows (2,001 including the header) and 32,000 cells. For `.xlsx`, a ZIP-expansion precheck runs before loading (returning 422 when `xl/**.xml` exceeds 8MB or cells exceed 32,000) to block zip bombs; for both `.xls` and `.xlsx`, worksheet metadata is read first and any sheet over 2,001 rows or rows × columns above 32,000 cells is rejected, keeping the whole workbook out of memory, with the actual row count rechecked after loading. Each row is validated independently (username 3-50, password 6-32, real name ≤50, phone ≤20, email ≤254, status 0/1); existing usernames are prefetched once, failed rows record the row number and a generic reason, and database errors are logged server-side only. The whole import is serialized by the Redis lock `import_users_lock` (`SET NX EX 1800`), returning 409 when an import is already running so concurrent imports cannot bypass duplicate checks; hashing 2,000 bcrypt passwords is CPU-intensive, so the TTL covers the worst case and an abnormally terminated process releases the lock via TTL. Each row's user and role assignments run in one transaction and roll back on failure. Corrupt, unreadable or unparseable workbooks return 422 with a readable message and never leak exception internals.
+**User import protection**: limited to a 5MB file, 2,000 data rows (2,001 including the header) and 32,000 cells. For `.xlsx`, a ZIP-expansion precheck runs before loading (returning 422 when `xl/**.xml` exceeds 8MB or cells exceed 32,000) to block zip bombs; for both `.xls` and `.xlsx`, worksheet metadata is read first and any sheet over 2,001 rows or rows × columns above 32,000 cells is rejected, keeping the whole workbook out of memory, with the actual row count rechecked after loading. Each row is validated independently (username 3-50, password 6-32, real name ≤50, phone ≤20, email ≤254, status 0/1); existing usernames are prefetched once, failed rows record the row number and a generic reason, and database errors are logged server-side only. Each row's user and role assignments run in one transaction and roll back on failure. Corrupt, unreadable or unparseable workbooks return 422 with a readable message and never leak exception internals.
+
+Importing is asynchronous: after validation, `POST /admin/import/users` takes the Redis lock `import_users_lock` (`SET NX EX 1800`, preventing concurrent imports from bypassing duplicate checks), stores the file under `runtime/imports/` with mode `0600`, writes job metadata, enqueues the job and returns HTTP 202 with a `job_id`; a running job returns 409. A single `import-worker` process (`count=1`) consumes the Redis queue serially, so the CPU cost of hashing 2,000 bcrypt passwords no longer occupies HTTP workers; job state is polled through `GET /admin/import/status/{job}` (creator-only) and is one of `queued`/`processing`/`completed`/`failed`. Import fails closed when Redis is unavailable (503 while taking the lock, 500 on enqueue failure with the file/metadata/lock cleaned up) — imports are never run without the lock. On restart the worker recovers unfinished jobs from the processing list, a 60-second `processing_at` grace period prevents duplicate consumption during rolling restarts, and the 1,800-second lock TTL is the final backstop.
 
 ---
 
@@ -559,8 +569,8 @@ The single-machine production stack uses `deploy/nginx/default.conf`: port 80 re
 | Stateless JWT cannot be actively invalidated | Tokens cannot be revoked server-side before expiry (except via blacklist) | Blacklist + password-change watermark + short 2h TTL narrows the risk window |
 | No special rate limit for admin endpoints | Admin endpoints share the 60/min default limit with normal endpoints | Admin operation frequency is naturally low; no distinction needed for now |
 | PCRE backtracking limit | The package has a built-in 1,000,000 backtracking cap with finally-based recovery; extremely complex inputs still pose a performance risk | Request body size limit (10MB) as a fallback |
-| Non-atomic confirmation-failure counter | `pwd_confirm_fail:<id>` uses separate `INCR` and first-time `EXPIRE` calls, so the window may be slightly extended under extreme concurrency | Only affects password-guessing rate limiting, not password correctness; Redis failure does not block the confirmation |
-| Session revocation runs after DB commit | If Redis fails, the user/role write succeeds but blacklist and watermark are not written, so old tokens may stay valid until natural expiry | Redis failures are logged; alert and blacklist manually if needed; TTL is at most 2h for access and 14d for refresh |
-| Import lock fails open | When Redis is unavailable, `import_users_lock` degrades to a lock-free import | Low-concurrency admin scenario limits the risk; the lock applies again once Redis recovers |
+| Confirmation throttling depends on Redis | When Redis is unavailable the failure counter is skipped, but password verification still runs | Only affects password-guessing rate limiting, not password correctness; session revocation for sensitive writes fails closed separately |
+| Sensitive writes depend on Redis revocation | When Redis is unavailable, password changes, disable/delete and similar writes abort before the database write and return 503 | The caller can retry; the database can never change while old sessions remain valid |
+| Import depends on the Redis queue | When Redis is unavailable import returns 503/500 and never runs without the lock | Monitor and alert on Redis; retry the import after recovery, and failed enqueues clean up the stored file |
 | PHP ≥ 8.4 bcrypt default cost change | Since 8.4, the default `PASSWORD_BCRYPT` cost rises from 10 to 12, making new hashes slower; the fixed cost-10 dummy hash can reintroduce a timing difference, and 2,000-row imports consume more of the 1,800-second lock TTL | Production pins PHP 8.3 (see Dockerfile); before upgrading to 8.4, evaluate login latency and import lock TTL, and align the dummy hash cost with stored hashes |
-| Role permission edits do not actively clear caches | After `RoleController` changes `permission_ids`, affected users' `perm:<id>` cache can take up to 60 seconds to expire | Permission tightening can be delayed up to 60 seconds; wait for expiry or delete `perm:<id>` manually for sensitive cases |
+| Permission cache version depends on Redis | If incrementing `perm_version` fails, old-version cache entries may still be read | Authorization falls back to database queries when Redis is unavailable; old entries expire within 60 seconds, so wait one TTL after sensitive permission changes |

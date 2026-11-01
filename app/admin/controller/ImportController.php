@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace app\admin\controller;
 
+use app\common\ImportJobService;
 use app\common\RbacService;
 use app\model\AdminRole;
 use app\model\AdminUser;
@@ -25,24 +26,16 @@ use ZipArchive;
  */
 class ImportController extends BaseController
 {
-    /** 导入锁：同一时间只允许一个导入任务，避免并发重复写库 */
-    private const IMPORT_LOCK_KEY = 'import_users_lock';
-
-    /** 导入锁超时（秒），需覆盖 2000 行 bcrypt 的最坏耗时；进程异常退出时由 TTL 兜底释放 */
-    private const IMPORT_LOCK_TTL = 1800;
-
     /**
      * @Apidoc\Title("导入用户")
      * @Apidoc\Group("数据导入")
      * @Apidoc\Method("POST")
      * @Apidoc\Url("/admin/import/users")
-     * @Apidoc\Desc("通过Excel文件批量导入用户")
+     * @Apidoc\Desc("通过Excel文件批量导入用户（异步）：校验通过后返回 202 与任务ID，通过 /admin/import/status/{job} 轮询结果")
      * @Apidoc\Param("file", type="file", require=true, desc="Excel文件(.xlsx/.xls)")
      * @Apidoc\Param("role_ids", type="array", require=false, desc="角色hashid数组，导入用户统一分配这些角色")
-     * @Apidoc\Returned("total", type="int", desc="总行数")
-     * @Apidoc\Returned("success", type="int", desc="成功数")
-     * @Apidoc\Returned("failed", type="int", desc="失败数")
-     * @Apidoc\Returned("errors", type="array", desc="失败详情")
+     * @Apidoc\Returned("job_id", type="string", desc="导入任务ID")
+     * @Apidoc\Returned("status", type="string", desc="任务状态: queued")
      */
     public function users(Request $request): Response
     {
@@ -99,44 +92,117 @@ class ImportController extends BaseController
             }
         }
 
-        // SET NX 锁串行化整个导入流程，避免并发导入绕过重名检查并重复写库
+        // 入队依赖 Redis 队列，Redis 不可用时失败关闭，避免文件已落盘却没有消费者
         $lockValue = bin2hex(random_bytes(8));
         try {
-            $locked = (bool) Redis::set(self::IMPORT_LOCK_KEY, $lockValue, ['nx', 'ex' => self::IMPORT_LOCK_TTL]);
+            $locked = ImportJobService::acquireLock($lockValue);
         } catch (\Throwable) {
-            // Redis 故障时降级为无锁导入（fail-open）
-            $locked = true;
-            $lockValue = null;
+            return $this->fail('导入服务暂不可用，请稍后重试', 503)->withStatus(503);
         }
 
         if (!$locked) {
             return $this->fail('已有导入任务正在执行，请稍后重试', 409)->withStatus(409);
         }
 
+        $jobId   = bin2hex(random_bytes(16));
+        $dir     = runtime_path('imports');
+        $target  = $dir . DIRECTORY_SEPARATOR . $jobId . '.' . $ext;
+        $stored  = false;
+
         try {
-            return $this->processImport((string) $file->getRealPath(), $ext, $roleIds);
-        } finally {
-            // 只删除自己持有的锁，避免锁过期后误删新持有者的锁
-            if ($lockValue !== null) {
-                try {
-                    Redis::eval(
-                        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
-                        [self::IMPORT_LOCK_KEY, $lockValue],
-                        1
-                    );
-                } catch (\Throwable) {
-                    // 释放失败由 TTL 兜底
-                }
+            if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
+                throw new \RuntimeException('cannot create import directory');
             }
+            @chmod($dir, 0700);
+            $source = (string) $file->getRealPath();
+            if ($source === '' || !is_file($source)) {
+                throw new \RuntimeException('uploaded file missing');
+            }
+            // 上传临时目录可能位于其他文件系统，rename 失败时退化为复制
+            if (!rename($source, $target)) {
+                if (!copy($source, $target)) {
+                    throw new \RuntimeException('cannot move uploaded file');
+                }
+                @unlink($source);
+            }
+            @chmod($target, 0600);
+            $stored = true;
+
+            ImportJobService::save([
+                'job_id'     => $jobId,
+                'status'     => 'queued',
+                'admin_id'   => (int) ($request->adminId ?? 0),
+                'file'       => $jobId . '.' . $ext,
+                'ext'        => $ext,
+                'role_ids'   => $roleIds,
+                'lock'       => $lockValue,
+                'created_at' => time(),
+            ]);
+            if (Redis::lpush(ImportJobService::QUEUE_KEY, $jobId) === false) {
+                throw new \RuntimeException('import queue push failed');
+            }
+        } catch (\Throwable $e) {
+            // 入队失败时清理文件、任务元数据与锁，不留下孤儿任务
+            Log::warning('import enqueue failed: ' . $e->getMessage());
+            if ($stored) {
+                @unlink($target);
+            }
+            try {
+                Redis::del(ImportJobService::key($jobId));
+            } catch (\Throwable) {
+            }
+            ImportJobService::releaseLock($lockValue);
+
+            return $this->fail('导入任务创建失败，请稍后重试', 500)->withStatus(500);
         }
+
+        return $this->success(['job_id' => $jobId, 'status' => 'queued'], '已加入导入队列')->withStatus(202);
     }
 
     /**
-     * 解析 Excel 并逐个导入用户
+     * @Apidoc\Title("导入任务状态")
+     * @Apidoc\Group("数据导入")
+     * @Apidoc\Method("GET")
+     * @Apidoc\Url("/admin/import/status/{job}")
+     * @Apidoc\Desc("查询异步导入任务状态与结果，仅任务创建者可查看")
+     * @Apidoc\Param("job", type="string", require=true, desc="导入任务ID")
+     * @Apidoc\Returned("job_id", type="string", desc="任务ID")
+     * @Apidoc\Returned("status", type="string", desc="任务状态: queued/processing/completed/failed")
+     * @Apidoc\Returned("result", type="object", desc="导入结果: total/success/failed/errors")
+     * @Apidoc\Returned("error", type="string", desc="失败原因（仅 failed 状态）")
+     */
+    public function status(Request $request, string $job): Response
+    {
+        // 任务 ID 固定 32 位十六进制，避免被用来构造任意 Redis 键
+        if (!preg_match('/^[a-f0-9]{32}$/', $job)) {
+            return $this->fail('任务不存在', 404)->withStatus(404);
+        }
+
+        try {
+            $data = ImportJobService::load($job);
+        } catch (\Throwable) {
+            return $this->fail('导入服务暂不可用，请稍后重试', 503)->withStatus(503);
+        }
+
+        // 只有任务创建者可以查看，其他人一律按不存在处理，避免泄露任务 ID 是否有效
+        if ($data === null || (int) ($data['admin_id'] ?? 0) !== (int) ($request->adminId ?? 0)) {
+            return $this->fail('任务不存在', 404)->withStatus(404);
+        }
+
+        return $this->success([
+            'job_id' => $job,
+            'status' => $data['status'] ?? 'queued',
+            'result' => $data['result'] ?? null,
+            'error'  => $data['error'] ?? null,
+        ]);
+    }
+
+    /**
+     * 解析 Excel 并逐个导入用户（由 ImportWorker 在后台进程调用）
      *
      * @param int[]|null $roleIds 统一分配的角色 ID，null 表示未指定
      */
-    private function processImport(string $tmpPath, string $ext, ?array $roleIds): Response
+    public function processImport(string $tmpPath, string $ext, ?array $roleIds): Response
     {
         try {
             // xlsx 本质是 ZIP：限制 xl/**.xml 解压后总量与单元格数，防止压缩炸弹或宽表在解析时撑爆 128M 内存

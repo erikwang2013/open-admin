@@ -132,6 +132,7 @@ class DocsController
                 '/admin/user/batch/status'  => $this->path('批量启用/禁用用户', 'POST', ['JWT', 'RBAC'], null, ['ids' => 'string[]', 'status' => '0|1']),
 
                 '/admin/role'     => $this->path('角色列表/创建', 'GET|POST', ['JWT', 'RBAC']),
+                '/admin/role/options' => $this->path('可分配角色选项', 'GET', ['JWT']),
                 '/admin/role/{id}' => $this->path('角色更新/删除', 'PUT|DELETE', ['JWT', 'RBAC', '删除需密码确认']),
 
                 '/admin/permission'     => $this->path('权限树/创建', 'GET|POST', ['JWT', 'RBAC']),
@@ -144,12 +145,13 @@ class DocsController
 
                 '/admin/profile'          => $this->path('更新个人信息', 'PUT', ['JWT'], null, ['real_name' => 'string?', 'phone' => 'string?', 'email' => 'string?']),
                 '/admin/profile/password' => $this->path('修改密码', 'PUT', ['JWT'], null, ['old_password' => 'string', 'new_password' => 'string']),
-                '/admin/profile/logout'   => $this->path('登出', 'POST', ['JWT']),
+                '/admin/profile/logout'   => $this->path('登出', 'POST', ['JWT'], null, ['refresh_token' => 'string']),
 
                 '/admin/export/excel' => $this->path('导出Excel', 'POST', ['JWT', 'RBAC'], 'binary', ['table' => 'string', 'columns' => 'string[]', 'conditions' => 'object?', 'title' => 'string?']),
-                '/admin/export/pdf'   => $this->path('导出PDF', 'POST', ['JWT', 'RBAC'], 'binary', ['type' => 'string', 'title' => 'string?', 'data' => 'object?']),
+                '/admin/export/pdf'   => $this->path('导出PDF', 'POST', ['JWT', 'RBAC', 'rows≤5000、headers+cells≤30000、stats≤200'], 'binary', ['type' => 'string', 'title' => 'string?', 'data' => 'object?']),
 
-                '/admin/import/users' => $this->path('导入用户(Excel)', 'POST', ['JWT', 'RBAC'], 'object', ['file' => 'file(.xlsx)']),
+                '/admin/import/users' => $this->path('导入用户(Excel, 异步任务)', 'POST', ['JWT', 'RBAC', '成功返回 HTTP 202'], 'object', ['file' => 'file(.xlsx|.xls)', 'role_ids' => 'string[]?']),
+                '/admin/import/status/{job}' => $this->path('导入任务状态', 'GET', ['JWT', '仅任务创建者'], 'object', ['job' => 'string']),
 
                 '/admin/upload' => $this->path('文件上传', 'POST', ['JWT', 'RBAC'], 'object', ['file' => 'file(jpg/png/pdf/xlsx/docx, max 10MB)']),
             ],

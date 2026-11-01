@@ -94,7 +94,13 @@ class BaseController
         // 失败计数 5 次 / 300 秒，防止已登录会话被用于反复猜测密码；Redis 故障时不阻断本次确认
         $throttleKey = "pwd_confirm_fail:{$adminId}";
         try {
-            if ((int) Redis::get($throttleKey) >= 5) {
+            // 先原子自增再判断，避免并发请求在 GET 与 INCR 之间同时通过
+            $attempts = (int) Redis::eval(
+                "local n = redis.call('incr', KEYS[1]) if n == 1 then redis.call('expire', KEYS[1], 300) end return n",
+                [$throttleKey],
+                1
+            );
+            if ($attempts > 5) {
                 return '密码验证失败次数过多，请 5 分钟后再试';
             }
         } catch (\Throwable) {}
@@ -102,16 +108,20 @@ class BaseController
         $decrypted = EncryptionService::decryptTransmission($password);
         $admin = AdminUser::find($adminId);
         if (!$admin || !password_verify($decrypted, $admin->password)) {
-            try {
-                if (Redis::incr($throttleKey) === 1) {
-                    Redis::expire($throttleKey, 300);
-                }
-            } catch (\Throwable) {}
             return trans('messages.password_confirm_failed');
         }
 
         try { Redis::del($throttleKey); } catch (\Throwable) {}
 
         return null; // 验证通过
+    }
+
+    /**
+     * 会话吊销失败（Redis 不可用）时的 503 响应
+     * 调用方必须在写库前中止，避免数据库已变更但旧会话仍然有效
+     */
+    protected function sessionRevokeFailure(): Response
+    {
+        return $this->fail('会话吊销失败，请稍后重试', 503)->withStatus(503);
     }
 }

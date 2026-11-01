@@ -9,7 +9,11 @@ import {
   DashboardData,
   User,
   UserListResult,
-  PageParams
+  PageParams,
+  RoleOption,
+  RefreshTokenRequest,
+  PasswordConfirmRequest,
+  UserCreatePayload
 } from '../model/DataModels';
 
 /**
@@ -26,13 +30,21 @@ export class AuthService {
   }
 
   static async refreshToken(refreshToken: string): Promise<LoginResponse> {
-    const response = await apiService.post<LoginResponse>('/api/v1/auth/refresh', {
-      refresh_token: refreshToken
-    });
+    const body: RefreshTokenRequest = { refresh_token: refreshToken };
+    const response = await apiService.post<LoginResponse>('/api/v1/auth/refresh', body);
     if (response.code !== 0) {
       throw new Error(response.message);
     }
     return response.data;
+  }
+
+  /** 服务端登出：吊销 access/refresh token（access 过期时由 ApiService 自动刷新后重试） */
+  static async logout(refreshToken: string): Promise<void> {
+    const body: RefreshTokenRequest = { refresh_token: refreshToken };
+    const response = await apiService.post<void>('/admin/profile/logout', body);
+    if (response.code !== 0) {
+      throw new Error(response.message);
+    }
   }
 }
 
@@ -42,6 +54,20 @@ export class AuthService {
 export class DashboardService {
   static async getDashboard(): Promise<DashboardData> {
     const response = await apiService.get<DashboardData>('/admin/dashboard');
+    if (response.code !== 0) {
+      throw new Error(response.message);
+    }
+    return response.data;
+  }
+}
+
+/**
+ * 角色服务
+ */
+export class RoleService {
+  /** 当前管理员可分配的角色（GET /admin/role/options） */
+  static async list(): Promise<RoleOption[]> {
+    const response = await apiService.get<RoleOption[]>('/admin/role/options');
     if (response.code !== 0) {
       throw new Error(response.message);
     }
@@ -73,7 +99,7 @@ export class UserService {
     return response.data;
   }
 
-  static async create(data: Partial<User> & { password: string }): Promise<void> {
+  static async create(data: UserCreatePayload): Promise<void> {
     const response = await apiService.post<User>('/admin/user', data);
     if (response.code !== 0) {
       throw new Error(response.message);
@@ -87,8 +113,10 @@ export class UserService {
     }
   }
 
-  static async delete(id: string): Promise<void> {
-    const response = await apiService.delete<void>(`/admin/user/${id}`);
+  /** 删除用户需当前管理员密码二次确认，密码放在 DELETE 请求体中 */
+  static async delete(id: string, password: string): Promise<void> {
+    const body: PasswordConfirmRequest = { password };
+    const response = await apiService.delete<void>(`/admin/user/${id}`, body);
     if (response.code !== 0) {
       throw new Error(response.message);
     }

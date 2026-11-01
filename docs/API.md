@@ -10,7 +10,7 @@
 - **API 版本**: 版本号体现在 URL 前缀中（`/api/v1/...`、`/api/v2/...`），不使用请求头
 - **语言**: 通过 `Accept-Language` 头或 `?lang=zh_CN|en` 参数切换（默认 zh_CN），Locale 中间件自动检测
 
-> **端点总览**: 认证(4) | 仪表盘(1) | 用户(7) | 角色(5) | 权限(4) | 配置(4) | 日志(1) | 个人中心(3) | 导入导出(3) | 上传(1) | 运维(4: health/metrics/docs/security.txt) | 共 37 端点
+> **端点总览**: 认证(4) | 仪表盘(1) | 用户(7) | 角色(5) | 权限(4) | 配置(4) | 日志(1) | 个人中心(3) | 导入导出(4) | 上传(1) | 运维(4: health/metrics/docs/security.txt) | 共 38 端点
 - **认证**: `Authorization: Bearer <token>`（JWT）
 - **响应格式**: `{ "code": 0, "message": "success", "data": {...} }`
 - **文档端点**: `GET /api/docs` 返回 OpenAPI 3.0 JSON 规范；`/apidoc/` 提供轻量同源调试界面（单个 HTML，无外部资源）
@@ -30,7 +30,8 @@
 |------|------|---------|
 | 0 | 成功 | |
 | 400 | 请求参数错误 | 请求格式不正确 |
-| 401 | 未认证 | Token 缺失 / 过期 / 已在黑名单 |
+| 202 | 已接受 | 异步导入任务已入队，响应携带 `job_id`，需轮询任务状态 |
+| 401 | 未认证 | Token 缺失 / 过期 / 已在黑名单 / 账号被删除或禁用 / Token 签发时间不晚于改密水位 |
 | 403 | 无权限 / 安全拦截 | RBAC 权限不足 / 超出可授予或可管理的角色边界 / 非超管操作超管账号 / SecurityFilter 命中 |
 | 404 | 资源不存在 | 查询/更新/删除的目标不存在 |
 | 405 | 请求方法不允许 | 仅允许 GET/POST/PUT/DELETE/OPTIONS/HEAD，非标准方法直接拒绝 |
@@ -40,7 +41,7 @@
 | 422 | 参数验证失败 | 必填字段缺失、格式不符、长度超限、role_ids 无效、导出筛选条件非法、业务校验不通过 |
 | 429 | 请求过于频繁 | RateLimit 触发 / 账号锁定（连续5次登录失败锁定15分钟） |
 | 500 | 服务器内部错误 | |
-| 503 | 服务暂时不可用 | Redis 不可用导致 `/api/`、`/admin/` 鉴权、限流或登录验证码消费失败关闭；超管保护命名锁等待超时或数据库异常 |
+| 503 | 服务暂时不可用 | Redis 不可用导致 `/api/`、`/admin/` 鉴权、限流、登录验证码消费、导入入队/状态查询或会话吊销失败关闭；超管保护命名锁等待超时，或 AdminAuth/导入依赖的数据库查询异常 |
 
 ## 3. 公开端点
 
@@ -1491,7 +1492,16 @@ POST /admin/profile/logout
 
 - **认证**: JWT
 
-**请求体**: 无（无 requestBody，从 Authorization 头读取 token）
+**请求体**:
+```json
+{
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| refresh_token | string | 是 | 当前管理员签发的刷新令牌；`token_type` 必须为 `refresh`，`sub` 必须与当前登录账号一致 |
 
 **响应示例**:
 ```json
@@ -1502,9 +1512,13 @@ POST /admin/profile/logout
 }
 ```
 
-登出逻辑：解码 JWT 获取剩余有效期 (exp - now)，将该 token 的 md5 哈希写入 Redis 黑名单 `jwt_blacklist:{md5}`，TTL = 剩余有效期。若请求携带的 refresh_token 存在轮换缓存，同时拉黑缓存中的 access_token 与 refresh_token 并删除缓存键。黑名单中的 token 在 `AdminAuth` 中间件中被拦截，返回 401；Redis 读取失败时返回 503（失败关闭）。
+登出逻辑：先校验 `refresh_token`（类型为 `refresh` 且 `sub` 与当前账号一致），校验失败返回 422，避免登出接口被用来吊销他人令牌。随后解码 access token 获取剩余有效期 (exp - now)，将其 md5 哈希写入 Redis 黑名单 `jwt_blacklist:{md5}`，TTL = 剩余有效期，并从 `user_tokens:{adminId}` 移除；refresh token 同样写入黑名单并从 `user_refresh_tokens:{adminId}` 移除。最后按 `refresh_rotation:<md5>` 清理该用户所有轮换缓存中的令牌对，防止旧 refresh token 重放换回有效令牌。黑名单中的 token 在 `AdminAuth` 中间件中被拦截，返回 401；Redis 读取失败时返回 503（失败关闭）。
 
-无 token 时返回 401。token 已过期/无效时（解码抛出异常）仍视为登出成功。
+无 access token 时返回 401；`refresh_token` 缺失返回 422。access token 已过期/无效时（解码抛出异常）仍视为登出成功，但 refresh token 校验仍会先执行。
+
+**可能的错误**:
+- 401: 未登录
+- 422: 缺少 refresh_token / refresh_token 类型错误或不属于当前账号
 
 ## 11. 导入导出
 
@@ -1600,7 +1614,13 @@ POST /admin/export/pdf
 
 `type=dashboard` 时 `data` 需包含 `stats` 数组（卡片形式渲染）；`type=table` 时 `data` 需包含 `columns` 和 `rows` 数组。
 
+渲染前会校验 `data` 结构：`columns`/`rows`/`stats` 必须是数组，`rows` 的每个元素必须是数组，`columns` 与单元格必须是标量（`null` 按空字符串渲染），否则返回 422。上限为：`columns` 最多 30,000 项、表头+单元格合计最多 30,000 个、`rows` 最多 5,000 行、`stats` 最多 200 项；任一超限返回 422，避免 128M 工作进程被大负载撑爆。
+
 PDF 模板包含版权信息和导出时间戳。
+
+**可能的错误**:
+- 422: 导出数据必须是对象 / columns、rows、stats 必须是数组 / rows 元素必须是数组 / columns 或单元格必须是标量
+- 422: 导出数据单元格超过 30,000 个 / 导出数据超过 5,000 行 / 导出统计卡片超过 200 项
 
 ### 11.3 导入用户 (Excel)
 
@@ -1610,6 +1630,7 @@ POST /admin/import/users
 
 - **认证**: JWT + RBAC
 - **请求类型**: `multipart/form-data`（文件上传）
+- **响应**: 校验通过后返回 HTTP 202 与任务 ID，实际导入由后台 `import-worker` 进程执行，需通过 11.4 轮询状态
 
 **表单字段**:
 
@@ -1633,7 +1654,26 @@ POST /admin/import/users
 
 服务端在加载工作簿前先做体积预检：`.xlsx` 为 ZIP 容器，`xl/**.xml` 解压后总大小超过 8MB，或工作表单元格总数超过 32,000 个，立即返回 422，防止压缩炸弹与 128M 工作进程 OOM；`.xls`/`.xlsx` 都会在 `load()` 前读取工作表元数据，任一工作表超过 2001 行、或行数 × 列数超过 32,000 个单元格即拒绝，避免整本工作簿进入内存；加载后再按实际数据行数二次校验。文件损坏、无法读取或无法解析时返回 422 与可读提示，不暴露异常内部信息。
 
-整个导入流程由 Redis 锁 `import_users_lock`（`SET NX EX 1800`，Lua 比对后释放）串行化，已有导入任务执行时返回 409。2000 行密码的 bcrypt 哈希是 CPU 密集操作，最坏耗时可达数分钟，锁 TTL 按此设置；进程异常退出时由 TTL 兜底释放。Redis 故障时降级为无锁导入（fail-open）。
+导入为**异步任务**：接口先完成参数、文件体积/格式、角色边界校验，再获取 Redis 锁 `import_users_lock`（`SET NX EX 1800`，Lua 比对后释放），把上传文件以 `0600` 权限存入 `runtime/imports/`，写入任务元数据并推入 Redis 队列，随后立即返回 202。已有导入任务执行时返回 409。2000 行密码的 bcrypt 哈希是 CPU 密集操作，最坏耗时可达数分钟，因此由单进程 `import-worker`（`count=1`）串行消费队列，锁 TTL 按最坏耗时设置；worker 异常重启时通过 processing 列表与 60 秒宽限期恢复未完成任务，进程异常退出时由 TTL 兜底释放锁。
+
+Redis 是导入队列的必需依赖：获取锁时 Redis 不可用返回 503；任务元数据写入或入队失败返回 500，并清理已落盘文件、任务元数据与锁，不留下孤儿任务。客户端应以约 1 秒间隔轮询 11.4 的状态接口。
+
+**响应示例（HTTP 202）**:
+```json
+{
+  "code": 0,
+  "message": "已加入导入队列",
+  "data": {
+    "job_id": "9f2c86b0d1e3470a8b5c6d7e8f901234",
+    "status": "queued"
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| job_id | string | 32 位十六进制任务 ID，用于轮询状态 |
+| status | string | 初始状态固定为 `queued` |
 
 **可能的错误**:
 - 403: 无权分配超级管理员角色 / 无权分配所选角色
@@ -1644,30 +1684,58 @@ POST /admin/import/users
 - 422: Excel 文件无法读取/解析，请确认文件未损坏且格式正确
 - 422: 数据行数不能超过 2000 行（不含表头）
 - 422: 角色参数格式错误 / 角色不存在
+- 500: 导入任务创建失败（任务元数据写入或入队失败）
+- 503: 导入服务暂不可用（导入锁或队列依赖的 Redis 不可用）
+
+### 11.4 导入任务状态
+
+```
+GET /admin/import/status/{job}
+```
+
+- **认证**: JWT（仅 `AdminAuth`，无需 RBAC 权限）
+- **路径参数**: `job` — 11.3 返回的 32 位十六进制任务 ID
+- **可见性**: 仅任务创建者可查询；任务不存在、ID 格式非法或不属于当前账号均返回 404，避免泄露任务是否存在
 
 **响应示例**:
 ```json
 {
   "code": 0,
-  "message": "导入完成",
+  "message": "success",
   "data": {
-    "total": 10,
-    "success": 8,
-    "failed": 2,
-    "errors": [
-      { "row": 3, "reason": "用户名为空" },
-      { "row": 7, "reason": "用户名 zhangsan 已存在" }
-    ]
+    "job_id": "9f2c86b0d1e3470a8b5c6d7e8f901234",
+    "status": "completed",
+    "result": {
+      "total": 10,
+      "success": 8,
+      "failed": 2,
+      "errors": [
+        { "row": 3, "reason": "用户名为空" },
+        { "row": 7, "reason": "用户名 zhangsan 已存在" }
+      ]
+    },
+    "error": null
   }
 }
 ```
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| total | int | 总行数（不含标题行） |
-| success | int | 成功导入数 |
-| failed | int | 失败条数 |
-| errors | array | 失败详情，每条含 row（Excel 行号）和 reason（失败原因） |
+| job_id | string | 任务 ID |
+| status | string | `queued`（排队中）/ `processing`（执行中）/ `completed`（已完成）/ `failed`（失败） |
+| result | object/null | 完成后的导入结果；任务未完成或失败时为 `null`（失败原因见 `error`） |
+| result.total | int | 总行数（不含标题行） |
+| result.success | int | 成功导入数 |
+| result.failed | int | 失败条数 |
+| result.errors | array | 失败详情，每条含 row（Excel 行号）和 reason（失败原因） |
+| error | string/null | 失败原因，仅 `failed` 状态有值 |
+
+任务元数据保留 24 小时，过期后查询返回 404。建议客户端以约 1 秒间隔轮询，遇到 `completed`/`failed` 后停止。
+
+**可能的错误**:
+- 401: 未登录
+- 404: 任务不存在或不属于当前账号
+- 503: 导入服务暂不可用（Redis 故障，失败关闭）
 
 ## 12. 文件上传
 
@@ -1777,7 +1845,7 @@ Nginx 静态资源（`/assets/`、`/open-admin/assets/` 等）在 location 级�
     ↓
    AdminPermission 中间件:
    a. 对资源路由解析权限标识
-   b. 查询用户启用角色 → 角色权限（缓存 key `perm:<id>`，60 秒），进行匹配
+   b. 查询用户启用角色 → 角色权限（缓存 key `perm:<perm_version>:<id>`，60 秒），进行匹配
    c. 启用 super_admin 角色持有通配权限 `*`，直接放行
    d. 无权限 → 403
     ↓
@@ -1825,7 +1893,7 @@ Nginx 静态资源（`/assets/`、`/open-admin/assets/` 等）在 location 级�
 - API 层 ID 使用 `erikwang2013/hashids` 加密传输，避免暴露原始 snowflake ID 序列
 - SecurityFilter 全局扫描 XSS、SQL 注入、路径遍历、命令注入，同 IP 5次/60秒临时黑名单 15 分钟
 - 敏感操作（删除用户/角色/权限/配置、批量删除等）需要当前登录用户密码二次确认；确认失败计数 `pwd_confirm_fail:<id>` 为 5 次/300 秒，超过后 5 分钟内拒绝确认
-- 会话吊销（`SessionService`）：修改密码、禁用、删除、批量禁用/删除时写入 `user_pwd_changed:<id>` 水位（TTL = refresh 有效期 + 60 秒），按 `user_tokens:<id>` / `user_refresh_tokens:<id>` 登记把访问/刷新令牌加入 `jwt_blacklist:<md5>`，并清理 `user_refresh_rotations:<id>`、轮换缓存与 `perm:<id>`；刷新接口校验水位，旧 refresh_token 在改密后失效
+- 会话吊销（`SessionService`）：修改密码、禁用、删除、批量禁用/删除时写入 `user_pwd_changed:<id>` 水位（TTL = refresh 有效期 + 60 秒），按 `user_tokens:<id>` / `user_refresh_tokens:<id>` 登记把访问/刷新令牌加入 `jwt_blacklist:<md5>`，并清理 `user_refresh_rotations:<id>`、轮换缓存与版本化权限缓存；刷新接口校验水位，旧 refresh_token 在改密后失效
 - 并发会话限制：同一用户最多 3 个有效 Token，第 4 个设备登录时最旧 Token 被强制加入黑名单
 - 账号锁定：连续 5 次登录失败触发 15 分钟账号锁定，锁定期间返回 429；已存在用户按 `account_lock:u:<userId>` / `login_fail:u:<userId>` 计数，未知用户名按 `account_lock:n:<md5(小写去空白用户名)>` / `login_fail:n:<同>` 计数，键 TTL 均为 900 秒
 - 刷新轮换：旧 refresh_token 在 60 秒宽限内重放返回同一对令牌；轮换由 `refresh_lock:<md5>` 串行化，缓存任一枚令牌被拉黑即删除缓存并返回 401，并发未命中返回 409；登出与改密会拉黑缓存令牌并清理 `user_refresh_rotations:<userId>`
@@ -1902,7 +1970,7 @@ docker compose up -d --build
 - `generate-secrets.sh` 生成 RSA 密钥、自签名 TLS 证书与管理员密码 `deploy/secrets/admin_password.txt`，RSA 私钥写入 `app.env`；默认幂等，`--regenerate` 先归档旧 `.env`、`env/` 与 `secrets/` 到 `deploy/secrets/archive/<时间戳>/`，默认只轮换应用密钥并保留 `ENCRYPTABLE_KEY`、Hashids 盐值、现有 TLS 证书、数据库/管理员密码；Hashids 用 `--rotate-hashids` 显式轮换（旧链接中的 ID 将失效），字段加密密钥、TLS、数据库密码、管理员密码分别用 `--rotate-encryptable`（旧密钥自动加入 `ENCRYPTION_PREVIOUS_KEYS`，旧数据仍可读取；完成数据重加密后再移除旧密钥）、`--rotate-tls`、`--rotate-db`、`--reset-admin` 显式轮换。
 - 真实域名证书替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`；80 端口仅保留 ACME 校验路径，其余 301 到 HTTPS；HSTS 默认关闭，配置真实证书后再启用。
 - 日志：Nginx/MySQL 写 stdout/stderr，Docker 按 `10m × 3` 轮转；持久化目录：`deploy/data/{mysql,redis,runtime,upload,backups}`。
-- 资源上限：`deploy/docker-compose.yml` 为每个服务同时设置 `deploy.resources.limits` 的 CPU、内存与 pids（app 1.0/512M/256、init 0.5/256M/128、mysql 1.5/768M/512、redis 0.5/384M/128、nginx 0.5/128M/128、backup 0.5/256M/128），可按宿主机容量调整。Redis 容器 384M 与 `redis-server --maxmemory 256mb` 配套，预留 128M 给 AOF 重写/fork、客户端缓冲与内存碎片，两者必须同步修改（如 `--maxmemory 512mb` 对应容器 640M）。
+- 资源上限：`deploy/docker-compose.yml` 为每个服务同时设置 `deploy.resources.limits` 的 CPU、内存与 pids（app 1.0/512M/256、init 0.5/256M/128、mysql 1.5/768M/512、redis 0.5/384M/128、nginx 0.5/128M/128、backup 0.5/256M/128），可按宿主机容量调整。Redis 容器 384M 与 `redis-server --maxmemory 256mb --maxmemory-policy noeviction` 配套，预留 128M 给 AOF 重写/fork、客户端缓冲与内存碎片，两者必须同步修改（如 `--maxmemory 512mb` 对应容器 640M）；`noeviction` 防止黑名单、水位线、权限缓存等安全键被淘汰，写满时相关请求失败关闭。
 - `backup` 服务使用最小权限用户 `backup_reader`（`SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES` + `erik_operation_log` 的 `DELETE`）每日 `mysqldump --single-transaction --no-tablespaces` 到 `deploy/data/backups`，同时把 `deploy/data/upload` 打包为 `upload_<时间>.tar.gz`；两类备份保留 30 天，并每日清理 180 天前的操作日志（每轮最多 10000 行）。
 - 日志清理：应用内另注册不监听端口的 `log-cleanup` webman 进程（`count=1`），启动时先尽力清理一次，之后每日删除 180 天前的 `operation_log`，每批 10000 行；失败只记日志，不与 backup 服务冲突。
 - 异地备份：备份默认留在数据库宿主机磁盘。`deploy/offsite-sync.sh` 读取 `deploy/.env` 的 `OFFSITE_TARGET`，支持 rsync（`user@host:/path/`）与 rclone（`rclone:remote:path`）；未配置目标、备份目录为空或目标无法识别时拒绝执行，并排除未写完的临时文件。脚本由宿主机 cron 调度，容器不会自动调用。

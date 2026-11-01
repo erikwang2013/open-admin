@@ -60,6 +60,11 @@ Route::get('/api/docs', [app\admin\controller\DocsController::class, 'index']);
 Route::get('/admin/role/options', [app\admin\controller\RoleController::class, 'options'])
     ->middleware([app\middleware\AdminAuth::class]);
 
+// 导入任务状态 — 轮询接口，只需认证（控制器内校验任务归属）
+// 必须在 /admin 组之前注册，避免被权限校验拦截
+Route::get('/admin/import/status/{job}', [app\admin\controller\ImportController::class, 'status'])
+    ->middleware([app\middleware\AdminAuth::class]);
+
 // ============================================================
 // 管理端路由
 // ============================================================

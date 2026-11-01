@@ -9,6 +9,8 @@ namespace app\common;
 
 use app\model\AdminRole;
 use app\model\AdminUser;
+use support\Log;
+use support\Redis;
 
 /**
  * RBAC 授权边界
@@ -16,6 +18,20 @@ use app\model\AdminUser;
  */
 class RbacService
 {
+    /**
+     * 全局权限缓存失效（角色/权限变更后调用）
+     * 缓存键带版本号，递增后旧键不再被读取，60 秒内自然过期
+     */
+    public static function invalidatePermissionCaches(): void
+    {
+        try {
+            Redis::incr('perm_version');
+        } catch (\Throwable $e) {
+            // Redis 故障时鉴权会降级查库，缓存最多再陈旧 60 秒
+            Log::error('权限缓存版本递增失败: ' . $e->getMessage());
+        }
+    }
+
     /**
      * 用户的有效权限（仅启用的角色）；超级管理员返回 ['*']
      *

@@ -76,8 +76,8 @@ flowchart TD
     subgraph "中间件层 Middleware Layer"
         M_RL["RateLimit<br/>Redis 滑动窗口限流<br/>X-RateLimit 响应头"]
         M_SF["SecurityFilter<br/>攻击检测拦截<br/>XSS/SQL注入/路径遍历/CSRF"]
-        M1["AdminAuth<br/>JWT Token 校验<br/>注入 adminId"]
-        M2["AdminPermission<br/>RBAC 鉴权<br/>method.path 匹配<br/>Redis 60s 缓存权限"]
+        M1["AdminAuth<br/>JWT Token 校验<br/>账号状态 + 改密水位<br/>注入 adminId"]
+        M2["AdminPermission<br/>RBAC 鉴权<br/>method.path 匹配<br/>Redis 版本化权限缓存 60s"]
     end
 
     subgraph "控制器层 Controller Layer"
@@ -97,6 +97,12 @@ flowchart TD
         S3["EncryptionService<br/>加解密 + 脱敏"]
         S4["SessionService<br/>会话吊销<br/>黑名单/水位线/缓存清理"]
         S5["RbacService<br/>授权边界<br/>可授予角色/目标管理"]
+        S6["ImportJobService<br/>导入锁/队列/任务元数据"]
+    end
+
+    subgraph "后台进程 Background Processes"
+        P1["ImportWorker<br/>串行消费导入队列<br/>恢复未完成任务"]
+        P2["LogCleanup<br/>180 天日志清理"]
     end
 
     subgraph "模型层 Model Layer"
@@ -124,6 +130,9 @@ flowchart TD
     MD1 & MD2 & MD3 & MD4 & MD5 --> D1
     CT7 --> D3
     S4 --> D3
+    S6 --> D3
+    P1 --> S6 & D1
+    P2 --> D1
 
     style R1 fill:#722ED1,color:#fff
     style M_SF fill:#FF4D4F,color:#fff
@@ -274,7 +283,7 @@ sequenceDiagram
     SV-->>CL: 200 { dashboard data }
 ```
 
-刷新令牌：`POST /api/v1/auth/refresh` 每次成功刷新都轮换 access/refresh 令牌；旧 refresh_token 立即加入黑名单，同时以 `refresh_rotation:<md5(旧令牌)>` 缓存新令牌对 60 秒，宽限期内再次提交同一旧令牌返回同一对令牌。并发轮换由 `refresh_lock:<md5>`（`SET NX EX 5` + Lua 释放）串行化，未命中缓存的并发请求返回 409；缓存令牌被拉黑时删除缓存并返回 401。刷新前校验密码变更水位 `user_pwd_changed:<userId>`，令牌签发早于水位时返回 401。密码修改、禁用、删除、批量禁用/删除由 `SessionService::revokeUser()` 统一写入水位、按 `user_tokens` / `user_refresh_tokens` 拉黑访问与刷新令牌、清理 `user_refresh_rotations` 与 `perm:<id>`；角色变化只清权限缓存。登出会拉黑缓存中的令牌，并按 `user_refresh_rotations:<userId>` 清理；HarmonyOS 客户端对并发 401 使用单飞刷新。
+刷新令牌：`POST /api/v1/auth/refresh` 每次成功刷新都轮换 access/refresh 令牌；旧 refresh_token 立即加入黑名单，同时以 `refresh_rotation:<md5(旧令牌)>` 缓存新令牌对 60 秒，宽限期内再次提交同一旧令牌返回同一对令牌。并发轮换由 `refresh_lock:<md5>`（`SET NX EX 5` + Lua 释放）串行化，未命中缓存的并发请求返回 409；缓存令牌被拉黑时删除缓存并返回 401。刷新前校验密码变更水位 `user_pwd_changed:<userId>`，令牌签发早于水位时返回 401。密码修改、禁用、删除、批量禁用/删除由 `SessionService::revokeUser()` 统一写入水位、按 `user_tokens` / `user_refresh_tokens` 拉黑访问与刷新令牌、清理 `user_refresh_rotations` 与版本化权限缓存；角色变化只清权限缓存。登出会拉黑缓存中的令牌，并按 `user_refresh_rotations:<userId>` 清理；HarmonyOS 客户端对并发 401 使用单飞刷新。
 
 ---
 
@@ -334,7 +343,7 @@ flowchart TD
     subgraph "判定流程"
         J1["提取 Token → adminId"]
         J2["查找用户启用角色"]
-        J3["收集权限 slug<br/>perm:&lt;id&gt; 缓存 60s"]
+        J3["收集权限 slug<br/>perm:&lt;version&gt;:&lt;id&gt; 缓存 60s"]
         J4["构造 method.path"]
         J5{"匹配?"}
         J6["放行"]
@@ -548,7 +557,35 @@ sequenceDiagram
 
 导出 5000 行 × 9 列在 128M 工作进程下实测约占 65MiB，已接近安全上限，不要同时提高行数与列数。
 
-导入用户时，`ImportController` 先用 Redis 锁 `import_users_lock`（`SET NX EX 1800`）串行化整批任务，已有任务返回 409。`.xlsx` 在加载前做 ZIP 解压预检（`xl/**.xml` 超过 8MB 或单元格超过 32,000 个返回 422）；`.xls`/`.xlsx` 都在 `IOFactory::load()` 前读取工作表元数据（`listWorksheetInfo`），任一工作表超过 2001 行或行 × 列超过 32,000 单元格立即返回 422；加载后再用 `getHighestDataRow()` 复核，文件上限 5MB、数据行上限 2000 行。每行独立校验（用户名 3-50、密码 6-32、姓名 ≤50、手机 ≤20、邮箱 ≤254、状态 0/1），失败行记录行号与通用原因，用户与角色关联同事务写入并按行回滚；bcrypt 哈希 2000 行属 CPU 密集操作，锁 TTL 按最坏耗时设置。
+用户导入采用异步队列，接口只做校验与入队，实际解析/写库由单进程 `import-worker` 执行：
+
+```mermaid
+sequenceDiagram
+    participant C as 客户端
+    participant IC as ImportController
+    participant R as Redis
+    participant W as ImportWorker
+    C->>IC: POST /admin/import/users (file, role_ids)
+    IC->>IC: 校验文件/角色边界
+    IC->>R: SET NX EX 1800 import_users_lock
+    alt 锁已被占用
+        IC-->>C: 409
+    else Redis 不可用
+        IC-->>C: 503
+    else 获取成功
+        IC->>IC: 文件存 runtime/imports (0600)
+        IC->>R: 写任务元数据 + LPUSH import_queue
+        IC-->>C: 202 {job_id, status: queued}
+    end
+    W->>R: RPOPLPUSH import_queue → import_processing
+    W->>W: processImport 逐行校验 + 事务写库
+    W->>R: 更新任务 completed/failed + result
+    C->>IC: GET /admin/import/status/{job}
+    IC->>R: 读取任务元数据（仅创建者）
+    IC-->>C: queued/processing/completed/failed
+```
+
+worker 重启时按 processing 列表恢复未完成任务，`processing_at` 60 秒宽限期避免滚动重启重复消费，锁 TTL 1800 秒兜底释放；Redis 不可用时接口失败关闭（获取锁 503，任务写入/入队失败 500 并清理文件、元数据与锁），不降级执行导入。`.xlsx` 在加载前做 ZIP 解压预检（`xl/**.xml` 超过 8MB 或单元格超过 32,000 个返回 422）；`.xls`/`.xlsx` 都在 `IOFactory::load()` 前读取工作表元数据（`listWorksheetInfo`），任一工作表超过 2001 行或行 × 列超过 32,000 单元格立即返回 422；加载后再用 `getHighestDataRow()` 复核，文件上限 5MB、数据行上限 2000 行。每行独立校验（用户名 3-50、密码 6-32、姓名 ≤50、手机 ≤20、邮箱 ≤254、状态 0/1），失败行记录行号与通用原因，用户与角色关联同事务写入并按行回滚；bcrypt 哈希 2000 行属 CPU 密集操作，锁 TTL 按最坏耗时设置。
 
 ---
 
@@ -662,10 +699,10 @@ flowchart TB
 
     subgraph "单机 Docker Compose（deploy/）"
         NGX["Nginx :80/:443<br/>TLS 终止 · 静态官网<br/>反向代理到 app:8791"]
-        WM["webman app :8791<br/>仅容器内网监听"]
+        WM["webman app :8791<br/>仅容器内网监听<br/>import-worker 单进程消费导入队列"]
         INIT["init（一次性）<br/>建表 + 创建管理员<br/>完成后退出"]
         MYSQL["MySQL 8.0<br/>deploy/data/mysql"]
-        REDIS["Redis 7 · AOF<br/>deploy/data/redis"]
+        REDIS["Redis 7 · AOF<br/>noeviction · deploy/data/redis"]
         BACKUP["backup（每日）<br/>mysqldump + upload tar<br/>保留 30 天 · 日志 180 天"]
     end
 
@@ -697,7 +734,7 @@ flowchart TB
     style DATA fill:#F6F8FC,color:#1677FF
 ```
 
-> 环境变量按服务隔离在 `deploy/env/{app,init,mysql,redis,backup}.env`（`600`，目录 `700`），master `deploy/.env` 只保存 compose 插值；应用与 init 以宿主机 `APP_UID`/`APP_GID` 运行。`backup` 使用最小权限用户 `backup_reader`，备份数据库、上传文件并清理 180 天前的操作日志；应用内 `log-cleanup` 进程每日清理同一张表作为兜底（每批 10000 行、最多 10 批）。`nginx` 通过 `depends_on.app.condition: service_healthy` 等待应用 `/health` 通过后再启动，避免上线瞬间 502。各服务设置 CPU/内存/pids 上限（app 1.0/512M/256、init 0.5/256M/128、mysql 1.5/768M/512、redis 0.5/384M/128、nginx 0.5/128M/128、backup 0.5/256M/128）；Redis 容器 384M 与 `--maxmemory 256mb` 配套，预留 128M 给 AOF 重写/fork 与内存碎片。异地备份由宿主机 cron 调用 `deploy/offsite-sync.sh`（读取 `OFFSITE_TARGET`）。Nginx/MySQL 日志写 stdout/stderr，由 Docker 按 `10m × 3` 轮转；HSTS 默认关闭，配置真实域名证书后再启用。
+> 环境变量按服务隔离在 `deploy/env/{app,init,mysql,redis,backup}.env`（`600`，目录 `700`），master `deploy/.env` 只保存 compose 插值；应用与 init 以宿主机 `APP_UID`/`APP_GID` 运行。`backup` 使用最小权限用户 `backup_reader`，备份数据库、上传文件并清理 180 天前的操作日志；应用内 `log-cleanup` 进程每日清理同一张表作为兜底（每批 10000 行、最多 10 批）。`nginx` 通过 `depends_on.app.condition: service_healthy` 等待应用 `/health` 通过后再启动，避免上线瞬间 502。各服务设置 CPU/内存/pids 上限（app 1.0/512M/256、init 0.5/256M/128、mysql 1.5/768M/512、redis 0.5/384M/128、nginx 0.5/128M/128、backup 0.5/256M/128）；Redis 容器 384M 与 `--maxmemory 256mb --maxmemory-policy noeviction` 配套，预留 128M 给 AOF 重写/fork 与内存碎片，`noeviction` 防止黑名单/水位线/权限缓存等安全键被淘汰。应用内另有 `import-worker`（`count=1`）串行消费 Redis 导入队列，启动时恢复未完成任务。异地备份由宿主机 cron 调用 `deploy/offsite-sync.sh`（读取 `OFFSITE_TARGET`）。Nginx/MySQL 日志写 stdout/stderr，由 Docker 按 `10m × 3` 轮转；HSTS 默认关闭，配置真实域名证书后再启用。
 
 ---
 

@@ -8,7 +8,9 @@ declare(strict_types=1);
 namespace app\admin\controller;
 
 use app\common\RbacService;
+use app\model\AdminPermission;
 use app\model\AdminRole;
+use InvalidArgumentException;
 use support\Request;
 use support\Response;
 use Webman\Validation\Validator;
@@ -100,10 +102,19 @@ class RoleController extends BaseController
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:50',
             'slug' => 'required|string|max:50',
+            'description' => 'string|max:255',
+            'status' => 'in:0,1',
+            'permission_ids' => 'array',
         ]);
 
         if ($validator->fails()) {
             return $this->fail($validator->errors()->first(), 422);
+        }
+
+        try {
+            $permissionIds = $this->decodePermissionIds($request);
+        } catch (InvalidArgumentException $e) {
+            return $this->fail($e->getMessage(), 422);
         }
 
         $role = new AdminRole();
@@ -115,10 +126,11 @@ class RoleController extends BaseController
         $role->save();
 
         // 同步权限（hashid → int）
-        if ($request->input('permission_ids') !== null) {
-            $ids = array_map(fn($hid) => $this->decodeId((string) $hid), $request->input('permission_ids', []));
-            $role->permissions()->sync($ids);
+        if ($permissionIds !== null) {
+            $role->permissions()->sync($permissionIds);
         }
+
+        RbacService::invalidatePermissionCaches();
 
         return $this->success($this->encodeIds($role->toArray()), '创建成功');
     }
@@ -146,15 +158,33 @@ class RoleController extends BaseController
             return $this->fail('超级管理员不可编辑', 403);
         }
 
+        $validator = Validator::make($request->all(), [
+            'name' => 'string|max:50',
+            'description' => 'string|max:255',
+            'status' => 'in:0,1',
+            'permission_ids' => 'array',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->fail($validator->errors()->first(), 422);
+        }
+
+        try {
+            $permissionIds = $this->decodePermissionIds($request);
+        } catch (InvalidArgumentException $e) {
+            return $this->fail($e->getMessage(), 422);
+        }
+
         $role->name = $request->input('name', $role->name);
         $role->description = $request->input('description', $role->description);
         $role->status = (int) $request->input('status', $role->status);
         $role->save();
 
-        if ($request->input('permission_ids') !== null) {
-            $ids = array_map(fn($hid) => $this->decodeId((string) $hid), $request->input('permission_ids', []));
-            $role->permissions()->sync($ids);
+        if ($permissionIds !== null) {
+            $role->permissions()->sync($permissionIds);
         }
+
+        RbacService::invalidatePermissionCaches();
 
         return $this->success($this->encodeIds($role->toArray()), '更新成功');
     }
@@ -189,6 +219,40 @@ class RoleController extends BaseController
         $role->users()->detach();
         $role->delete();
 
+        RbacService::invalidatePermissionCaches();
+
         return $this->success([], '删除成功');
+    }
+
+    /**
+     * 解码并校验 permission_ids；返回 null 表示请求未携带该字段
+     *
+     * @return int[]|null
+     * @throws InvalidArgumentException 权限 ID 无法解码或不存在
+     */
+    private function decodePermissionIds(Request $request): ?array
+    {
+        $permissionIds = $request->input('permission_ids');
+        if ($permissionIds === null) {
+            return null;
+        }
+        if (!is_array($permissionIds)) {
+            throw new InvalidArgumentException('权限ID格式错误');
+        }
+
+        $ids = [];
+        foreach ($permissionIds as $hashid) {
+            if (!is_string($hashid)) {
+                throw new InvalidArgumentException('权限ID格式错误');
+            }
+            $ids[] = $this->decodeId($hashid);
+        }
+        $ids = array_values(array_unique($ids));
+
+        if ($ids !== [] && AdminPermission::whereIn('id', $ids)->count() !== count($ids)) {
+            throw new InvalidArgumentException('权限不存在');
+        }
+
+        return $ids;
     }
 }

@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace app\admin\controller;
 
+use app\common\RbacService;
 use app\model\AdminPermission;
 use support\Db;
 use support\Request;
@@ -70,6 +71,8 @@ class PermissionController extends BaseController
         $perm->sort = (int) $request->input('sort', 0);
         $perm->save();
 
+        RbacService::invalidatePermissionCaches();
+
         return $this->success($this->encodeIds($perm->toArray()), '创建成功');
     }
 
@@ -88,11 +91,24 @@ class PermissionController extends BaseController
             return $this->fail('权限不存在', 404);
         }
 
+        $validator = Validator::make($request->all(), [
+            'name' => 'string|max:50',
+            'icon' => 'string|max:50',
+            'path' => 'string|max:255',
+            'sort' => 'integer',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->fail($validator->errors()->first(), 422);
+        }
+
         $perm->name = $request->input('name', $perm->name);
         $perm->icon = $request->input('icon', $perm->icon);
         $perm->path = $request->input('path', $perm->path);
         $perm->sort = (int) $request->input('sort', $perm->sort);
         $perm->save();
+
+        RbacService::invalidatePermissionCaches();
 
         return $this->success($this->encodeIds($perm->toArray()), '更新成功');
     }
@@ -133,6 +149,8 @@ class PermissionController extends BaseController
 
         Db::table('admin_role_permission')->whereIn('permission_id', $ids)->delete();
         AdminPermission::whereIn('id', $ids)->delete();
+
+        RbacService::invalidatePermissionCaches();
 
         return $this->success([], '删除成功');
     }

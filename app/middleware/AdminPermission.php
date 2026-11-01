@@ -48,8 +48,13 @@ class AdminPermission
 
     private function getUserPermissions(int $adminId): array
     {
-        // Redis 缓存，避免每请求 N+1 查询
-        $cacheKey = "perm:{$adminId}";
+        // Redis 缓存，避免每请求 N+1 查询；版本号递增即整体失效，旧键 60 秒后自然过期
+        $version = 0;
+        try {
+            $version = (int) Redis::get('perm_version');
+        } catch (\Throwable) {}
+
+        $cacheKey = "perm:{$version}:{$adminId}";
         try {
             $cached = Redis::get($cacheKey);
             if ($cached) {

@@ -66,7 +66,8 @@ final class SessionServiceTest extends TestCase
         $tokensKey   = $this->track("user_tokens:{$id}");
         $refreshKey  = $this->track("user_refresh_tokens:{$id}");
         $rotationSet = $this->track("user_refresh_rotations:{$id}");
-        $permKey     = $this->track("perm:{$id}");
+        $permVersion = (int) (Redis::get('perm_version') ?: 0);
+        $permKey     = $this->track("perm:{$permVersion}:{$id}");
         $watermark   = $this->track("user_pwd_changed:{$id}");
         $rotationKey = $this->key('refresh_rotation');
         $accessBlacklist  = $this->track('jwt_blacklist:' . md5($access));
@@ -80,7 +81,7 @@ final class SessionServiceTest extends TestCase
         Redis::setex($permKey, 60, '{}');
 
         $before = time();
-        SessionService::revokeUser($id);
+        self::assertTrue(SessionService::revokeUser($id));
 
         // 改密水位线：未登记过的旧 refresh token 也会因 iat 早于水位线被拒绝
         self::assertSame(1, (int) Redis::exists($watermark));
@@ -96,5 +97,20 @@ final class SessionServiceTest extends TestCase
         self::assertSame(0, (int) Redis::exists($rotationKey));
         self::assertSame(0, (int) Redis::exists($rotationSet));
         self::assertSame(0, (int) Redis::exists($permKey));
+    }
+
+    public function testMillisecondWatermarkRejectsOnlyEarlierTokens(): void
+    {
+        $id = $this->userId;
+        $key = $this->track("user_pwd_changed:{$id}");
+        $watermark = (int) floor(microtime(true) * 1000);
+        Redis::setex($key, 60, (string) $watermark);
+
+        self::assertTrue(SessionService::isTokenRevoked(['iat_ms' => $watermark], $id));
+        self::assertFalse(SessionService::isTokenRevoked(['iat_ms' => $watermark + 1], $id));
+
+        // 兼容升级前写入的秒级水位线与无 iat_ms 的旧令牌
+        Redis::setex($key, 60, (string) time());
+        self::assertTrue(SessionService::isTokenRevoked(['iat' => time()], $id));
     }
 }

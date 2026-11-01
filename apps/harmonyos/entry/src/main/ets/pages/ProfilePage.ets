@@ -5,6 +5,7 @@
 import router from '@ohos.router';
 import promptAction from '@ohos.promptAction';
 import { TokenManager } from '../utils/TokenManager';
+import { AuthService } from '../service/DataService';
 
 @Entry
 @Component
@@ -28,9 +29,7 @@ struct ProfilePage {
         value: '确定退出',
         fontColor: '#FF4D4F',
         action: () => {
-          TokenManager.clearTokens();
-          promptAction.showToast({ message: '已退出登录' });
-          router.replaceUrl({ url: 'pages/LoginPage' });
+          this.performLogout();
         }
       },
       secondaryButton: {
@@ -38,6 +37,18 @@ struct ProfilePage {
         action: () => {}
       }
     });
+  }
+
+  /** 先尝试服务端吊销 token（失败也不阻断），再清理本地会话并跳转登录页 */
+  async performLogout(): Promise<void> {
+    try {
+      await AuthService.logout(TokenManager.getRefreshToken());
+    } catch (_) {
+      // 网络或 token 已失效时仍继续登出
+    }
+    TokenManager.clearTokens();
+    promptAction.showToast({ message: '已退出登录' });
+    router.replaceUrl({ url: 'pages/LoginPage' });
   }
 
   build() {

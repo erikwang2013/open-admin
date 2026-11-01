@@ -74,7 +74,7 @@ SVG / PNG）**不是开源资产**，版权归作者所有。未经书面许可�
 | | 并发会话限制 | 同一用户最多 3 个有效 Token；改密/禁用/删除吊销全部会话 |
 | 📊 仪表盘 | 实时统计/趋势图/分布图/最近操作 | Redis 缓存 5 分钟 |
 | 👥 用户管理 | CRUD + 批量删除/启禁用 + 角色分配 | 软删除 + 密码二次确认（5 次/5 分钟节流）；不能删除自己或最后一名启用的超管；角色分配受权限子集与目标管理边界约束 |
-| | Excel 批量导入 | 逐行校验 + 通用错误报告；5MB / 2000 行 / 32,000 单元格预检；Redis 导入锁（并发返回 409） |
+| | Excel 批量导入（异步） | 202 + `job_id`，`import-worker` 串行消费队列，`/admin/import/status/{job}` 轮询；逐行校验 + 通用错误报告；5MB / 2000 行 / 32,000 单元格预检；Redis 导入锁（并发返回 409，Redis 故障失败关闭） |
 | 🔒 角色权限 | 角色 CRUD + 权限树 + 角色分配 | RBAC method.path 粒度鉴权；`GET /admin/role/options` 仅返回可授予的启用角色；内置 `super_admin` 禁改删（通配 `*` 权限） |
 | ⚙ 系统配置 | 键值对 CRUD | 分组管理 |
 | 📋 操作审计 | 日志查询 + 来源端检测 | 8 平台自动识别；请求体 phone/email/id_card/mobile/address 递归脱敏 |
@@ -121,7 +121,7 @@ open-admin/
 │   │   ├── LogController.php       # 操作日志查询
 │   │   ├── ProfileController.php   # 个人中心 + 登出
 │   │   ├── ExportController.php    # Excel/PDF 导出
-│   │   ├── ImportController.php    # Excel 导入用户
+│   │   ├── ImportController.php    # Excel 导入用户（异步入队/状态查询）
 │   │   ├── UploadController.php    # 文件上传
 │   │   ├── HealthController.php    # 健康检查
 │   │   ├── DocsController.php      # OpenAPI 文档
@@ -135,18 +135,19 @@ open-admin/
 │   │   ├── SnowflakeService.php# Snowflake ID 生成
 │   │   ├── EncryptionService.php # 数据加解密 + 脱敏
 │   │   ├── SessionService.php  # 会话吊销（黑名单/水位线/轮换缓存/权限缓存）
-│   │   └── RbacService.php     # RBAC 授权边界（可授予角色/目标管理边界）
+│   │   ├── RbacService.php     # RBAC 授权边界（可授予角色/目标管理边界）
+│   │   └── ImportJobService.php# 导入锁/队列/任务元数据
 │   ├── middleware/             # 中间件
 │   │   ├── Cors.php            # 跨域
 │   │   ├── SecurityFilter.php  # 攻击检测拦截（HTTP方法限制/XSS/SQL注入/路径遍历/命令注入/CSRF）
 │   │   ├── RateLimit.php       # Redis 限流（滑动窗口 + 响应头）
-│   │   ├── AdminAuth.php       # JWT 认证 + 黑名单
-│   │   ├── AdminPermission.php # RBAC 权限校验
+│   │   ├── AdminAuth.php       # JWT 认证 + 黑名单 + 账号状态/改密水位（故障关闭）
+│   │   ├── AdminPermission.php # RBAC 权限校验（Redis 版本化 60s 缓存）
 │   │   └── OperationLog.php    # 操作日志自动记录（含来源端检测）
 │   ├── model/                  # 数据模型
 │   ├── view/index/view.html    # 站点首页模板（GET /，含项目宠物与入口导航）
 │   ├── queue/                  # 队列任务
-│   └── process/                # 进程 (Http, Monitor, LogCleanup)
+│   └── process/                # 进程 (Http, Monitor, LogCleanup, ImportWorker)
 ├── apps/
 │   ├── flutter/                # Flutter Web 管理后台（PC 风格）
 │   │   ├── lib/app/
@@ -330,7 +331,7 @@ docker compose up -d
 完整的 API 参考（统一响应格式、错误码、全部端点详情、认证流程、限流策略、中间件链路）见 **[docs/API.md](docs/API.md)**，要点如下：
 
 - **统一响应格式**: `{ "code": 0, "message": "success", "data": {...} }`，`code=0` 表示成功
-- **错误码**: `400` 参数错误 / `401` 未登录 / `403` 无权限（含角色授予与目标管理边界） / `404` 不存在 / `409` 并发冲突（刷新轮换或导入锁） / `422` 验证失败 / `429` 限流 / `500` 服务器错误 / `503` Redis 故障导致鉴权或限流失败关闭
+- **错误码**: `202` 异步导入已入队 / `400` 参数错误 / `401` 未登录（含账号已删除/禁用、Token 早于改密水位） / `403` 无权限（含角色授予与目标管理边界） / `404` 不存在 / `409` 并发冲突（刷新轮换或导入锁） / `422` 验证失败 / `429` 限流 / `500` 服务器错误 / `503` Redis 或数据库故障导致鉴权、限流、导入或会话吊销失败关闭
 - **API 版本**: 版本号体现在 URL 前缀中（如 `/api/v1/...`），不使用请求头
 - **认证**: `Authorization: Bearer {token}`；access_token 有效期 2 小时，refresh_token 14 天；刷新令牌轮换后保留 60 秒宽限；改密/禁用/删除会吊销该用户全部会话
 - **在线调试**: `/apidoc/` 提供单文件同源调试界面，直接从 `GET /api/docs` 读取 OpenAPI 规范
@@ -362,11 +363,11 @@ docker compose up -d
 - 所有配置文件必须包含中文注释说明
 - 数据库主键必须由应用层 snowflake 生成，禁止自增
 - API 层所有参数和响应中的 ID 必须通过 hashids 加解密
-- AdminPermission 中间件使用 Redis 缓存用户权限（TTL=60s），消除 N+1 查询瓶颈；启用状态的 `super_admin` 角色直接返回通配权限 `['*']`，角色变更后清理 `perm:<id>` 缓存
-- 会话吊销统一走 `SessionService::revokeUser()`：写 `user_pwd_changed:<id>` 水位线、按剩余 TTL 拉黑 `user_tokens` / `user_refresh_tokens` ZSET 成员、清理 `user_refresh_rotations` 轮换缓存与 `perm:<id>`；改密、禁用、删除、批量删除/禁用均调用
+- AdminPermission 中间件使用 Redis 缓存用户权限（键为 `perm:<perm_version>:<id>`，TTL=60s），消除 N+1 查询瓶颈；启用状态的 `super_admin` 角色直接返回通配权限 `['*']`；角色/权限/用户-角色变更后由 `RbacService::invalidatePermissionCaches()` 递增 `perm_version` 整体失效
+- 会话吊销统一走 `SessionService::revokeUser()`：写 `user_pwd_changed:<id>` 水位线、按剩余 TTL 拉黑 `user_tokens` / `user_refresh_tokens` ZSET 成员、清理 `user_refresh_rotations` 轮换缓存与权限缓存；改密、禁用、删除、批量删除/禁用均在**写库前**调用，吊销失败中止写库并返回 503
 - 角色分配：`role_ids`（hashid 数组）只允许授予操作者自身权限子集内的角色；非超管不得分配 `super_admin`、不得操作持有更高权限角色的账号；禁用角色的权限同样参与边界判断
 - 用户/个人中心写入前先解密并校验：`phone` ≤ 20、`email` ≤ 254、`real_name` ≤ 50
-- Excel 导入逐行校验并返回通用错误（服务端记录异常）；Redis `import_users_lock`（`SET NX EX 1800`）保证单实例导入，忙时返回 409；`role_ids` 与用户写入同事务
+- Excel 导入为异步任务：校验后获取 Redis `import_users_lock`（`SET NX EX 1800`，忙时 409），文件以 `0600` 存入 `runtime/imports/` 并入队，返回 202 + `job_id`；单进程 `import-worker` 串行消费，`GET /admin/import/status/{job}` 仅创建者可轮询 `queued`/`processing`/`completed`/`failed`；Redis 故障时失败关闭（503/500），不降级执行导入；`role_ids` 与用户写入同事务
 - Excel 导出数据单元格使用显式字符串类型防止公式注入；`conditions` 必须是数组且键属于导出列、值为标量，否则 422
 
 ## 部署
@@ -392,7 +393,7 @@ docker compose up -d
 | `app` | webman PHP 8.3 应用，容器内监听 8791，仅经 Nginx 暴露 |
 | `init` | 一次性初始化：建表、创建管理员，完成后退出 |
 | `mysql` | MySQL 8.0，数据持久化到宿主机目录；错误/慢日志写 stderr |
-| `redis` | Redis 7，AOF 持久化到宿主机目录；容器 384M / `--maxmemory 256mb` |
+| `redis` | Redis 7，AOF 持久化到宿主机目录；容器 384M / `--maxmemory 256mb --maxmemory-policy noeviction` |
 | `backup` | 最小权限用户每日备份数据库 + 上传文件到 `deploy/data/backups`，保留 30 天；清理 180 天前操作日志 |
 
 ```bash
@@ -406,9 +407,9 @@ docker compose up -d --build
 - `--regenerate` 先归档旧的 `deploy/.env`、`deploy/env/` 与 `deploy/secrets/` 到 `deploy/secrets/archive/<时间戳>/`，默认只轮换 JWT/ENCRYPTION/RSA/Redis 等应用密钥，并保留 `HASHIDS_SALT`、`ENCRYPTABLE_KEY`、现有 TLS 证书（真实域名证书不会被覆盖）、`DB_PASSWORD`、`MYSQL_ROOT_PASSWORD` 与管理员密码，不会破坏已有数据库。轮换 Hashids 用 `--rotate-hashids`（旧链接中的 ID 将失效）；轮换字段加密密钥用 `--rotate-encryptable`（旧密钥自动加入 `ENCRYPTION_PREVIOUS_KEYS`，旧数据仍可读取；完成数据重加密后再移除旧密钥），轮换 TLS 用 `--rotate-tls`，轮换数据库密码用 `--rotate-db`（脚本会打印需手动执行的 `ALTER USER` 命令），重置管理员密码用 `--reset-admin`。
 - **宿主机属主**：`app`/`init` 以 `${APP_UID:-1000}:${APP_GID:-1000}` 运行，脚本用 `id -u`/`id -g` 写入 master `.env`，保证 `deploy/data/{runtime,upload}` 对宿主机用户可写。
 - **日志**：Nginx 与 MySQL 写 stdout/stderr，由 Docker 按 `10m × 3` 轮转，用 `docker compose logs -f app` 查看；宿主机持久化目录为 `deploy/data/{mysql,redis,runtime,upload,backups}`。
-- **资源上限**：compose 为各服务设置 CPU/内存/pids 上限（app 1.0/512M/256、init 0.5/256M/128、mysql 1.5/768M/512、redis 0.5/384M/128、nginx 0.5/128M/128、backup 0.5/256M/128）。Redis 容器 384M 与 `--maxmemory 256mb` 配套，预留 128M 给 AOF 重写/fork、客户端缓冲与内存碎片，两者必须同步修改（如 `--maxmemory 512mb` 对应容器 640M）。
+- **资源上限**：compose 为各服务设置 CPU/内存/pids 上限（app 1.0/512M/256、init 0.5/256M/128、mysql 1.5/768M/512、redis 0.5/384M/128、nginx 0.5/128M/128、backup 0.5/256M/128）。Redis 容器 384M 与 `--maxmemory 256mb --maxmemory-policy noeviction` 配套，预留 128M 给 AOF 重写/fork、客户端缓冲与内存碎片，两者必须同步修改（如 `--maxmemory 512mb` 对应容器 640M）。`noeviction` 防止黑名单、水位线、权限缓存等安全键在内存压力下被淘汰，写满时相关请求失败关闭并触发告警。
 - TLS：默认按 `DOMAIN`（默认 `localhost`）生成自签名证书；真实域名证书直接替换 `deploy/secrets/tls/fullchain.pem` 与 `privkey.pem`，脚本不会覆盖已有证书（`--rotate-tls` 除外）。80 端口仅放行 `/.well-known/acme-challenge/`，其余 301 到 HTTPS；HSTS 默认关闭，配置真实域名证书后再启用。
-- 自动备份：`backup` 使用最小权限用户 `backup_reader` 每天执行 `mysqldump --single-transaction --no-tablespaces`，并把 `deploy/data/upload` 打包为 tar.gz，写入 `deploy/data/backups` 并保留 30 天；同时清理 180 天前的操作日志（每轮最多 10000 行）。应用内不监听端口的 `log-cleanup` 进程（`count=1`）启动时先尽力清理一次、之后每日按每批 10000 行、最多 10 批（单轮 100000 行）清理，作为兜底。
+- 自动备份：`backup` 使用最小权限用户 `backup_reader` 每天执行 `mysqldump --single-transaction --no-tablespaces`，并把 `deploy/data/upload` 打包为 tar.gz，写入 `deploy/data/backups` 并保留 30 天；同时清理 180 天前的操作日志（每轮最多 10000 行）。应用内不监听端口的 `log-cleanup` 进程（`count=1`）启动时先尽力清理一次、之后每日按每批 10000 行、最多 10 批（单轮 100000 行）清理，作为兜底；`import-worker` 进程（`count=1`）串行消费 Redis 导入队列，启动时恢复未完成任务并清理过期任务文件。
 - 启动顺序：`nginx` 通过 `depends_on.app.condition: service_healthy` 等待应用 `/health` 健康检查通过后再启动，避免容器启动瞬间返回 502。
 - 异地备份：备份默认留在数据库宿主机磁盘。宿主机 cron 调用 `deploy/offsite-sync.sh`（读取 `deploy/.env` 的 `OFFSITE_TARGET`，支持 rsync `user@host:/path/` 与 rclone `rclone:remote:path`）；未配置目标或备份目录为空时拒绝执行，并排除未写完的临时文件。cron 示例与执行前检查清单见 `deploy/README.md` 的「异地备份」。
 - RSA 公钥：`GET /api/v1/auth/public-key` 返回当前公钥，Flutter 登录前动态获取、失败时回退内置公钥；`--regenerate` 换钥后需确认该端点可达，依赖内置回退的旧客户端需重新构建。
@@ -420,10 +421,9 @@ PHP 镜像通过 `Dockerfile` 构建，基础镜像 `php:8.3-cli-alpine`，启�
 GitHub Actions 持续集成流水线：`.github/workflows/ci.yml`
 
 - PHP 语法检查 (`php -l`)
-- PHPUnit 单元测试（37 个测试 / 81 个断言；含锁键、刷新轮换、进程配置、会话吊销、操作日志脱敏、用户掩码、导入体积守卫）
+- PHPUnit 单元测试（65 个测试 / 226 个断言；含锁键、刷新轮换、进程配置、会话吊销、操作日志脱敏、用户掩码、导入体积守卫，以及 `RbacBoundaryTest`、`ConfirmThrottleTest`、`PdfExportLimitTest`、`ImportAsyncTest`；CI 的 PHP job 提供 MySQL 8.0 与 Redis 7 service、安装 `zip` 扩展并将 `DB_PASSWORD` 设为 `root`，依赖服务用例实际执行；本地环境不可用时自动跳过）
 - Flutter 静态分析 (`flutter analyze`)
 - Docker 镜像构建 + PHP 扩展检查（redis/zip/gd、GD FreeType/JPEG）+ 根目录与 `deploy/` Compose 配置校验 + 两份 Nginx 配置 `nginx -t`
-- 控制器 / RBAC / 导入的临时数据库验证（125/125 用户与 RBAC、42/42 导入）在本地执行，未纳入仓库；CI 只运行上述单元测试
 
 ### 数据库备份
 

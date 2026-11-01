@@ -20,7 +20,7 @@ A full-stack admin dashboard built on **webman v2 + Flutter**: authentication an
 | | Concurrent session limit | Max 3 active tokens per user; password change/disable/delete revokes all sessions |
 | 📊 Dashboard | Real-time stats/trends/distribution/logs | Redis cached 5 min |
 | 👥 Users | CRUD + batch delete/toggle status + role assignment | Soft delete + password confirmation (5 failures / 5 minutes throttled); cannot delete yourself or the last enabled super admin; role grants limited to the actor's permission subset and management boundary |
-| | Excel batch import | Row-level validation + generic error report; 5MB / 2,000 rows / 32,000 cells pre-checked; Redis import lock (HTTP 409 when busy) |
+| | Excel batch import (async) | 202 + `job_id`; a single `import-worker` consumes the queue serially and `GET /admin/import/status/{job}` polls progress; row-level validation + generic error report; 5MB / 2,000 rows / 32,000 cells pre-checked; Redis import lock (HTTP 409 when busy, fail-closed when Redis is down) |
 | 🔒 Roles & Perms | Role CRUD + permission tree + role assignment | RBAC method.path granularity; `GET /admin/role/options` returns only assignable enabled roles; built-in `super_admin` cannot be edited/deleted (wildcard `*` permission) |
 | ⚙ Config | Key-value CRUD | Grouped management |
 | 📋 Audit | Log query + source detection | 8 platforms auto-detected; phone/email/id_card/mobile/address masked recursively in request bodies |
@@ -98,7 +98,7 @@ open-admin/
 │   │   ├── LogController.php       # Operation log viewer
 │   │   ├── ProfileController.php   # Profile + logout
 │   │   ├── ExportController.php    # Excel/PDF export
-│   │   ├── ImportController.php    # Excel import users
+│   │   ├── ImportController.php    # Excel import users (async enqueue/status)
 │   │   ├── UploadController.php    # File upload
 │   │   ├── HealthController.php    # Health check
 │   │   └── DocsController.php      # OpenAPI docs
@@ -111,16 +111,17 @@ open-admin/
 │   │   ├── SnowflakeService.php
 │   │   ├── EncryptionService.php
 │   │   ├── SessionService.php  # Session revocation + permission-cache clearing
-│   │   └── RbacService.php     # RBAC authorization boundaries
+│   │   ├── RbacService.php     # RBAC authorization boundaries
+│   │   └── ImportJobService.php# Import lock/queue/job metadata
 │   ├── middleware/             # Middleware
 │   │   ├── Cors.php            # CORS
 │   │   ├── SecurityFilter.php  # Attack detection (HTTP method restriction/XSS/SQLi/path traversal/cmd injection/CSRF)
 │   │   ├── RateLimit.php       # Redis rate limiting
-│   │   ├── AdminAuth.php       # JWT auth + blacklist
-│   │   ├── AdminPermission.php # RBAC authorization
+│   │   ├── AdminAuth.php       # JWT auth + blacklist + account status/password watermark (fail-closed)
+│   │   ├── AdminPermission.php # RBAC authorization (versioned Redis cache, 60s)
 │   │   └── OperationLog.php    # Auto operation logging (with source detection)
 │   ├── model/                  # Eloquent models
-│   ├── process/                # Processes (Http, Monitor, LogCleanup)
+│   ├── process/                # Processes (Http, Monitor, LogCleanup, ImportWorker)
 │   └── view/index/view.html    # Site home page template (GET /, with the project pet and entry navigation)
 ├── apps/
 │   ├── flutter/                # Flutter Web admin panel
@@ -272,7 +273,7 @@ docker compose up -d
 The complete API reference (response format, error codes, all endpoint details, auth flow, rate limiting, middleware chain) lives in **[docs/API.en.md](../API.en.md)**. Highlights:
 
 - **Response format**: `{ "code": 0, "message": "success", "data": {...} }`, `code=0` means success
-- **Error codes**: `400` bad request / `401` unauthenticated / `403` forbidden (including role-grant and target-management boundaries) / `404` not found / `409` conflict (refresh rotation or import lock) / `422` validation failed / `429` rate limited / `500` server error / `503` Redis failure makes auth or rate limiting fail closed
+- **Error codes**: `202` async import enqueued / `400` bad request / `401` unauthenticated (including deleted/disabled account or token issued before the password-change watermark) / `403` forbidden (including role-grant and target-management boundaries) / `404` not found / `409` conflict (refresh rotation or import lock) / `422` validation failed / `429` rate limited / `500` server error / `503` Redis or database failure makes auth, rate limiting, import or session revocation fail closed
 - **API versioning**: the version is reflected in the URL prefix (e.g. `/api/v1/...`), not in request headers
 - **Authentication**: `Authorization: Bearer {token}`; access_token TTL 2h, refresh_token TTL 14d; rotated refresh tokens keep a 60-second grace period; password change/disable/delete revokes all sessions for that user
 - **Interactive debugging**: `/apidoc/` is a single-file same-origin UI that reads the OpenAPI spec from `GET /api/docs`
@@ -304,11 +305,11 @@ The complete API reference (response format, error codes, all endpoint details, 
 - All config files must include inline comments
 - Primary keys must be generated at the application layer via snowflake — no auto-increment
 - All IDs in API parameters and responses must be encoded/decoded via hashids
-- AdminPermission middleware uses Redis cache for user permissions (TTL=60s), eliminating N+1 query bottlenecks; an enabled `super_admin` role yields the wildcard `['*']`, and `perm:<id>` is cleared after role changes
-- Session revocation goes through `SessionService::revokeUser()`: write the `user_pwd_changed:<id>` watermark, blacklist `user_tokens` / `user_refresh_tokens` ZSET members with their remaining TTL, and clear `user_refresh_rotations` and `perm:<id>`. It runs on password change, disable, delete, batch delete and batch disable
+- AdminPermission middleware uses Redis cache for user permissions (key `perm:<perm_version>:<id>`, TTL=60s), eliminating N+1 query bottlenecks; an enabled `super_admin` role yields the wildcard `['*']`; role/permission/user-role changes call `RbacService::invalidatePermissionCaches()` to increment `perm_version` and invalidate all of them
+- Session revocation goes through `SessionService::revokeUser()`: write the `user_pwd_changed:<id>` watermark, blacklist `user_tokens` / `user_refresh_tokens` ZSET members with their remaining TTL, and clear `user_refresh_rotations` and permission caches. It runs on password change, disable, delete, batch delete and batch disable, always **before the database write**; if revocation fails the write is aborted and 503 is returned
 - Role assignment: `role_ids` (hashid array) may contain only roles whose permissions are a subset of the actor's; non-super admins cannot assign `super_admin`, operate on higher-permission accounts, or bypass boundaries with disabled roles
 - Decrypt and validate user/profile writes before saving: `phone` ≤ 20, `email` ≤ 254, `real_name` ≤ 50
-- Excel import validates every row with generic errors (exceptions stay server-side); the Redis `import_users_lock` (`SET NX EX 1800`) serializes imports and returns 409 when busy; `role_ids` and the user row share one transaction
+- Excel import is asynchronous: after validation it acquires the Redis `import_users_lock` (`SET NX EX 1800`, 409 when busy), stores the file with mode `0600` under `runtime/imports/`, enqueues it and returns 202 + `job_id`; a single `import-worker` process consumes the queue serially, and `GET /admin/import/status/{job}` lets only the creator poll `queued`/`processing`/`completed`/`failed`; Redis failures fail closed (503/500) — imports are never run without the lock; `role_ids` and user rows share one transaction
 - Excel export writes data cells as explicit strings to block formula injection; `conditions` must be an array of known columns with scalar values, otherwise 422
 
 ## Deployment
@@ -334,7 +335,7 @@ The production stack lives in `deploy/` and runs `nginx`, `app`, `init` (one-sho
 | `app` | webman PHP 8.3 application, listens on 8791 inside the container network only |
 | `init` | One-shot bootstrap: schema and admin user, then exits |
 | `mysql` | MySQL 8.0 with data on a host bind mount; error/slow logs to stderr |
-| `redis` | Redis 7 with AOF persistence on a host bind mount; 384M container / `--maxmemory 256mb` |
+| `redis` | Redis 7 with AOF persistence on a host bind mount; 384M container / `--maxmemory 256mb --maxmemory-policy noeviction` |
 | `backup` | Least-privilege daily database + upload backup into `deploy/data/backups`, 30-day retention; deletes operation logs older than 180 days |
 
 ```bash
@@ -348,9 +349,9 @@ docker compose up -d --build
 - `--regenerate` archives the current `deploy/.env`, `deploy/env/` and `deploy/secrets/` to `deploy/secrets/archive/<timestamp>/`, then rotates application secrets (JWT/ENCRYPTION/RSA/Redis) by default while preserving `HASHIDS_SALT`, `ENCRYPTABLE_KEY`, the existing TLS certificate (real-domain certificates are never overwritten), `DB_PASSWORD`, `MYSQL_ROOT_PASSWORD` and the admin password, so an existing database keeps working. Rotate Hashids explicitly with `--rotate-hashids` (IDs in old links stop resolving); use `--rotate-encryptable` to rotate the field-encryption key (the old key is appended to `ENCRYPTION_PREVIOUS_KEYS`, so existing data remains readable; remove the old key only after re-encrypting the data), `--rotate-tls` to rotate TLS, `--rotate-db` for database passwords (the script prints the manual `ALTER USER` commands), and `--reset-admin` to reset the admin password.
 - **Host ownership**: `app`/`init` run as `${APP_UID:-1000}:${APP_GID:-1000}`; the script writes `id -u`/`id -g` into the master `.env`, so `deploy/data/{runtime,upload}` stays writable for the host user.
 - **Logs**: Nginx and MySQL log to stdout/stderr and Docker rotates them at `10m × 3`; inspect with `docker compose logs -f app`. Host persistent directories are `deploy/data/{mysql,redis,runtime,upload,backups}`.
-- **Resource limits**: compose sets per-service CPU/memory/pids limits (app 1.0/512M/256, init 0.5/256M/128, mysql 1.5/768M/512, redis 0.5/384M/128, nginx 0.5/128M/128, backup 0.5/256M/128). The Redis container's 384M pairs with `--maxmemory 256mb`, leaving 128M of headroom for AOF rewrite/fork, client buffers and fragmentation; change both values together (e.g. `--maxmemory 512mb` with a 640M container).
+- **Resource limits**: compose sets per-service CPU/memory/pids limits (app 1.0/512M/256, init 0.5/256M/128, mysql 1.5/768M/512, redis 0.5/384M/128, nginx 0.5/128M/128, backup 0.5/256M/128). The Redis container's 384M pairs with `--maxmemory 256mb --maxmemory-policy noeviction`, leaving 128M of headroom for AOF rewrite/fork, client buffers and fragmentation; change both values together (e.g. `--maxmemory 512mb` with a 640M container). `noeviction` keeps security keys such as blacklists, watermarks and permission caches from being evicted under memory pressure; when memory fills, affected requests fail closed and raise an alert.
 - TLS defaults to a self-signed certificate for `DOMAIN` (`localhost` by default). Replace `deploy/secrets/tls/fullchain.pem` and `privkey.pem` with real-domain certificates; existing certificates are not overwritten (`--rotate-tls` excepted). Port 80 only serves `/.well-known/acme-challenge/` and redirects everything else to HTTPS. HSTS is commented out by default; enable it after a real domain certificate is configured.
-- Automatic backup: the `backup` service uses the least-privilege `backup_reader` user to run `mysqldump --single-transaction --no-tablespaces` daily and archives `deploy/data/upload` as tar.gz into `deploy/data/backups`, keeping both for 30 days. It also deletes operation logs older than 180 days (at most 10,000 rows per run). The in-app `log-cleanup` process (no listening port, `count=1`) cleans the same table on startup and then daily in 10,000-row batches, up to 10 batches (100,000 rows) per run, as a fallback.
+- Automatic backup: the `backup` service uses the least-privilege `backup_reader` user to run `mysqldump --single-transaction --no-tablespaces` daily and archives `deploy/data/upload` as tar.gz into `deploy/data/backups`, keeping both for 30 days. It also deletes operation logs older than 180 days (at most 10,000 rows per run). The in-app `log-cleanup` process (no listening port, `count=1`) cleans the same table on startup and then daily in 10,000-row batches, up to 10 batches (100,000 rows) per run, as a fallback. The `import-worker` process (`count=1`) consumes the Redis import queue serially, recovers unfinished jobs on startup and removes expired job files.
 - Startup order: `nginx` waits for the app health check via `depends_on.app.condition: service_healthy`, avoiding 502s during startup.
 - Offsite backup: backups stay on the DB host disk by default. Host cron calls `deploy/offsite-sync.sh`, which reads `OFFSITE_TARGET` from `deploy/.env` and supports rsync (`user@host:/path/`) and rclone (`rclone:remote:path`); it refuses an unset target or empty backup directory and excludes in-progress temp files. See "Offsite copies" in `deploy/README.md` for the cron example and pre-run checklist.
 - RSA public key: `GET /api/v1/auth/public-key` returns the current public key. Flutter fetches it before login and falls back to the embedded key on failure; after `--regenerate` rotates the keypair, verify the endpoint is reachable and rebuild clients that rely on the embedded fallback.
@@ -362,10 +363,9 @@ The PHP image is built from `Dockerfile`, based on `php:8.3-cli` with OPcache en
 GitHub Actions CI pipeline: `.github/workflows/ci.yml`
 
 - PHP syntax check (`php -l`)
-- PHPUnit tests (37 tests / 81 assertions, including lock keys, refresh rotation, process config, session revocation, operation-log masking, user masking and import size guards)
+- PHPUnit tests (65 tests / 226 assertions, including lock keys, refresh rotation, process config, session revocation, operation-log masking, user masking and import size guards, plus `RbacBoundaryTest`, `ConfirmThrottleTest`, `PdfExportLimitTest` and `ImportAsyncTest`; the CI PHP job runs MySQL 8.0 and Redis 7 services, installs the `zip` extension and sets `DB_PASSWORD=root`, so DB/Redis-dependent cases execute in CI; they skip automatically locally when services are unavailable)
 - Flutter static analysis (`flutter analyze`)
 - Docker image build + PHP extension checks (redis/zip/gd, GD FreeType/JPEG) + root and `deploy/` Compose config validation + `nginx -t` for both Nginx configs
-- Controller/RBAC/import database verification (125/125 user/RBAC, 42/42 import) runs locally and is not committed; CI runs only the unit tests above
 
 ### Database Backup
 

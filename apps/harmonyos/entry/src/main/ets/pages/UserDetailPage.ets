@@ -4,9 +4,64 @@
 
 import router from '@ohos.router';
 import promptAction from '@ohos.promptAction';
-import { UserService } from '../service/DataService';
-import { User } from '../model/DataModels';
+import { UserService, RoleService } from '../service/DataService';
+import { User, RoleOption } from '../model/DataModels';
 import { LoadingView, ErrorView } from '../common/Components';
+
+@CustomDialog
+struct DeleteUserDialog {
+  controller?: CustomDialogController;
+  confirm: (password: string) => void = () => {};
+  @State password: string = '';
+
+  build() {
+    Column() {
+      Text('确认删除')
+        .fontSize(18)
+        .fontWeight(FontWeight.Bold)
+
+      Text('确定要删除该用户吗？删除后不可恢复。')
+        .fontSize(14)
+        .fontColor('#666666')
+        .margin({ top: 8 })
+
+      TextInput({ placeholder: '请输入当前管理员密码', text: this.password })
+        .type(InputType.Password)
+        .margin({ top: 12 })
+        .onChange((v: string) => {
+          this.password = v;
+        })
+
+      Row() {
+        Button('取消')
+          .layoutWeight(1)
+          .height(40)
+          .fontColor('#666666')
+          .backgroundColor('#F5F5F5')
+          .onClick(() => {
+            this.controller?.close();
+          })
+
+        Button('删除')
+          .layoutWeight(1)
+          .height(40)
+          .fontColor('#FFFFFF')
+          .backgroundColor('#FF4D4F')
+          .margin({ left: 12 })
+          .enabled(this.password.length > 0)
+          .onClick(() => {
+            const password = this.password;
+            this.controller?.close();
+            this.confirm(password);
+          })
+      }
+      .margin({ top: 20 })
+    }
+    .padding(20)
+    .backgroundColor('#FFFFFF')
+    .borderRadius(12)
+  }
+}
 
 @Entry
 @Component
@@ -26,6 +81,22 @@ struct UserDetailPage {
   @State formPassword: string = '';
   @State formStatus: number = 1;
 
+  // 新建时可选角色（GET /admin/role/options）
+  @State roles: RoleOption[] = [];
+  @State selectedRoleIds: string[] = [];
+  @State rolesLoading: boolean = false;
+  @State roleError: boolean = false;
+
+  deleteDialog: CustomDialogController = new CustomDialogController({
+    builder: DeleteUserDialog({
+      confirm: (password: string) => {
+        this.performDelete(password);
+      }
+    }),
+    autoCancel: true,
+    alignment: DialogAlignment.Center
+  });
+
   aboutToAppear(): void {
     const params = (router.getParams() ?? {}) as Record<string, Object>;
     this.mode = (params?.['mode'] as string) ?? 'view';
@@ -35,6 +106,35 @@ struct UserDetailPage {
       this.loadDetail();
     } else {
       this.isLoading = false;
+      this.loadRoles();
+    }
+  }
+
+  async loadRoles(): Promise<void> {
+    this.rolesLoading = true;
+    try {
+      this.roles = await RoleService.list();
+    } catch (e) {
+      if (e instanceof Error && e.message === 'UNAUTHORIZED') {
+        router.replaceUrl({ url: 'pages/LoginPage' });
+        return;
+      }
+      promptAction.showToast({ message: '角色列表加载失败' });
+    } finally {
+      this.rolesLoading = false;
+    }
+  }
+
+  toggleRole(id: string, checked: boolean): void {
+    if (checked) {
+      if (this.selectedRoleIds.indexOf(id) < 0) {
+        this.selectedRoleIds = this.selectedRoleIds.concat([id]);
+      }
+    } else {
+      this.selectedRoleIds = this.selectedRoleIds.filter((v: string) => v !== id);
+    }
+    if (this.selectedRoleIds.length > 0) {
+      this.roleError = false;
     }
   }
 
@@ -67,6 +167,11 @@ struct UserDetailPage {
       promptAction.showToast({ message: '请输入密码' });
       return;
     }
+    if (this.mode === 'create' && this.selectedRoleIds.length === 0) {
+      this.roleError = true;
+      promptAction.showToast({ message: '请至少选择一个角色' });
+      return;
+    }
 
     this.isSubmitting = true;
     try {
@@ -77,7 +182,8 @@ struct UserDetailPage {
           password: this.formPassword,
           phone: this.formPhone,
           email: this.formEmail,
-          status: this.formStatus
+          status: this.formStatus,
+          role_ids: this.selectedRoleIds
         });
         promptAction.showToast({ message: '创建成功' });
       } else {
@@ -101,34 +207,28 @@ struct UserDetailPage {
     }
   }
 
-  async deleteUser(): Promise<void> {
-    AlertDialog.show({
-      title: '确认删除',
-      message: '确定要删除该用户吗？删除后不可恢复。',
-      autoCancel: true,
-      alignment: DialogAlignment.Center,
-      primaryButton: {
-        value: '确定',
-        fontColor: '#FF4D4F',
-        action: async () => {
-          try {
-            await UserService.delete(this.userId);
-            promptAction.showToast({ message: '删除成功' });
-            router.back();
-          } catch (e) {
-            if (e instanceof Error && e.message === 'UNAUTHORIZED') {
-              router.replaceUrl({ url: 'pages/LoginPage' });
-              return;
-            }
-            promptAction.showToast({ message: '删除失败' });
-          }
-        }
-      },
-      secondaryButton: {
-        value: '取消',
-        action: () => {}
+  deleteUser(): void {
+    this.deleteDialog.open();
+  }
+
+  async performDelete(password: string): Promise<void> {
+    if (!password) {
+      promptAction.showToast({ message: '请输入密码' });
+      return;
+    }
+    try {
+      await UserService.delete(this.userId, password);
+      promptAction.showToast({ message: '删除成功' });
+      router.back();
+    } catch (e) {
+      if (e instanceof Error && e.message === 'UNAUTHORIZED') {
+        router.replaceUrl({ url: 'pages/LoginPage' });
+        return;
       }
-    });
+      // 422（密码错误/业务校验）等失败展示服务端消息，不能提示成功
+      const message = e instanceof Error && e.message ? e.message : '删除失败';
+      promptAction.showToast({ message });
+    }
   }
 
   build() {
@@ -191,6 +291,45 @@ struct UserDetailPage {
                   .type(InputType.Password)
                   .onChange((v: string) => { this.formPassword = v; })
               });
+
+              // 角色多选：至少选择一个，role_ids 随创建请求提交
+              Column() {
+                Text('角色')
+                  .fontSize(15)
+                  .fontColor('#333333')
+
+                if (this.rolesLoading) {
+                  Text('加载中...').fontSize(13).fontColor('#999999').margin({ top: 8 })
+                } else if (this.roles.length === 0) {
+                  Text('暂无可分配角色').fontSize(13).fontColor('#FF4D4F').margin({ top: 8 })
+                } else {
+                  Flex({ wrap: FlexWrap.Wrap }) {
+                    ForEach(this.roles, (role: RoleOption) => {
+                      Row() {
+                        Checkbox({ name: role.id })
+                          .select(this.selectedRoleIds.indexOf(role.id) >= 0)
+                          .selectedColor('#1677FF')
+                          .onChange((checked: boolean) => { this.toggleRole(role.id, checked); })
+
+                        Text(role.name)
+                          .fontSize(14)
+                          .fontColor('#333333')
+                      }
+                      .margin({ right: 16, top: 8 })
+                    }, (role: RoleOption) => role.id)
+                  }
+                  .width('100%')
+                }
+
+                if (this.roleError) {
+                  Text('请至少选择一个角色').fontSize(12).fontColor('#FF4D4F').margin({ top: 8 })
+                }
+              }
+              .width('100%')
+              .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+              .backgroundColor('#FFFFFF')
+              .alignItems(HorizontalAlign.Start)
+              .border({ width: { bottom: 0.5 }, color: '#EEEEEE' })
             }
 
             this.buildFormItem('姓名', () => {

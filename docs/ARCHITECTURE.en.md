@@ -78,8 +78,8 @@ flowchart TD
     subgraph "Middleware Layer"
         M_RL["RateLimit<br/>Redis Sliding Window Rate Limiting<br/>X-RateLimit Response Headers"]
         M_SF["SecurityFilter<br/>Attack Detection & Blocking<br/>XSS/SQLi/Path Traversal/CSRF"]
-        M1["AdminAuth<br/>JWT Token Verification<br/>Injects adminId"]
-        M2["AdminPermission<br/>RBAC Authorization<br/>method.path Matching<br/>Redis 60s Permission Cache"]
+        M1["AdminAuth<br/>JWT Token Verification<br/>Account status + password watermark<br/>Injects adminId"]
+        M2["AdminPermission<br/>RBAC Authorization<br/>method.path Matching<br/>Versioned Redis permission cache (60s)"]
     end
 
     subgraph "Controller Layer"
@@ -99,6 +99,12 @@ flowchart TD
         S3["EncryptionService<br/>Encryption + Masking"]
         S4["SessionService<br/>Session Revocation<br/>Blacklist / Watermark / Cache Cleanup"]
         S5["RbacService<br/>Grant Boundaries<br/>Assignable Roles / Target Management"]
+        S6["ImportJobService<br/>Import Lock / Queue / Job Metadata"]
+    end
+
+    subgraph "Background Processes"
+        P1["ImportWorker<br/>Serial queue consumer<br/>Recovers unfinished jobs"]
+        P2["LogCleanup<br/>180-day log cleanup"]
     end
 
     subgraph "Model Layer"
@@ -126,6 +132,9 @@ flowchart TD
     MD1 & MD2 & MD3 & MD4 & MD5 --> D1
     CT7 --> D3
     S4 --> D3
+    S6 --> D3
+    P1 --> S6 & D1
+    P2 --> D1
 
     style R1 fill:#722ED1,color:#fff
     style M_SF fill:#FF4D4F,color:#fff
@@ -276,7 +285,7 @@ sequenceDiagram
     SV-->>CL: 200 { dashboard data }
 ```
 
-Refresh tokens: every successful `POST /api/v1/auth/refresh` rotates the access/refresh pair; the old refresh_token is blacklisted immediately and the new pair is cached for 60 seconds under `refresh_rotation:<md5(old token)>`, so resubmitting the same old token within the grace period returns the same pair. Concurrent rotation is serialized by `refresh_lock:<md5>` (`SET NX EX 5` + Lua release); a concurrent request that misses the cache returns 409, and a blacklisted cached token deletes the cache and returns 401. Before refreshing, the server checks the password-change watermark `user_pwd_changed:<userId>` and returns 401 when the token was issued before it. Password change, disable, delete and batch disable/delete use `SessionService::revokeUser()` to write the watermark, blacklist access/refresh tokens tracked in `user_tokens` / `user_refresh_tokens`, and clear `user_refresh_rotations` plus `perm:<id>`; a role change only clears the permission cache. Logout blacklists cached tokens and cleans up via `user_refresh_rotations:<userId>`; the HarmonyOS client uses single-flight refresh for concurrent 401s.
+Refresh tokens: every successful `POST /api/v1/auth/refresh` rotates the access/refresh pair; the old refresh_token is blacklisted immediately and the new pair is cached for 60 seconds under `refresh_rotation:<md5(old token)>`, so resubmitting the same old token within the grace period returns the same pair. Concurrent rotation is serialized by `refresh_lock:<md5>` (`SET NX EX 5` + Lua release); a concurrent request that misses the cache returns 409, and a blacklisted cached token deletes the cache and returns 401. Before refreshing, the server checks the password-change watermark `user_pwd_changed:<userId>` and returns 401 when the token was issued before it. Password change, disable, delete and batch disable/delete use `SessionService::revokeUser()` to write the watermark, blacklist access/refresh tokens tracked in `user_tokens` / `user_refresh_tokens`, and clear `user_refresh_rotations` plus the versioned permission cache; a role change only clears the permission cache. Logout blacklists cached tokens and cleans up via `user_refresh_rotations:<userId>`; the HarmonyOS client uses single-flight refresh for concurrent 401s.
 
 ---
 
@@ -336,7 +345,7 @@ flowchart TD
     subgraph "Decision Flow"
         J1["Extract Token → adminId"]
         J2["Look Up Enabled User Roles"]
-        J3["Collect Permission Slugs<br/>perm:&lt;id&gt; cached 60s"]
+        J3["Collect Permission Slugs<br/>perm:&lt;version&gt;:&lt;id&gt; cached 60s"]
         J4["Build method.path"]
         J5{"Match?"}
         J6["Allow"]
@@ -550,7 +559,35 @@ sequenceDiagram
 
 At 5,000 rows × 9 columns the export uses about 65MiB in a 128M worker, close to the safe ceiling; row and column limits should not be raised together.
 
-For user import, `ImportController` first serializes the whole run with the Redis lock `import_users_lock` (`SET NX EX 1800`), returning 409 when an import is already running. For `.xlsx`, a ZIP-expansion precheck runs before loading (HTTP 422 when `xl/**.xml` exceeds 8MB or cells exceed 32,000); for both `.xls` and `.xlsx`, worksheet metadata (`listWorksheetInfo`) is read before `IOFactory::load()`, rejecting any sheet over 2,001 rows or rows × columns above 32,000 cells with HTTP 422, and `getHighestDataRow()` rechecks after loading. Files are limited to 5MB and 2,000 data rows. Each row is validated independently (username 3-50, password 6-32, real name ≤50, phone ≤20, email ≤254, status 0/1); failed rows record the row number and a generic reason, user and role assignment run in one transaction per row with rollback, and 2,000 bcrypt hashes are CPU-intensive, so the lock TTL covers the worst case.
+User import is asynchronous: the endpoint validates and enqueues, while a single `import-worker` process does the parsing and database writes:
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant IC as ImportController
+    participant R as Redis
+    participant W as ImportWorker
+    C->>IC: POST /admin/import/users (file, role_ids)
+    IC->>IC: Validate file / role boundaries
+    IC->>R: SET NX EX 1800 import_users_lock
+    alt Lock is held
+        IC-->>C: 409
+    else Redis unavailable
+        IC-->>C: 503
+    else Lock acquired
+        IC->>IC: Store file in runtime/imports (0600)
+        IC->>R: Write job metadata + LPUSH import_queue
+        IC-->>C: 202 {job_id, status: queued}
+    end
+    W->>R: RPOPLPUSH import_queue → import_processing
+    W->>W: processImport: per-row validation + transactional writes
+    W->>R: Update job completed/failed + result
+    C->>IC: GET /admin/import/status/{job}
+    IC->>R: Load job metadata (creator only)
+    IC-->>C: queued/processing/completed/failed
+```
+
+On restart the worker recovers unfinished jobs from the processing list, a 60-second `processing_at` grace period prevents duplicate consumption during rolling restarts, and the 1,800-second lock TTL is the final backstop. Redis is a hard dependency: the endpoint fails closed (503 while taking the lock, 500 when metadata write or enqueue fails after cleaning up the file/metadata/lock) and never imports without the lock. For `.xlsx`, a ZIP-expansion precheck runs before loading (HTTP 422 when `xl/**.xml` exceeds 8MB or cells exceed 32,000); for both `.xls` and `.xlsx`, worksheet metadata (`listWorksheetInfo`) is read before `IOFactory::load()`, rejecting any sheet over 2,001 rows or rows × columns above 32,000 cells with HTTP 422, and `getHighestDataRow()` rechecks after loading. Files are limited to 5MB and 2,000 data rows. Each row is validated independently (username 3-50, password 6-32, real name ≤50, phone ≤20, email ≤254, status 0/1); failed rows record the row number and a generic reason, user and role assignment run in one transaction per row with rollback, and 2,000 bcrypt hashes are CPU-intensive, so the lock TTL covers the worst case.
 
 ---
 
@@ -664,10 +701,10 @@ flowchart TB
 
     subgraph "Single-machine Docker Compose (deploy/)"
         NGX["Nginx :80/:443<br/>TLS termination · static site<br/>reverse proxy to app:8791"]
-        WM["webman app :8791<br/>container network only"]
+        WM["webman app :8791<br/>container network only<br/>single import-worker consumes the import queue"]
         INIT["init (one-shot)<br/>schema + admin user<br/>then exits"]
         MYSQL["MySQL 8.0<br/>deploy/data/mysql"]
-        REDIS["Redis 7 · AOF<br/>deploy/data/redis"]
+        REDIS["Redis 7 · AOF<br/>noeviction · deploy/data/redis"]
         BACKUP["backup (daily)<br/>mysqldump + upload tar<br/>30-day retention · 180-day logs"]
     end
 
@@ -699,7 +736,7 @@ flowchart TB
     style DATA fill:#F6F8FC,color:#1677FF
 ```
 
-> Environment variables are isolated per service in `deploy/env/{app,init,mysql,redis,backup}.env` (`600`, directory `700`); the master `deploy/.env` only holds compose interpolation values. The app and init containers run as the host `APP_UID`/`APP_GID`. `backup` uses the least-privilege `backup_reader` user to back up the database and uploads and to delete operation logs older than 180 days; the in-app `log-cleanup` process purges the same table daily as a fallback (10,000 rows per batch, up to 10 batches). `nginx` waits for the app `/health` check via `depends_on.app.condition: service_healthy`, avoiding 502s during startup. Every service has CPU/memory/pids limits (app 1.0/512M/256, init 0.5/256M/128, mysql 1.5/768M/512, redis 0.5/384M/128, nginx 0.5/128M/128, backup 0.5/256M/128); the Redis container's 384M pairs with `--maxmemory 256mb`, leaving 128M for AOF rewrite/fork and fragmentation. Offsite copies are run by host cron via `deploy/offsite-sync.sh` (reads `OFFSITE_TARGET`). Nginx/MySQL logs go to stdout/stderr and are rotated by Docker at `10m × 3`; HSTS is off by default and should be enabled after a real domain certificate is configured.
+> Environment variables are isolated per service in `deploy/env/{app,init,mysql,redis,backup}.env` (`600`, directory `700`); the master `deploy/.env` only holds compose interpolation values. The app and init containers run as the host `APP_UID`/`APP_GID`. `backup` uses the least-privilege `backup_reader` user to back up the database and uploads and to delete operation logs older than 180 days; the in-app `log-cleanup` process purges the same table daily as a fallback (10,000 rows per batch, up to 10 batches). `nginx` waits for the app `/health` check via `depends_on.app.condition: service_healthy`, avoiding 502s during startup. Every service has CPU/memory/pids limits (app 1.0/512M/256, init 0.5/256M/128, mysql 1.5/768M/512, redis 0.5/384M/128, nginx 0.5/128M/128, backup 0.5/256M/128); the Redis container's 384M pairs with `--maxmemory 256mb --maxmemory-policy noeviction`, leaving 128M for AOF rewrite/fork and fragmentation; `noeviction` keeps security keys (blacklist, watermark, permission cache) from being evicted. The app also runs an `import-worker` (`count=1`) that consumes the Redis import queue serially and recovers unfinished jobs on startup. Offsite copies are run by host cron via `deploy/offsite-sync.sh` (reads `OFFSITE_TARGET`). Nginx/MySQL logs go to stdout/stderr and are rotated by Docker at `10m × 3`; HSTS is off by default and should be enabled after a real domain certificate is configured.
 
 ---
 

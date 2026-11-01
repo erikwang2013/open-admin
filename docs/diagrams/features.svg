@@ -39,7 +39,7 @@
   <text class="fItem" x="50" y="205">· 登录 / 刷新 / 登出</text>
   <text class="fItem" x="50" y="224">· 验证码标记原子消费 + 占位 bcrypt</text>
   <text class="fItem" x="50" y="243">· 账号锁定 5 次 × 15 分钟</text>
-  <text class="fItem" x="50" y="262">· 并发会话上限 3 + 会话吊销</text>
+  <text class="fItem" x="50" y="262">· 会话上限 3 · 改密水位 · 吊销</text>
 
   <!-- 仪表盘 -->
   <rect class="card" x="330" y="112" width="280" height="152" rx="14"/>
@@ -66,9 +66,9 @@
   <text class="fWhere" x="698" y="167">UserController · ImportController</text>
   <line x1="650" y1="184" x2="890" y2="184" stroke="#EEF2F7"/>
   <text class="fItem" x="650" y="205">· CRUD + 批量操作 + 角色分配</text>
-  <text class="fItem" x="650" y="224">· Excel 导入 5MB / 2000 行</text>
-  <text class="fItem" x="650" y="243">· 32000 单元格 + 导入锁 409</text>
-  <text class="fItem" x="650" y="262">· 逐行事务校验 + 二次确认</text>
+  <text class="fItem" x="650" y="224">· 异步 202 入队 · import-worker×1</text>
+  <text class="fItem" x="650" y="243">· 5MB/2000 行 · 32000 单元格预检</text>
+  <text class="fItem" x="650" y="262">· 逐行事务 · 状态轮询 · 导入锁 409</text>
 
   <!-- 角色权限 -->
   <rect class="card" x="930" y="112" width="280" height="152" rx="14"/>
@@ -83,7 +83,7 @@
   <text class="fItem" x="950" y="205">· 角色 CRUD + 权限树 + 角色选项</text>
   <text class="fItem" x="950" y="224">· RBAC method.path · 超管通配 *</text>
   <text class="fItem" x="950" y="243">· 授权边界：仅权限子集可授予</text>
-  <text class="fItem" x="950" y="262">· 最后超管命名锁保护</text>
+  <text class="fItem" x="950" y="262">· 权限缓存版本化 · 最后超管锁</text>
 
   <!-- ===== 第 2 行 ===== -->
   <!-- 系统配置 -->
@@ -129,9 +129,9 @@
   <text class="fWhere" x="698" y="339">UploadController · ExportController</text>
   <line x1="650" y1="356" x2="890" y2="356" stroke="#EEF2F7"/>
   <text class="fItem" x="650" y="377">· 文件上传（类型 + 大小校验）</text>
-  <text class="fItem" x="650" y="396">· Excel 导出 5000 行 + 条件校验</text>
-  <text class="fItem" x="650" y="415">· TYPE_STRING 防公式注入</text>
-  <text class="fItem" x="650" y="434">· PDF 版权页脚 + 敏感数据脱敏</text>
+  <text class="fItem" x="650" y="396">· Excel ≤5000 行 · PDF ≤30000 单元格</text>
+  <text class="fItem" x="650" y="415">· 条件/单元格标量校验 · 文本防注入</text>
+  <text class="fItem" x="650" y="434">· PDF ≤5000 行 · 统计卡 ≤200 · 脱敏</text>
 
   <!-- 安全防御 -->
   <rect class="card" x="930" y="284" width="280" height="152" rx="14" stroke="#FFCCC7"/>
@@ -146,7 +146,7 @@
   <text class="fItem" x="950" y="377">· 31 种攻击检测器 + IP 黑名单</text>
   <text class="fItem" x="950" y="396">· CSP / 安全响应头 + RSA 传输</text>
   <text class="fItem" x="950" y="415">· 验证码原子消费 + 会话吊销</text>
-  <text class="fItem" x="950" y="434">· 限流 60 次/分 · security.txt</text>
+  <text class="fItem" x="950" y="434">· 限流 60 次/分 · Redis noeviction</text>
 
   <!-- ===== 第 3 行 ===== -->
   <!-- 国际化 -->
@@ -178,7 +178,7 @@
   <text class="fItem" x="350" y="549">· GET /health 健康检查</text>
   <text class="fItem" x="350" y="568">· GET /metrics 5 项 Prometheus 指标</text>
   <text class="fItem" x="350" y="587">· GET /api/docs OpenAPI 文档</text>
-  <text class="fItem" x="350" y="606">· 备份/异地同步 + Docker + CI</text>
+  <text class="fItem" x="350" y="606">· PHPUnit 65/226 · Docker · 备份同步</text>
 
   <!-- 安装向导 -->
   <rect class="card" x="630" y="456" width="280" height="152" rx="14"/>
